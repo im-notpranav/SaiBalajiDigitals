@@ -38,3 +38,11 @@ export async function updateMe(data: {
   });
   return { user: res };
 }
+
+export async function toggleUserStatus(id: number, is_active: boolean) {
+  const res = await apiFetch<AuthUser>(`/users/${id}/status`, {
+    method: "PUT",
+    data: { is_active },
+  });
+  return { user: res };
+}

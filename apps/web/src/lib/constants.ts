@@ -1,4 +1,4 @@
-import type { UserRole, RemarkType } from "@sb-oms/shared-types";
+import type { UserRole, RemarkType, ClosureRemarkType, ProductionRemarkType } from "@sb-oms/shared-types";
 
 export const roleHome: Record<UserRole, string> = {
   employee: "/employee/dashboard",
@@ -50,18 +50,18 @@ export const REVENUE_TREND = [
   { month: "Apr", revenue: 1890000, orders: 112 },
 ];
 
-export const CLOSURE_REMARK_TYPES = [
-  "Delivered",
-  "Customer Cancelled",
-  "Duplicate Order",
-  "Payment Cleared",
-  "Custom Reason",
+export const CLOSURE_REMARK_TYPES: { value: ClosureRemarkType; label: string }[] = [
+  { value: "Delivered", label: "Delivered" },
+  { value: "CustomerCancelled", label: "Customer Cancelled" },
+  { value: "DuplicateOrder", label: "Duplicate Order" },
+  { value: "PaymentCleared", label: "Payment Cleared" },
+  { value: "CustomReason", label: "Custom Reason" },
 ];
 
-export const PRODUCTION_REMARK_TYPES = [
-  "Clarification",
-  "Internal Note",
-  "Customer Update",
-  "Production Handoff",
-  "QC Hold",
+export const PRODUCTION_REMARK_TYPES: { value: ProductionRemarkType; label: string }[] = [
+  { value: "Clarification", label: "Clarification" },
+  { value: "InternalNote", label: "Internal Note" },
+  { value: "CustomerUpdate", label: "Customer Update" },
+  { value: "ProductionHandoff", label: "Production Handoff" },
+  { value: "QCHold", label: "QC Hold" },
 ];

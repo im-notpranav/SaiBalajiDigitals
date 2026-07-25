@@ -34,13 +34,14 @@ const NAV: Record<UserRole, NavItem[]> = {
     { to: "/employee/new-order", label: "New Order", icon: PlusCircle },
     { to: "/employee/orders", label: "My Orders", icon: ClipboardList },
     { to: "/employee/notifications", label: "Notifications", icon: Bell },
-    { to: "/employee/profile", label: "Profile", icon: UserCircle },
+    { to: "/profile", label: "Profile", icon: UserCircle },
   ],
   PRODUCTION: [
     { to: "/production/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { to: "/production/queue", label: "Queue", icon: Workflow },
     { to: "/production/remarks", label: "Remarks", icon: MessageSquare },
     { to: "/production/notifications", label: "Notifications", icon: Bell },
+    { to: "/profile", label: "Profile", icon: UserCircle },
   ],
   ACCOUNTS: [
     { to: "/accountant/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -49,6 +50,7 @@ const NAV: Record<UserRole, NavItem[]> = {
     { to: "/accountant/reports", label: "Financial Reports", icon: FileBarChart2 },
     { to: "/accountant/financial-year", label: "Financial Year", icon: CalendarClock },
     { to: "/accountant/notifications", label: "Notifications", icon: Bell },
+    { to: "/profile", label: "Profile", icon: UserCircle },
   ],
   ADMIN: [
     { to: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -58,6 +60,7 @@ const NAV: Record<UserRole, NavItem[]> = {
     { to: "/admin/reports", label: "Reports", icon: FileBarChart2 },
     { to: "/admin/financial-year", label: "Financial Year", icon: CalendarClock },
     { to: "/admin/settings", label: "Settings", icon: Settings },
+    { to: "/profile", label: "Profile", icon: UserCircle },
   ],
 };
 

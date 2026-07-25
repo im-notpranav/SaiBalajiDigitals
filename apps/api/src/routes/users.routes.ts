@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getUsers, createUser, deleteUser, updateMe, checkUsername } from "../controllers/users.controller";
+import { getUsers, createUser, deleteUser, updateMe, checkUsername, toggleUserStatus } from "../controllers/users.controller";
 import { authenticate, authorize } from "../middlewares/auth.middleware";
 
 const router = Router();
@@ -13,5 +13,6 @@ router.get("/check", authorize("ADMIN"), checkUsername);
 router.get("/", authorize("ADMIN"), getUsers);
 router.post("/", authorize("ADMIN"), createUser);
 router.delete("/:id", authorize("ADMIN"), deleteUser);
+router.put("/:id/status", authorize("ADMIN"), toggleUserStatus);
 
 export default router;

@@ -43,13 +43,13 @@ function SettingsPage() {
             <div>
               <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Production remark types</div>
               <div className="flex flex-wrap gap-1.5">
-                {PRODUCTION_REMARK_TYPES.map((r) => <Badge key={r} variant="outline">{r}</Badge>)}
+                {PRODUCTION_REMARK_TYPES.map((r) => <Badge key={r.value} variant="outline">{r.label}</Badge>)}
               </div>
             </div>
             <div>
               <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Closure remark types</div>
               <div className="flex flex-wrap gap-1.5">
-                {CLOSURE_REMARK_TYPES.map((r) => <Badge key={r} variant="outline">{r}</Badge>)}
+                {CLOSURE_REMARK_TYPES.map((r) => <Badge key={r.value} variant="outline">{r.label}</Badge>)}
               </div>
             </div>
             <div className="rounded-lg border border-info/30 bg-info/5 p-3 text-xs text-info">

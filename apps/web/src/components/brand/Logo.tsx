@@ -1,4 +1,3 @@
-import logoAsset from "@/assets/sb-logo.png.asset.json";
 import { cn } from "@/lib/utils";
 
 interface LogoProps {
@@ -6,7 +5,6 @@ interface LogoProps {
   className?: string;
 }
 
-import { Box } from "lucide-react";
 
 export function Logo({ size = 40, className }: LogoProps) {
   return (
@@ -17,7 +15,11 @@ export function Logo({ size = 40, className }: LogoProps) {
       )}
       style={{ width: size, height: size }}
     >
-      <Box className="text-primary-foreground" size={Math.floor(size * 0.6)} />
+      <img
+        src="/logo.png"
+        alt="Sai Balaji Digitals"
+        className="h-full w-full object-cover"
+      />
     </div>
   );
 }
@@ -34,7 +36,7 @@ export function BrandLockup({ compact = false, logoSize = 40, className }: Brand
       <Logo size={logoSize} />
       <div className="min-w-0 leading-tight">
         <div className="truncate text-[13px] font-bold tracking-wide text-primary-deep sm:text-sm">
-          SAI BALAJI DIGITALS PVT LTD
+          SAI BALAJI DIGITALS
         </div>
         {!compact && (
           <div className="truncate text-[11px] text-muted-foreground">

@@ -7,7 +7,7 @@ import { createUserSchema, updateMeSchema } from "../utils/validators";
 export const getUsers = async (req: Request, res: Response) => {
   try {
     const users = await prisma.user.findMany({
-      select: { id: true, name: true, username: true, role: true, created_at: true },
+      select: { id: true, name: true, username: true, role: true, created_at: true, is_active: true, last_login_at: true },
     });
     return res.status(200).json({ users });
   } catch (err) {
@@ -101,6 +101,31 @@ export const updateMe = async (req: Request, res: Response) => {
       where: { id: userId },
       data: updateData,
       select: { id: true, name: true, username: true, role: true },
+    });
+
+    return res.status(200).json(updatedUser);
+  } catch (err) {
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+export const toggleUserStatus = async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id as string, 10);
+    const { is_active } = req.body;
+    
+    if (typeof is_active !== "boolean") {
+      return res.status(400).json({ message: "is_active must be a boolean" });
+    }
+
+    if (req.user!.id === id && !is_active) {
+      return res.status(400).json({ message: "You cannot deactivate yourself." });
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id },
+      data: { is_active },
+      select: { id: true, name: true, username: true, role: true, is_active: true },
     });
 
     return res.status(200).json(updatedUser);

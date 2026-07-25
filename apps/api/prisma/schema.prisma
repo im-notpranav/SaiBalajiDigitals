@@ -30,16 +30,34 @@ enum RemarkType {
   FreeOfCost
 }
 
+enum ClosureRemarkType {
+  Delivered
+  CustomerCancelled
+  DuplicateOrder
+  PaymentCleared
+  CustomReason
+}
+
+enum ProductionRemarkType {
+  Clarification
+  InternalNote
+  CustomerUpdate
+  ProductionHandoff
+  QCHold
+}
+
 model User {
   id         Int              @id @default(autoincrement())
   name       String
   username   String           @unique
   password   String
   role       Role
-  created_at DateTime         @default(now())
-  updated_at DateTime         @updatedAt
-  orders     Order[]
-  changeLogs OrderChangeLog[]
+  created_at    DateTime         @default(now())
+  updated_at    DateTime         @updatedAt
+  last_login_at DateTime?
+  is_active     Boolean          @default(true)
+  orders        Order[]
+  changeLogs    OrderChangeLog[]
 }
 
 model OrderSequence {
@@ -62,6 +80,10 @@ model Order {
   created_by   Int
   creator      User             @relation(fields: [created_by], references: [id])
   creator_name String
+  closure_remark_type ClosureRemarkType?
+  closure_remark_text String?
+  production_remark_type ProductionRemarkType?
+  production_remark_text String?
   items        OrderItem[]
   changeLogs   OrderChangeLog[]
   created_at   DateTime         @default(now())

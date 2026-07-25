@@ -110,7 +110,7 @@ export const getOrder = async (req: Request, res: Response) => {
   }
 };
 
-import { createOrderSchema, updateOrderSchema, invoiceSchema, closeOrderSchema } from "../utils/validators";
+import { createOrderSchema, updateOrderSchema, invoiceSchema, closeOrderSchema, advanceOrderSchema } from "../utils/validators";
 
 export const createOrder = async (req: Request, res: Response) => {
   try {
@@ -149,7 +149,7 @@ export const createOrder = async (req: Request, res: Response) => {
 
     const order_no = await generateOrderId();
 
-    const order = await prisma.$transaction(async (tx: any) => {
+    const order = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT set_config('app.current_user_id', ${user.id.toString()}, true)`;
       return tx.order.create({
         data: {
@@ -212,7 +212,7 @@ export const updateOrder = async (req: Request, res: Response) => {
     if (location !== undefined) logChange("Location", existingOrder.location, location);
     if (po_number !== undefined) logChange("PO Number", existingOrder.po_number || "", po_number || "");
 
-    const updatedOrder = await prisma.$transaction(async (tx: any) => {
+    const updatedOrder = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT set_config('app.current_user_id', ${user.id.toString()}, true)`;
 
       // Update header
@@ -286,7 +286,7 @@ export const updateOrder = async (req: Request, res: Response) => {
 export const deleteOrder = async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id as string, 10);
-    await prisma.$transaction(async (tx: any) => {
+    await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT set_config('app.current_user_id', ${req.user!.id.toString()}, true)`;
       await tx.order.delete({ where: { id } });
     });
@@ -317,7 +317,7 @@ export const reconcileInvoice = async (req: Request, res: Response) => {
     const isMatch = Number(bill_amount).toFixed(2) === orderTotal.toFixed(2);
     const newStatus = isMatch ? "Completed" : "Pending";
 
-    const updated = await prisma.$transaction(async (tx: any) => {
+    const updated = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT set_config('app.current_user_id', ${user.id.toString()}, true)`;
       return tx.order.update({
         where: { id },
@@ -356,7 +356,7 @@ export const closeOrder = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Only pending orders can be closed." });
     }
 
-    const updated = await prisma.$transaction(async (tx: any) => {
+    const updated = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT set_config('app.current_user_id', ${req.user!.id.toString()}, true)`;
       return tx.order.update({
         where: { id },
@@ -425,6 +425,56 @@ export const exportOrders = async (req: Request, res: Response) => {
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     return res.send(buffer);
   } catch (err) {
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+export const advanceOrder = async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id as string, 10);
+    const parseResult = advanceOrderSchema.safeParse(req.body);
+
+    if (!parseResult.success) {
+      return res.status(400).json({ message: "Invalid input", errors: parseResult.error.errors });
+    }
+
+    const { production_remark_type, production_remark_text } = parseResult.data;
+
+    const order = await prisma.order.findUnique({ where: { id } });
+    if (!order) {
+      return res.status(404).json({ message: "Order not found" });
+    }
+    if (order.status !== "Active") {
+      return res.status(400).json({ message: "Only Active orders can be advanced to Pending" });
+    }
+
+    const updatedOrder = await prisma.$transaction(async (tx) => {
+      const updated = await tx.order.update({
+        where: { id },
+        data: {
+          status: "Pending",
+          production_remark_type,
+          production_remark_text,
+        },
+        include: { items: true },
+      });
+
+      await tx.orderChangeLog.create({
+        data: {
+          order_id: id,
+          changed_by: req.user!.id,
+          field_changed: "status",
+          old_value: "Active",
+          new_value: "Pending",
+        },
+      });
+
+      return updated;
+    });
+
+    return res.status(200).json(updatedOrder);
+  } catch (err) {
+    console.error("Advance order error:", err);
     return res.status(500).json({ message: "Internal server error" });
   }
 };

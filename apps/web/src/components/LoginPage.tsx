@@ -128,7 +128,7 @@ export default function LoginPage() {
             />
             <div className="min-w-0">
               <h2 className="truncate text-sm font-extrabold tracking-tight text-[#0057C2] sm:text-base lg:text-lg">
-                SAI BALAJI DIGITALS PVT LTD
+                SAI BALAJI DIGITALS
               </h2>
               <p className="hidden text-xs text-slate-500 sm:block">
                 Where <span className="font-semibold text-[#0A7BE8]">Excellence</span>{" "}

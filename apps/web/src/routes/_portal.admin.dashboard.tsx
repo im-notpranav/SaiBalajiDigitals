@@ -30,7 +30,13 @@ function AdminDashboard() {
   const { data: auditData } = useQuery({ queryKey: ["audit", 1, 6], queryFn: () => fetchAuditLog(1, 6) });
 
   const totalRevenue = dash?.total_revenue || 0;
-  const activeUsers = usersData?.users?.filter((u: any) => u.status === "active").length || 0;
+  
+  const activeUsers = usersData?.users?.filter((u: any) => {
+    if (!u.last_login_at) return false;
+    const diff = Date.now() - new Date(u.last_login_at).getTime();
+    return diff < 30 * 24 * 60 * 60 * 1000;
+  }).length || 0;
+  
   const openAlerts = 3;
 
   const getStatusCount = (s: string) => {

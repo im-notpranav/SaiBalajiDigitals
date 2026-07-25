@@ -26,6 +26,15 @@ export const login = async (req: Request, res: Response) => {
       return res.status(401).json({ message: "Invalid username or password" });
     }
 
+    if (!user.is_active) {
+      return res.status(403).json({ message: "Account is inactive. Please contact the administrator." });
+    }
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { last_login_at: new Date() },
+    });
+
     const payload = {
       id: user.id,
       username: user.username,

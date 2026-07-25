@@ -18,7 +18,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { fetchUsers, createUser } from "@/api/users";
+import { fetchUsers, createUser, toggleUserStatus } from "@/api/users";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_portal/admin/users")({
@@ -52,8 +52,20 @@ function UsersPage() {
     }
   });
 
+  const toggleMutation = useMutation({
+    mutationFn: ({ id, is_active }: { id: number; is_active: boolean }) => toggleUserStatus(id, is_active),
+    onSuccess: () => {
+      toast.success("User status updated");
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+    },
+    onError: (err: any) => {
+      const data = err?.response?.data;
+      toast.error(data?.message || "Failed to update user status");
+    }
+  });
+
   const users = usersData?.users || [];
-  const active = users.filter((u: any) => u.status === "active").length;
+  const active = users.filter((u: any) => u.is_active).length;
   const filtered = users.filter((u: any) =>
     `${u.name} ${u.username} ${u.role}`.toLowerCase().includes(q.toLowerCase()),
   );
@@ -154,7 +166,7 @@ function UsersPage() {
                     <Badge variant="outline" className="capitalize">{u.role.toLowerCase()}</Badge>
                   </TableCell>
                   <TableCell>
-                    {u.status !== "inactive" ? (
+                    {u.is_active ? (
                       <Badge className="bg-success/15 text-success hover:bg-success/20">Active</Badge>
                     ) : (
                       <Badge variant="secondary">Inactive</Badge>
@@ -168,10 +180,11 @@ function UsersPage() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      className={u.status !== "inactive" ? "text-destructive" : "text-success"}
-                      onClick={() => toast.success(`${u.status !== "inactive" ? "Deactivated" : "Reactivated"} ${u.name}`)}
+                      className={u.is_active ? "text-destructive" : "text-success"}
+                      onClick={() => toggleMutation.mutate({ id: u.id, is_active: !u.is_active })}
+                      disabled={toggleMutation.isPending}
                     >
-                      {u.status !== "inactive" ? "Deactivate" : "Reactivate"}
+                      {u.is_active ? "Deactivate" : "Reactivate"}
                     </Button>
                   </TableCell>
                 </TableRow>

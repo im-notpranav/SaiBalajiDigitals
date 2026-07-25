@@ -11,11 +11,27 @@ export type RemarkType =
   | "LessAmount"
   | "FreeOfCost";
 
+export type ClosureRemarkType =
+  | "Delivered"
+  | "CustomerCancelled"
+  | "DuplicateOrder"
+  | "PaymentCleared"
+  | "CustomReason";
+
+export type ProductionRemarkType =
+  | "Clarification"
+  | "InternalNote"
+  | "CustomerUpdate"
+  | "ProductionHandoff"
+  | "QCHold";
+
 export interface AuthUser {
   id: number;
   name: string;
   username: string;
   role: UserRole;
+  is_active?: boolean;
+  last_login_at?: string | null;
   initials: string;
 }
 
@@ -29,6 +45,7 @@ export interface OrderItem {
   total_sft: number;
   rate?: number;
   amount?: number;
+  remarks?: RemarkType | null;
 }
 
 export interface Order {
@@ -39,8 +56,11 @@ export interface Order {
   location: string;
   date?: string;
   po_number?: string | null;
-  remarks?: RemarkType | null;
   status: OrderStatus;
+  closure_remark_type?: ClosureRemarkType | null;
+  closure_remark_text?: string | null;
+  production_remark_type?: ProductionRemarkType | null;
+  production_remark_text?: string | null;
   invoice_no?: string | null;
   bill_amount?: number | null;
   created_by?: number;
@@ -101,12 +121,12 @@ export interface CreateOrderInput {
   location: string;
   date: string;
   po_number?: string | null;
-  remarks?: RemarkType | null;
   items: Array<{
     media: string;
     width_inches: number;
     height_inches: number;
     qty: number;
     rate: number;
+    remarks?: RemarkType | null;
   }>;
 }

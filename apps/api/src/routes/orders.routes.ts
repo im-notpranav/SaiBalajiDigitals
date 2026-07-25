@@ -8,6 +8,7 @@ import {
   reconcileInvoice,
   closeOrder,
   exportOrders,
+  advanceOrder,
 } from "../controllers/orders.controller";
 import { authenticate, authorize } from "../middlewares/auth.middleware";
 
@@ -23,5 +24,6 @@ router.put("/:id", authorize("EMPLOYEE", "ADMIN"), updateOrder);
 router.delete("/:id", authorize("ADMIN"), deleteOrder);
 router.put("/:id/invoice", authorize("ACCOUNTS", "ADMIN"), reconcileInvoice);
 router.put("/:id/close", authorize("ADMIN", "ACCOUNTS"), closeOrder);
+router.put("/:id/advance", authorize("PRODUCTION", "ADMIN"), advanceOrder);
 
 export default router;

@@ -3,21 +3,27 @@ import { prisma } from "../utils/prisma";
 
 export const getDashboard = async (req: Request, res: Response) => {
   try {
-    const total_orders = await prisma.order.count();
-    const active_orders = await prisma.order.count({ where: { status: "Active" } });
-    const pending_orders = await prisma.order.count({ where: { status: "Pending" } });
-    const completed_orders = await prisma.order.count({ where: { status: "Completed" } });
+    const user = req.user!;
+    const baseWhere: any = {};
+    if (user.role === "EMPLOYEE") {
+      baseWhere.created_by = user.id;
+    }
+
+    const total_orders = await prisma.order.count({ where: baseWhere });
+    const active_orders = await prisma.order.count({ where: { ...baseWhere, status: "Active" } });
+    const pending_orders = await prisma.order.count({ where: { ...baseWhere, status: "Pending" } });
+    const completed_orders = await prisma.order.count({ where: { ...baseWhere, status: "Completed" } });
 
     const total_revenue_agg = await prisma.order.aggregate({
       _sum: { bill_amount: true },
-      where: { status: "Completed" },
+      where: { ...baseWhere, status: "Completed" },
     });
     const total_revenue = Number(total_revenue_agg._sum.bill_amount) || 0;
 
     const clients = await prisma.order.groupBy({
       by: ["client_name"],
       _sum: { bill_amount: true },
-      where: { status: "Completed" },
+      where: { ...baseWhere, status: "Completed" },
       orderBy: { _sum: { bill_amount: "desc" } },
       take: 5,
     });

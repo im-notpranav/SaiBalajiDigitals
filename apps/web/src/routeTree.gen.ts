@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PortalRouteImport } from './routes/_portal'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as PortalProfileRouteImport } from './routes/_portal.profile'
 import { Route as PortalAccountantBillingRouteImport } from './routes/_portal.accountant.billing'
 import { Route as PortalAccountantClosureRouteImport } from './routes/_portal.accountant.closure'
 import { Route as PortalAccountantDashboardRouteImport } from './routes/_portal.accountant.dashboard'
@@ -29,11 +30,12 @@ import { Route as PortalEmployeeDashboardRouteImport } from './routes/_portal.em
 import { Route as PortalEmployeeNewOrderRouteImport } from './routes/_portal.employee.new-order'
 import { Route as PortalEmployeeNotificationsRouteImport } from './routes/_portal.employee.notifications'
 import { Route as PortalEmployeeOrdersRouteImport } from './routes/_portal.employee.orders'
-import { Route as PortalEmployeeProfileRouteImport } from './routes/_portal.employee.profile'
 import { Route as PortalProductionDashboardRouteImport } from './routes/_portal.production.dashboard'
 import { Route as PortalProductionNotificationsRouteImport } from './routes/_portal.production.notifications'
 import { Route as PortalProductionQueueRouteImport } from './routes/_portal.production.queue'
 import { Route as PortalProductionRemarksRouteImport } from './routes/_portal.production.remarks'
+import { Route as PortalAdminEditOrderIdRouteImport } from './routes/_portal.admin.edit-order.$id'
+import { Route as PortalEmployeeEditOrderIdRouteImport } from './routes/_portal.employee.edit-order.$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -48,6 +50,11 @@ const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
   getParentRoute: () => rootRouteImport,
+} as any)
+const PortalProfileRoute = PortalProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => PortalRoute,
 } as any)
 const PortalAccountantBillingRoute = PortalAccountantBillingRouteImport.update({
   id: '/accountant/billing',
@@ -139,11 +146,6 @@ const PortalEmployeeOrdersRoute = PortalEmployeeOrdersRouteImport.update({
   path: '/employee/orders',
   getParentRoute: () => PortalRoute,
 } as any)
-const PortalEmployeeProfileRoute = PortalEmployeeProfileRouteImport.update({
-  id: '/employee/profile',
-  path: '/employee/profile',
-  getParentRoute: () => PortalRoute,
-} as any)
 const PortalProductionDashboardRoute =
   PortalProductionDashboardRouteImport.update({
     id: '/production/dashboard',
@@ -166,10 +168,22 @@ const PortalProductionRemarksRoute = PortalProductionRemarksRouteImport.update({
   path: '/production/remarks',
   getParentRoute: () => PortalRoute,
 } as any)
+const PortalAdminEditOrderIdRoute = PortalAdminEditOrderIdRouteImport.update({
+  id: '/admin/edit-order/$id',
+  path: '/admin/edit-order/$id',
+  getParentRoute: () => PortalRoute,
+} as any)
+const PortalEmployeeEditOrderIdRoute =
+  PortalEmployeeEditOrderIdRouteImport.update({
+    id: '/employee/edit-order/$id',
+    path: '/employee/edit-order/$id',
+    getParentRoute: () => PortalRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/profile': typeof PortalProfileRoute
   '/accountant/billing': typeof PortalAccountantBillingRoute
   '/accountant/closure': typeof PortalAccountantClosureRoute
   '/accountant/dashboard': typeof PortalAccountantDashboardRoute
@@ -187,15 +201,17 @@ export interface FileRoutesByFullPath {
   '/employee/new-order': typeof PortalEmployeeNewOrderRoute
   '/employee/notifications': typeof PortalEmployeeNotificationsRoute
   '/employee/orders': typeof PortalEmployeeOrdersRoute
-  '/employee/profile': typeof PortalEmployeeProfileRoute
   '/production/dashboard': typeof PortalProductionDashboardRoute
   '/production/notifications': typeof PortalProductionNotificationsRoute
   '/production/queue': typeof PortalProductionQueueRoute
   '/production/remarks': typeof PortalProductionRemarksRoute
+  '/admin/edit-order/$id': typeof PortalAdminEditOrderIdRoute
+  '/employee/edit-order/$id': typeof PortalEmployeeEditOrderIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
+  '/profile': typeof PortalProfileRoute
   '/accountant/billing': typeof PortalAccountantBillingRoute
   '/accountant/closure': typeof PortalAccountantClosureRoute
   '/accountant/dashboard': typeof PortalAccountantDashboardRoute
@@ -213,17 +229,19 @@ export interface FileRoutesByTo {
   '/employee/new-order': typeof PortalEmployeeNewOrderRoute
   '/employee/notifications': typeof PortalEmployeeNotificationsRoute
   '/employee/orders': typeof PortalEmployeeOrdersRoute
-  '/employee/profile': typeof PortalEmployeeProfileRoute
   '/production/dashboard': typeof PortalProductionDashboardRoute
   '/production/notifications': typeof PortalProductionNotificationsRoute
   '/production/queue': typeof PortalProductionQueueRoute
   '/production/remarks': typeof PortalProductionRemarksRoute
+  '/admin/edit-order/$id': typeof PortalAdminEditOrderIdRoute
+  '/employee/edit-order/$id': typeof PortalEmployeeEditOrderIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_portal': typeof PortalRouteWithChildren
   '/login': typeof LoginRoute
+  '/_portal/profile': typeof PortalProfileRoute
   '/_portal/accountant/billing': typeof PortalAccountantBillingRoute
   '/_portal/accountant/closure': typeof PortalAccountantClosureRoute
   '/_portal/accountant/dashboard': typeof PortalAccountantDashboardRoute
@@ -241,17 +259,19 @@ export interface FileRoutesById {
   '/_portal/employee/new-order': typeof PortalEmployeeNewOrderRoute
   '/_portal/employee/notifications': typeof PortalEmployeeNotificationsRoute
   '/_portal/employee/orders': typeof PortalEmployeeOrdersRoute
-  '/_portal/employee/profile': typeof PortalEmployeeProfileRoute
   '/_portal/production/dashboard': typeof PortalProductionDashboardRoute
   '/_portal/production/notifications': typeof PortalProductionNotificationsRoute
   '/_portal/production/queue': typeof PortalProductionQueueRoute
   '/_portal/production/remarks': typeof PortalProductionRemarksRoute
+  '/_portal/admin/edit-order/$id': typeof PortalAdminEditOrderIdRoute
+  '/_portal/employee/edit-order/$id': typeof PortalEmployeeEditOrderIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/login'
+    | '/profile'
     | '/accountant/billing'
     | '/accountant/closure'
     | '/accountant/dashboard'
@@ -269,15 +289,17 @@ export interface FileRouteTypes {
     | '/employee/new-order'
     | '/employee/notifications'
     | '/employee/orders'
-    | '/employee/profile'
     | '/production/dashboard'
     | '/production/notifications'
     | '/production/queue'
     | '/production/remarks'
+    | '/admin/edit-order/$id'
+    | '/employee/edit-order/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/login'
+    | '/profile'
     | '/accountant/billing'
     | '/accountant/closure'
     | '/accountant/dashboard'
@@ -295,16 +317,18 @@ export interface FileRouteTypes {
     | '/employee/new-order'
     | '/employee/notifications'
     | '/employee/orders'
-    | '/employee/profile'
     | '/production/dashboard'
     | '/production/notifications'
     | '/production/queue'
     | '/production/remarks'
+    | '/admin/edit-order/$id'
+    | '/employee/edit-order/$id'
   id:
     | '__root__'
     | '/'
     | '/_portal'
     | '/login'
+    | '/_portal/profile'
     | '/_portal/accountant/billing'
     | '/_portal/accountant/closure'
     | '/_portal/accountant/dashboard'
@@ -322,11 +346,12 @@ export interface FileRouteTypes {
     | '/_portal/employee/new-order'
     | '/_portal/employee/notifications'
     | '/_portal/employee/orders'
-    | '/_portal/employee/profile'
     | '/_portal/production/dashboard'
     | '/_portal/production/notifications'
     | '/_portal/production/queue'
     | '/_portal/production/remarks'
+    | '/_portal/admin/edit-order/$id'
+    | '/_portal/employee/edit-order/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -357,6 +382,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_portal/profile': {
+      id: '/_portal/profile'
+      path: '/profile'
+      fullPath: '/profile'
+      preLoaderRoute: typeof PortalProfileRouteImport
+      parentRoute: typeof PortalRoute
     }
     '/_portal/accountant/billing': {
       id: '/_portal/accountant/billing'
@@ -477,13 +509,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PortalEmployeeOrdersRouteImport
       parentRoute: typeof PortalRoute
     }
-    '/_portal/employee/profile': {
-      id: '/_portal/employee/profile'
-      path: '/employee/profile'
-      fullPath: '/employee/profile'
-      preLoaderRoute: typeof PortalEmployeeProfileRouteImport
-      parentRoute: typeof PortalRoute
-    }
     '/_portal/production/dashboard': {
       id: '/_portal/production/dashboard'
       path: '/production/dashboard'
@@ -512,10 +537,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PortalProductionRemarksRouteImport
       parentRoute: typeof PortalRoute
     }
+    '/_portal/admin/edit-order/$id': {
+      id: '/_portal/admin/edit-order/$id'
+      path: '/admin/edit-order/$id'
+      fullPath: '/admin/edit-order/$id'
+      preLoaderRoute: typeof PortalAdminEditOrderIdRouteImport
+      parentRoute: typeof PortalRoute
+    }
+    '/_portal/employee/edit-order/$id': {
+      id: '/_portal/employee/edit-order/$id'
+      path: '/employee/edit-order/$id'
+      fullPath: '/employee/edit-order/$id'
+      preLoaderRoute: typeof PortalEmployeeEditOrderIdRouteImport
+      parentRoute: typeof PortalRoute
+    }
   }
 }
 
 interface PortalRouteChildren {
+  PortalProfileRoute: typeof PortalProfileRoute
   PortalAccountantBillingRoute: typeof PortalAccountantBillingRoute
   PortalAccountantClosureRoute: typeof PortalAccountantClosureRoute
   PortalAccountantDashboardRoute: typeof PortalAccountantDashboardRoute
@@ -533,14 +573,16 @@ interface PortalRouteChildren {
   PortalEmployeeNewOrderRoute: typeof PortalEmployeeNewOrderRoute
   PortalEmployeeNotificationsRoute: typeof PortalEmployeeNotificationsRoute
   PortalEmployeeOrdersRoute: typeof PortalEmployeeOrdersRoute
-  PortalEmployeeProfileRoute: typeof PortalEmployeeProfileRoute
   PortalProductionDashboardRoute: typeof PortalProductionDashboardRoute
   PortalProductionNotificationsRoute: typeof PortalProductionNotificationsRoute
   PortalProductionQueueRoute: typeof PortalProductionQueueRoute
   PortalProductionRemarksRoute: typeof PortalProductionRemarksRoute
+  PortalAdminEditOrderIdRoute: typeof PortalAdminEditOrderIdRoute
+  PortalEmployeeEditOrderIdRoute: typeof PortalEmployeeEditOrderIdRoute
 }
 
 const PortalRouteChildren: PortalRouteChildren = {
+  PortalProfileRoute: PortalProfileRoute,
   PortalAccountantBillingRoute: PortalAccountantBillingRoute,
   PortalAccountantClosureRoute: PortalAccountantClosureRoute,
   PortalAccountantDashboardRoute: PortalAccountantDashboardRoute,
@@ -558,11 +600,12 @@ const PortalRouteChildren: PortalRouteChildren = {
   PortalEmployeeNewOrderRoute: PortalEmployeeNewOrderRoute,
   PortalEmployeeNotificationsRoute: PortalEmployeeNotificationsRoute,
   PortalEmployeeOrdersRoute: PortalEmployeeOrdersRoute,
-  PortalEmployeeProfileRoute: PortalEmployeeProfileRoute,
   PortalProductionDashboardRoute: PortalProductionDashboardRoute,
   PortalProductionNotificationsRoute: PortalProductionNotificationsRoute,
   PortalProductionQueueRoute: PortalProductionQueueRoute,
   PortalProductionRemarksRoute: PortalProductionRemarksRoute,
+  PortalAdminEditOrderIdRoute: PortalAdminEditOrderIdRoute,
+  PortalEmployeeEditOrderIdRoute: PortalEmployeeEditOrderIdRoute,
 }
 
 const PortalRouteWithChildren =

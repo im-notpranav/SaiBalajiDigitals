@@ -1,4 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Bell, LogOut, Search, User, Sun, Moon, ChevronDown, CalendarRange } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ import { cn } from "@/lib/utils";
 export function TopHeader() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [dark, setDark] = useState(false);
   const unread = NOTIFICATIONS.filter((n) => !n.read).length;
 
@@ -26,8 +28,9 @@ export function TopHeader() {
     document.documentElement.classList.toggle("dark", dark);
   }, [dark]);
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    queryClient.removeQueries({ queryKey: ["auth", "me"] });
+    await logout();
     navigate({ to: "/login" });
   };
 

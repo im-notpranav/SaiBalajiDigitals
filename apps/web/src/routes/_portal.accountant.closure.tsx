@@ -45,18 +45,21 @@ function ClosurePage() {
   const eligible = allPending.filter((o: Order) => !!o.invoice_no).slice(0, 20);
 
   const [orderNum, setOrderNum] = useState<string>("");
-  const [remark, setRemark] = useState<string>(CLOSURE_REMARK_TYPES[0]!);
+  const [remark, setRemark] = useState<string>(CLOSURE_REMARK_TYPES[0]!.value);
   const [custom, setCustom] = useState("");
 
-  const isCustom = remark === "Custom Reason";
+  const isCustom = remark === "CustomReason";
   const canSubmit = !!orderNum && (!isCustom || custom.trim().length > 0);
   const target = eligible.find((o: Order) => o.order_no === orderNum);
 
   const close = async () => {
     if (!target) return;
     try {
-      await closeOrder(target.id, isCustom ? custom : remark);
-      toast.success(`${orderNum} closed`, { description: `Remark: ${isCustom ? custom : remark}` });
+      await closeOrder(target.id, {
+        closure_remark_type: remark,
+        closure_remark_text: isCustom ? custom : undefined
+      });
+      toast.success(`${orderNum} closed`);
       setOrderNum("");
       setCustom("");
     } catch (e: any) {
@@ -99,7 +102,7 @@ function ClosurePage() {
                   <Select value={remark} onValueChange={setRemark}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {CLOSURE_REMARK_TYPES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                      {CLOSURE_REMARK_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>

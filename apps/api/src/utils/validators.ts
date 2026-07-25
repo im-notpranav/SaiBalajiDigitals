@@ -18,6 +18,14 @@ export const closureRemarkEnum = z.enum([
   "CustomReason",
 ]);
 
+export const productionRemarkEnum = z.enum([
+  "Clarification",
+  "InternalNote",
+  "CustomerUpdate",
+  "ProductionHandoff",
+  "QCHold",
+]);
+
 export const orderItemSchema = z.object({
   media: z.string().min(1).max(200),
   width_inches: z.coerce.number().positive(),
@@ -54,6 +62,11 @@ export const closeOrderSchema = z.object({
     path: ["closure_remark_text"],
   }
 );
+
+export const advanceOrderSchema = z.object({
+  production_remark_type: productionRemarkEnum,
+  production_remark_text: z.string().max(500).optional().nullable(),
+});
 
 export const createUserSchema = z.object({
   name: z.string().min(1).max(100),
