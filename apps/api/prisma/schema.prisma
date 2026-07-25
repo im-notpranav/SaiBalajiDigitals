@@ -1,0 +1,113 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  EMPLOYEE
+  ACCOUNTS
+  PRODUCTION
+}
+
+enum OrderStatus {
+  Active
+  Pending
+  Completed
+}
+
+enum RemarkType {
+  Reprint
+  Sample
+  UnderWarranty
+  Revised
+  ExtraAmount
+  LessAmount
+  FreeOfCost
+}
+
+model User {
+  id         Int              @id @default(autoincrement())
+  name       String
+  username   String           @unique
+  password   String
+  role       Role
+  created_at DateTime         @default(now())
+  updated_at DateTime         @updatedAt
+  orders     Order[]
+  changeLogs OrderChangeLog[]
+}
+
+model OrderSequence {
+  id          Int    @id @default(1)
+  year_code   String
+  last_number Int    @default(0)
+}
+
+model Order {
+  id           Int              @id @default(autoincrement())
+  order_no     String           @unique
+  client_name  String
+  store_name   String
+  location     String
+  date         DateTime         @default(now())
+  po_number    String?
+  status       OrderStatus      @default(Active)
+  invoice_no   String?
+  bill_amount  Decimal?         @db.Decimal(10, 2)
+  created_by   Int
+  creator      User             @relation(fields: [created_by], references: [id])
+  creator_name String
+  items        OrderItem[]
+  changeLogs   OrderChangeLog[]
+  created_at   DateTime         @default(now())
+  updated_at   DateTime         @updatedAt
+
+  @@index([client_name])
+  @@index([store_name])
+  @@index([status])
+  @@index([created_by])
+}
+
+model OrderItem {
+  id            Int     @id @default(autoincrement())
+  order_id      Int
+  order         Order   @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  s_no          Int
+  media         String
+  width_inches  Decimal @db.Decimal(10, 2)
+  height_inches Decimal @db.Decimal(10, 2)
+  qty           Decimal @db.Decimal(10, 2)
+  total_sft     Decimal @db.Decimal(10, 2)
+  rate          Decimal @db.Decimal(10, 2)
+  amount        Decimal @db.Decimal(10, 2)
+  remarks       RemarkType?
+}
+
+model OrderChangeLog {
+  id            Int      @id @default(autoincrement())
+  order_id      Int
+  order         Order    @relation(fields: [order_id], references: [id])
+  order_item_id Int?
+  changed_by    Int
+  changer       User     @relation(fields: [changed_by], references: [id])
+  field_changed String
+  old_value     String
+  new_value     String
+  changed_at    DateTime @default(now())
+}
+
+model AuditLog {
+  id         BigInt   @id @default(autoincrement())
+  table_name String
+  record_id  Int
+  action     String
+  changed_by Int?
+  old_data   Json?
+  new_data   Json?
+  changed_at DateTime @default(now())
+}
