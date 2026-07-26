@@ -98,7 +98,7 @@ function AdminOrders() {
           showCreator 
           action={(o) => (
             <div className="flex justify-end gap-2">
-              <Link to="/admin/orders/$id" params={{ id: String(o.id) }} className={buttonVariants({ size: "sm", variant: "ghost" })}>
+              <Link to="/admin/orders/$id" params={{ id: String(o.id) }} className={buttonVariants({ size: "sm", variant: "ghost" })} onClick={() => console.log("VIEW CLICKED", o.id)}>
                 View
               </Link>
               {o.status !== "Completed" && (

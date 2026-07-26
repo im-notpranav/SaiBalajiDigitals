@@ -6,7 +6,7 @@ import { getRouter } from "./router";
 import "./styles.css";
 
 const queryClient = new QueryClient();
-const router = getRouter();
+const router = getRouter(queryClient);
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
