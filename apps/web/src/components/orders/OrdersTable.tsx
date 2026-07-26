@@ -21,7 +21,6 @@ interface OrdersTableProps {
   showCreator?: boolean;
   showAmount?: boolean;
   action?: (o: Order) => ReactNode;
-  detailBase?: string;
 }
 
 export function OrdersTable({
@@ -29,7 +28,6 @@ export function OrdersTable({
   showCreator,
   showAmount = true,
   action,
-  detailBase,
 }: OrdersTableProps) {
   const { sorted, sortKey, sortDir, toggleSort } = useSortableTable(
     orders,
@@ -112,14 +110,6 @@ export function OrdersTable({
                 </TableCell>
                 {action ? (
                   <TableCell className="text-right">{action(o)}</TableCell>
-                ) : detailBase ? (
-                  <TableCell className="text-right">
-                    <Button asChild size="sm" variant="ghost">
-                      <Link to={detailBase}>
-                        <Eye className="mr-1 h-3.5 w-3.5" /> View
-                      </Link>
-                    </Button>
-                  </TableCell>
                 ) : null}
               </TableRow>
             ))}

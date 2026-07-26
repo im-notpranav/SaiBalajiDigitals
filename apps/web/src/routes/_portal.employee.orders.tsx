@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Search, Download, Edit } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { OrdersTable } from "@/components/orders/OrdersTable";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -96,20 +96,15 @@ function MyOrders() {
       ) : (
         <OrdersTable 
           orders={orders} 
-          detailBase="/employee/orders" 
           action={(o) => (
             <div className="flex justify-end gap-2">
-              <Button asChild size="sm" variant="ghost">
-                <Link to="/employee/orders/$id" params={{ id: String(o.id) }}>
-                  View
-                </Link>
-              </Button>
+              <Link to="/employee/orders/$id" params={{ id: String(o.id) }} className={buttonVariants({ size: "sm", variant: "ghost" })}>
+                View
+              </Link>
               {o.status === "Active" && (
-                <Button asChild size="sm" variant="outline">
-                  <Link to="/employee/edit-order/$id" params={{ id: String(o.id) }}>
-                    <Edit className="mr-1 h-3.5 w-3.5" /> Edit
-                  </Link>
-                </Button>
+                <Link to="/employee/edit-order/$id" params={{ id: String(o.id) }} className={buttonVariants({ size: "sm", variant: "outline" })}>
+                  <Edit className="mr-1 h-3.5 w-3.5" /> Edit
+                </Link>
               )}
             </div>
           )}
