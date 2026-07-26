@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { PRODUCTION_REMARK_TYPES, CLOSURE_REMARK_TYPES } from "@/lib/constants";
+import { REMARK_TYPES } from "@/lib/constants";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_portal/admin/settings")({
@@ -41,20 +41,13 @@ function SettingsPage() {
           <h3 className="mb-4 text-sm font-semibold">Reference data</h3>
           <div className="space-y-4">
             <div>
-              <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Production remark types</div>
+              <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Order remark types</div>
               <div className="flex flex-wrap gap-1.5">
-                {PRODUCTION_REMARK_TYPES.map((r) => <Badge key={r.value} variant="outline">{r.label}</Badge>)}
-              </div>
-            </div>
-            <div>
-              <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Closure remark types</div>
-              <div className="flex flex-wrap gap-1.5">
-                {CLOSURE_REMARK_TYPES.map((r) => <Badge key={r.value} variant="outline">{r.label}</Badge>)}
+                {REMARK_TYPES.map((r) => <Badge key={r.value} variant="outline">{r.label}</Badge>)}
               </div>
             </div>
             <div className="rounded-lg border border-info/30 bg-info/5 p-3 text-xs text-info">
-              Enum-backed values map 1:1 with Postgres enums <code className="mx-1 font-mono">remark_type</code> and{" "}
-              <code className="mx-1 font-mono">closure_remark_type</code>. Changes require a DB migration.
+              Enum-backed values map 1:1 with Postgres enums. Changes require a DB migration.
             </div>
           </div>
         </div>

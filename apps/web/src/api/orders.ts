@@ -62,7 +62,7 @@ export async function submitInvoice(id: number, invoice_no: string, bill_amount:
   return { order: res };
 }
 
-export async function closeOrder(id: number, payload: { closure_remark_type: string, closure_remark_text?: string | null }) {
+export async function closeOrder(id: number, payload: { remarks?: string | null, remarks_other_text?: string | null }) {
   const res = await apiFetch<Order>(`/orders/${id}/close`, {
     method: "PUT",
     data: payload,
@@ -77,16 +77,7 @@ export async function forceCloseOrder(id: number) {
   return { order: res };
 }
 
-export async function advanceOrder(
-  id: number,
-  payload: { production_remark_type: string; production_remark_text?: string },
-) {
-  const res = await apiFetch<Order>(`/orders/${id}/advance`, {
-    method: "PUT",
-    data: payload,
-  });
-  return { order: res };
-}
+
 
 export async function exportOrders(params: OrdersQuery = {}) {
   const qs = new URLSearchParams();

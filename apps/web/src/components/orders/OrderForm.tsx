@@ -22,7 +22,6 @@ interface Line {
   height_inches: number;
   qty: number;
   rate: number;
-  remarks?: RemarkType | "none";
 }
 
 export interface OrderFormProps {
@@ -36,6 +35,8 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false }: Ord
   const [storeName, setStoreName] = useState(defaultValues?.store_name || "");
   const [location, setLocation] = useState(defaultValues?.location || "");
   const [poNumber, setPoNumber] = useState(defaultValues?.po_number || "");
+  const [remarkType, setRemarkType] = useState<RemarkType | "none" | "Other">(defaultValues?.remarks || "none");
+  const [remarkOther, setRemarkOther] = useState(defaultValues?.remarks_other_text || "");
   
   const [lines, setLines] = useState<Line[]>(
     defaultValues?.items?.length
@@ -46,9 +47,8 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false }: Ord
           height_inches: item.height_inches,
           qty: item.qty,
           rate: Number(item.rate),
-          remarks: item.remarks || "none",
         }))
-      : [{ id: crypto.randomUUID(), media: "", width_inches: 0, height_inches: 0, qty: 1, rate: 0, remarks: "none" }]
+      : [{ id: crypto.randomUUID(), media: "", width_inches: 0, height_inches: 0, qty: 1, rate: 0 }]
   );
 
   const getSft = (l: Line) => (l.width_inches * l.height_inches) / 144;
@@ -60,7 +60,7 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false }: Ord
   const update = (id: string, patch: Partial<Line>) =>
     setLines((ls) => ls.map((l) => (l.id === id ? { ...l, ...patch } : l)));
   const addLine = () =>
-    setLines((ls) => [...ls, { id: crypto.randomUUID(), media: "", width_inches: 0, height_inches: 0, qty: 1, rate: 0, remarks: "none" }]);
+    setLines((ls) => [...ls, { id: crypto.randomUUID(), media: "", width_inches: 0, height_inches: 0, qty: 1, rate: 0 }]);
   const removeLine = (id: string) => setLines((ls) => (ls.length > 1 ? ls.filter((l) => l.id !== id) : ls));
 
   const submit = async (e: React.FormEvent) => {
@@ -84,8 +84,9 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false }: Ord
         height_inches: l.height_inches,
         qty: l.qty,
         rate: l.rate,
-        remarks: l.remarks === "none" ? undefined : (l.remarks as RemarkType),
       })),
+      remarks: remarkType === "none" ? undefined : (remarkType as RemarkType),
+      remarks_other_text: remarkType === "Other" && remarkOther.trim() ? remarkOther.trim() : undefined,
     };
     
     await onSubmit(payload);
@@ -119,6 +120,23 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false }: Ord
               <Label htmlFor="poNumber">PO Number (Optional)</Label>
               <Input id="poNumber" value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="e.g. PO-12345" className="mt-1.5" />
             </div>
+            <div>
+              <Label>Order Remarks</Label>
+              <Select value={remarkType} onValueChange={(val) => setRemarkType(val as any)}>
+                <SelectTrigger className="mt-1.5"><SelectValue placeholder="None" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none" className="text-muted-foreground italic">None</SelectItem>
+                  {REMARK_TYPES.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
+                  <SelectItem value="Other">Other (Custom)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {remarkType === "Other" && (
+              <div className="animate-pop-in sm:col-span-2">
+                <Label>Custom Remarks *</Label>
+                <Input value={remarkOther} onChange={(e) => setRemarkOther(e.target.value)} placeholder="Enter custom remarks" className="mt-1.5" />
+              </div>
+            )}
           </div>
         </motion.section>
 
@@ -187,16 +205,6 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false }: Ord
                       onChange={(e) => update(line.id, { rate: Number(e.target.value) })}
                       className="mt-1"
                     />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <Label className="text-[10px] uppercase text-muted-foreground">Remarks</Label>
-                    <Select value={line.remarks} onValueChange={(val) => update(line.id, { remarks: val as any })}>
-                      <SelectTrigger className="mt-1 h-9 px-2 text-xs"><SelectValue placeholder="None" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none" className="text-muted-foreground italic text-xs">None</SelectItem>
-                        {REMARK_TYPES.map(r => <SelectItem key={r.value} value={r.value} className="text-xs">{r.label}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
                   </div>
                   <div className="absolute right-2 top-1/2 -translate-y-1/2">
                     <Button

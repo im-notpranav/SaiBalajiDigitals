@@ -28,6 +28,7 @@ import usersRoutes from "./routes/users.routes";
 import dashboardRoutes from "./routes/dashboard.routes";
 import adminRoutes from "./routes/admin.routes";
 import notificationsRoutes from "./routes/notifications.routes";
+import { initEmailService } from "./services/email.service";
 
 app.use("/api/auth", authRoutes);
 app.use("/api/orders", ordersRoutes);
@@ -40,6 +41,7 @@ app.get("/health", (req, res) => {
   res.status(200).json({ status: "ok" });
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`Server listening on port ${PORT}`);
+  await initEmailService();
 });

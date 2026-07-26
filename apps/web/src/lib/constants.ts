@@ -1,4 +1,4 @@
-import type { UserRole, RemarkType, ClosureRemarkType, ProductionRemarkType } from "@sb-oms/shared-types";
+import type { UserRole, RemarkType } from "@sb-oms/shared-types";
 
 export const roleHome: Record<UserRole, string> = {
   employee: "/employee/dashboard",
@@ -41,27 +41,5 @@ export const NOTIFICATIONS: Notification[] = [
   { id: "n5", title: "Admin override applied", body: "ORD261000 edited by Administrator.", at: "1d ago", read: true, kind: "info" },
 ];
 
-export const REVENUE_TREND = [
-  { month: "Nov", revenue: 1240000, orders: 78 },
-  { month: "Dec", revenue: 1580000, orders: 92 },
-  { month: "Jan", revenue: 1420000, orders: 85 },
-  { month: "Feb", revenue: 1780000, orders: 104 },
-  { month: "Mar", revenue: 2140000, orders: 121 },
-  { month: "Apr", revenue: 1890000, orders: 112 },
-];
 
-export const CLOSURE_REMARK_TYPES: { value: ClosureRemarkType; label: string }[] = [
-  { value: "Delivered", label: "Delivered" },
-  { value: "CustomerCancelled", label: "Customer Cancelled" },
-  { value: "DuplicateOrder", label: "Duplicate Order" },
-  { value: "PaymentCleared", label: "Payment Cleared" },
-  { value: "CustomReason", label: "Custom Reason" },
-];
 
-export const PRODUCTION_REMARK_TYPES: { value: ProductionRemarkType; label: string }[] = [
-  { value: "Clarification", label: "Clarification" },
-  { value: "InternalNote", label: "Internal Note" },
-  { value: "CustomerUpdate", label: "Customer Update" },
-  { value: "ProductionHandoff", label: "Production Handoff" },
-  { value: "QCHold", label: "QC Hold" },
-];

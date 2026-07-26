@@ -3,6 +3,7 @@ import { format } from "date-fns";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { StatusBadge } from "./StatusBadge";
 import { inr } from "@/lib/format";
+import { remarkLabel } from "@/lib/constants";
 import type { Order, OrderItem } from "@sb-oms/shared-types";
 
 export interface OrderDetailProps {
@@ -54,6 +55,18 @@ export function OrderDetail({ order, actions }: OrderDetailProps) {
               <div className="font-semibold">{order.creator.name}</div>
             </div>
           )}
+          {order.remarks && (
+            <div>
+              <div className="text-xs text-muted-foreground uppercase">Remarks</div>
+              <div className="font-semibold">{remarkLabel(order.remarks)}</div>
+            </div>
+          )}
+          {order.remarks_other_text && (
+            <div className="sm:col-span-2 lg:col-span-4">
+              <div className="text-xs text-muted-foreground uppercase">Custom Remarks</div>
+              <div className="font-semibold text-muted-foreground mt-1 whitespace-pre-wrap">{order.remarks_other_text}</div>
+            </div>
+          )}
         </div>
       </motion.section>
 
@@ -76,7 +89,6 @@ export function OrderDetail({ order, actions }: OrderDetailProps) {
               <TableHead className="text-right">Total Sft</TableHead>
               {hasFinancials && <TableHead className="text-right">Rate (₹)</TableHead>}
               {hasFinancials && <TableHead className="text-right">Amount (₹)</TableHead>}
-              <TableHead>Remarks</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -89,7 +101,6 @@ export function OrderDetail({ order, actions }: OrderDetailProps) {
                 <TableCell className="text-right">{(item.total_sft || 0).toFixed(2)}</TableCell>
                 {hasFinancials && <TableCell className="text-right">{item.rate}</TableCell>}
                 {hasFinancials && <TableCell className="text-right font-semibold">{inr(item.amount || 0)}</TableCell>}
-                <TableCell className="text-muted-foreground text-xs">{item.remarks || "-"}</TableCell>
               </TableRow>
             ))}
           </TableBody>

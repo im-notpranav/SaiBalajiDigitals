@@ -2,7 +2,7 @@ import nodemailer from "nodemailer";
 
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
-  port: parseInt(process.env.SMTP_PORT || "2525"),
+  port: parseInt(process.env.SMTP_PORT || "587"),
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
@@ -10,6 +10,15 @@ const transporter = nodemailer.createTransport({
 });
 
 const adminEmail = process.env.ADMIN_EMAIL || "admin@saibalaji.com";
+
+export async function initEmailService() {
+  try {
+    await transporter.verify();
+    console.log("✅ Email service initialized successfully");
+  } catch (err) {
+    console.error("❌ Email service failed to connect:", err);
+  }
+}
 
 interface FieldChange {
   field: string;

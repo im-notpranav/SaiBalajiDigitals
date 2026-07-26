@@ -2,7 +2,6 @@ import { createFileRoute } from "@tanstack/react-router";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { KpiCard } from "@/components/kpi/KpiCard";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { REVENUE_TREND } from "@/lib/constants";
 import { useQuery } from "@tanstack/react-query";
 import { fetchDashboard } from "@/api/dashboard";
 import { inr } from "@/lib/format";
@@ -29,7 +28,7 @@ function AdminReports() {
         <h3 className="mb-4 text-sm font-semibold">Orders by month</h3>
         <div className="h-72">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={REVENUE_TREND}>
+            <BarChart data={dash?.revenue_trend || []}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
               <XAxis dataKey="month" stroke="var(--color-muted-foreground)" fontSize={12} />
               <YAxis stroke="var(--color-muted-foreground)" fontSize={12} />

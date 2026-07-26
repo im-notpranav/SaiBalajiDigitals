@@ -1,6 +1,6 @@
 export type UserRole = "employee" | "production" | "accountant" | "admin";
 
-export type OrderStatus = "Active" | "Pending" | "Unsettled" | "Completed";
+export type OrderStatus = "Active" | "Pending" | "Completed";
 
 export type RemarkType =
   | "Reprint"
@@ -11,19 +11,7 @@ export type RemarkType =
   | "LessAmount"
   | "FreeOfCost";
 
-export type ClosureRemarkType =
-  | "Delivered"
-  | "CustomerCancelled"
-  | "DuplicateOrder"
-  | "PaymentCleared"
-  | "CustomReason";
 
-export type ProductionRemarkType =
-  | "Clarification"
-  | "InternalNote"
-  | "CustomerUpdate"
-  | "ProductionHandoff"
-  | "QCHold";
 
 export interface AuthUser {
   id: number;
@@ -45,7 +33,7 @@ export interface OrderItem {
   total_sft: number;
   rate?: number;
   amount?: number;
-  remarks?: RemarkType | null;
+
 }
 
 export interface Order {
@@ -57,10 +45,8 @@ export interface Order {
   date?: string;
   po_number?: string | null;
   status: OrderStatus;
-  closure_remark_type?: ClosureRemarkType | null;
-  closure_remark_text?: string | null;
-  production_remark_type?: ProductionRemarkType | null;
-  production_remark_text?: string | null;
+  remarks?: RemarkType | null;
+  remarks_other_text?: string | null;
   invoice_no?: string | null;
   bill_amount?: number | null;
   created_by?: number;
@@ -121,13 +107,15 @@ export interface CreateOrderInput {
   location: string;
   date: string;
   po_number?: string | null;
+  remarks?: RemarkType | null;
+  remarks_other_text?: string | null;
   items: Array<{
     media: string;
     width_inches: number;
     height_inches: number;
     qty: number;
     rate: number;
-    remarks?: RemarkType | null;
+
   }>;
 }
 

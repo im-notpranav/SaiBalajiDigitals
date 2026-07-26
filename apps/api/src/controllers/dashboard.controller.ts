@@ -42,6 +42,35 @@ export const getDashboard = async (req: Request, res: Response) => {
       revenue: Number(c._sum.bill_amount) || 0,
     }));
 
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    
+    const recentOrders = await prisma.order.findMany({
+      where: { ...baseWhere, status: "Completed", date: { gte: sixMonthsAgo } },
+      select: { date: true, bill_amount: true, id: true },
+    });
+    
+    const trendMap = new Map<string, { revenue: number; orders: number }>();
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date();
+      d.setMonth(d.getMonth() - i);
+      const monthStr = d.toLocaleString('default', { month: 'short' });
+      trendMap.set(monthStr, { revenue: 0, orders: 0 });
+    }
+    
+    recentOrders.forEach(o => {
+      const monthStr = o.date.toLocaleString('default', { month: 'short' });
+      if (trendMap.has(monthStr)) {
+        const current = trendMap.get(monthStr)!;
+        trendMap.set(monthStr, {
+          revenue: current.revenue + (Number(o.bill_amount) || 0),
+          orders: current.orders + 1,
+        });
+      }
+    });
+    
+    const revenue_trend = Array.from(trendMap.entries()).map(([month, data]) => ({ month, revenue: data.revenue, orders: data.orders }));
+
     return res.status(200).json({
       total_orders,
       active_orders,
@@ -49,6 +78,7 @@ export const getDashboard = async (req: Request, res: Response) => {
       completed_orders,
       total_revenue,
       revenue_by_client,
+      revenue_trend,
     });
   } catch (err) {
     return res.status(500).json({ message: "Internal server error" });

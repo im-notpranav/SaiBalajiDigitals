@@ -80,7 +80,7 @@ function ProductionDashboard() {
                     <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
                       <span>{o.items.length} items</span>
                       <span>
-                        {new Date(o.created_at || "").toLocaleDateString()}
+                        {new Date(o.date || "").toLocaleDateString()}
                       </span>
                     </div>
                   </div>

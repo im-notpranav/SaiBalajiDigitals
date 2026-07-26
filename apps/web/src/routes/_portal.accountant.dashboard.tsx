@@ -13,7 +13,7 @@ import {
 import { PageHeader } from "@/components/layout/PageHeader";
 import { KpiCard } from "@/components/kpi/KpiCard";
 import { Button } from "@/components/ui/button";
-import { REVENUE_TREND } from "@/lib/constants";
+
 import { useQuery } from "@tanstack/react-query";
 import { fetchDashboard } from "@/api/dashboard";
 import { inr } from "@/lib/format";
@@ -68,7 +68,7 @@ function AccountantDashboard() {
           </div>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={REVENUE_TREND}>
+              <AreaChart data={dash?.revenue_trend || []}>
                 <defs>
                   <linearGradient id="rev" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="var(--color-primary)" stopOpacity={0.5} />

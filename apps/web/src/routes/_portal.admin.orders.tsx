@@ -25,9 +25,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { CLOSURE_REMARK_TYPES } from "@/lib/constants";
+import { REMARK_TYPES } from "@/lib/constants";
 import { toast } from "sonner";
-import type { Order } from "@sb-oms/shared-types";
+import type { Order, RemarkType } from "@sb-oms/shared-types";
 
 export const Route = createFileRoute("/_portal/admin/orders")({
   head: () => ({ meta: [{ title: "Order Oversight — SB OMS" }] }),
@@ -39,10 +39,10 @@ function AdminOrders() {
   const [section, setSection] = useState<"active" | "completed">("active");
 
   const [closingOrder, setClosingOrder] = useState<Order | null>(null);
-  const [remark, setRemark] = useState<string>(CLOSURE_REMARK_TYPES[0]!.value);
+  const [remark, setRemark] = useState<RemarkType | "Other">(REMARK_TYPES[0]!.value);
   const [custom, setCustom] = useState("");
 
-  const isCustom = remark === "CustomReason";
+  const isCustom = remark === "Other";
   const canSubmitClose = !isCustom || custom.trim().length > 0;
 
   const { data, isLoading } = useQuery({
@@ -54,8 +54,8 @@ function AdminOrders() {
     if (!closingOrder) return;
     try {
       await closeOrder(closingOrder.id, {
-        closure_remark_type: remark,
-        closure_remark_text: isCustom ? custom : undefined,
+        remarks: remark,
+        remarks_other_text: isCustom ? custom : undefined,
       });
       toast.success(`Order ${closingOrder.order_no} closed (Admin Override)`);
       queryClient.invalidateQueries({ queryKey: ["orders"] });
@@ -64,7 +64,7 @@ function AdminOrders() {
     } finally {
       setClosingOrder(null);
       setCustom("");
-      setRemark(CLOSURE_REMARK_TYPES[0]!.value);
+      setRemark(REMARK_TYPES[0]!.value);
     }
   };
 
@@ -133,12 +133,13 @@ function AdminOrders() {
           <div className="py-4 space-y-4">
             <div>
               <label className="mb-1.5 block text-xs font-semibold">Closure remark type</label>
-              <Select value={remark} onValueChange={setRemark}>
+              <Select value={remark} onValueChange={(v) => setRemark(v as RemarkType | "Other")}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {CLOSURE_REMARK_TYPES.map((t) => (
+                  {REMARK_TYPES.map((t) => (
                     <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
                   ))}
+                  <SelectItem value="Other">Other (Custom)</SelectItem>
                 </SelectContent>
               </Select>
             </div>

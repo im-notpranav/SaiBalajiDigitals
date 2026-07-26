@@ -55,14 +55,7 @@ function OrderDetailAccountant() {
       const res = await submitInvoice(Number(id), invoiceNo, amt);
       queryClient.invalidateQueries({ queryKey: ["orders"] });
       
-      const newStatus = res.order.status;
-      if (newStatus === "Completed") {
-        toast.success(`Order ${order.order_no} completely billed!`);
-      } else {
-        toast.warning(`Order ${order.order_no} marked as Unsettled`, {
-          description: "Bill amount was less than the total order value.",
-        });
-      }
+      toast.success(`Order ${order.order_no} completely billed!`);
       navigate({ to: "/accountant/billing" });
     } catch (err: any) {
       toast.error("Failed to submit invoice", { description: err.message || "Unknown error" });

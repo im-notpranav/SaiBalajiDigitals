@@ -13,7 +13,7 @@ import {
 import { PageHeader } from "@/components/layout/PageHeader";
 import { KpiCard } from "@/components/kpi/KpiCard";
 import { StatusBadge } from "@/components/orders/StatusBadge";
-import { REVENUE_TREND, ORDER_STATUSES } from "@/lib/constants";
+import { ORDER_STATUSES } from "@/lib/constants";
 import { useQuery } from "@tanstack/react-query";
 import { fetchDashboard, fetchAuditLog, fetchAdminDashboard } from "@/api/dashboard";
 import { fetchUsers } from "@/api/users";

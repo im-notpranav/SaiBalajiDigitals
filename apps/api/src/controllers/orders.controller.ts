@@ -1,3 +1,4 @@
+import { serializeDecimals } from "../utils/serialize";
 import { Request, Response } from "express";
 import { prisma } from "../utils/prisma";
 import { generateOrderId } from "../utils/order-sequence";
@@ -64,10 +65,20 @@ export const getOrders = async (req: Request, res: Response) => {
           total_sft: i.total_sft,
         })),
       }));
-      return res.status(200).json({ data: sanitizedOrders, total, page: Number(page) });
+      
+      const sanitizedWithTotal = sanitizedOrders.map((o: any) => {
+        const total_amount = o.items.reduce((sum: number, i: any) => sum + Number(i.amount), 0);
+        return { ...o, total_amount };
+      });
+      return res.status(200).json(serializeDecimals({ data: sanitizedWithTotal, total, page: Number(page) }));
     }
 
-    return res.status(200).json({ data: orders, total, page: Number(page) });
+    
+    const ordersWithTotal = orders.map((o: any) => {
+      const total_amount = o.items.reduce((sum: number, i: any) => sum + Number(i.amount), 0);
+      return { ...o, total_amount };
+    });
+    return res.status(200).json(serializeDecimals({ data: ordersWithTotal, total, page: Number(page) }));
   } catch (err) {
     console.error(err);
     return res.status(500).json({ message: "Internal server error" });
@@ -92,7 +103,9 @@ export const getOrder = async (req: Request, res: Response) => {
       if (order.status !== "Active") {
         return res.status(403).json({ message: "Forbidden" });
       }
-      return res.status(200).json({
+      
+      const total_amount = order.items.reduce((sum: number, i: any) => sum + Number(i.amount), 0);
+      return res.status(200).json(serializeDecimals({
         id: order.id,
         order_no: order.order_no,
         client_name: order.client_name,
@@ -100,6 +113,7 @@ export const getOrder = async (req: Request, res: Response) => {
         location: order.location,
         status: order.status,
         date: order.date,
+        total_amount,
         items: order.items.map((i: any) => ({
           id: i.id,
           s_no: i.s_no,
@@ -109,10 +123,12 @@ export const getOrder = async (req: Request, res: Response) => {
           qty: i.qty,
           total_sft: i.total_sft,
         })),
-      });
+      }));
     }
 
-    return res.status(200).json(order);
+    
+    const total_amount = order.items.reduce((sum: number, i: any) => sum + Number(i.amount), 0);
+    return res.status(200).json(serializeDecimals({ ...order, total_amount }));
   } catch (err) {
     return res.status(500).json({ message: "Internal server error" });
   }
@@ -185,7 +201,9 @@ export const createOrder = async (req: Request, res: Response) => {
       `Client: ${order.client_name}`,
       "info"
     );
-    return res.status(201).json(order);
+    
+    const total_amount = order.items.reduce((sum: number, i: any) => sum + Number(i.amount), 0);
+    return res.status(201).json(serializeDecimals({ ...order, total_amount }));
   
   } catch (err: any) {
     console.error(err);
@@ -295,7 +313,9 @@ export const updateOrder = async (req: Request, res: Response) => {
       await sendOrderEditEmail(existingOrder.order_no, user.name, changes);
     }
 
-    return res.status(200).json(updatedOrder);
+    
+    const total_amount = updatedOrder?.items?.reduce((sum: number, i: any) => sum + Number(i.amount), 0) || 0;
+    return res.status(200).json(serializeDecimals({ ...updatedOrder, total_amount }));
   } catch (err) {
     console.error(err);
     return res.status(500).json({ message: "Internal server error" });
@@ -309,7 +329,7 @@ export const deleteOrder = async (req: Request, res: Response) => {
       await tx.$executeRaw`SELECT set_config('app.current_user_id', ${req.user!.id.toString()}, true)`;
       await tx.order.delete({ where: { id } });
     });
-    return res.status(200).json({ message: "Order deleted" });
+    return res.status(200).json(serializeDecimals({ message: "Order deleted" }));
   } catch (err) {
     return res.status(500).json({ message: "Internal server error" });
   }
@@ -371,7 +391,7 @@ export const reconcileInvoice = async (req: Request, res: Response) => {
       );
     }
 
-    return res.status(200).json(updated);
+    return res.status(200).json(serializeDecimals(updated));
   } catch (err) {
     console.error(err);
     return res.status(500).json({ message: "Internal server error" });
@@ -406,7 +426,7 @@ export const closeOrder = async (req: Request, res: Response) => {
       });
     });
 
-    return res.status(200).json(updated);
+    return res.status(200).json(serializeDecimals(updated));
   } catch (err) {
     return res.status(500).json({ message: "Internal server error" });
   }
@@ -494,7 +514,7 @@ export const forceCloseOrder = async (req: Request, res: Response) => {
       });
     });
 
-    return res.status(200).json(updated);
+    return res.status(200).json(serializeDecimals(updated));
   } catch (err) {
     console.error(err);
     return res.status(500).json({ message: "Internal server error" });
