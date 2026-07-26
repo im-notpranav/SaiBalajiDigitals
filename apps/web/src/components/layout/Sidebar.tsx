@@ -39,14 +39,13 @@ const NAV: Record<UserRole, NavItem[]> = {
   PRODUCTION: [
     { to: "/production/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { to: "/production/queue", label: "Queue", icon: Workflow },
-    { to: "/production/remarks", label: "Remarks", icon: MessageSquare },
     { to: "/production/notifications", label: "Notifications", icon: Bell },
     { to: "/profile", label: "Profile", icon: UserCircle },
   ],
   ACCOUNTS: [
     { to: "/accountant/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { to: "/accountant/billing", label: "Billing Queue", icon: Receipt },
-    { to: "/accountant/closure", label: "Order Closure", icon: Wallet },
+
     { to: "/accountant/reports", label: "Financial Reports", icon: FileBarChart2 },
     { to: "/accountant/financial-year", label: "Financial Year", icon: CalendarClock },
     { to: "/accountant/notifications", label: "Notifications", icon: Bell },
@@ -59,7 +58,6 @@ const NAV: Record<UserRole, NavItem[]> = {
     { to: "/admin/audit", label: "Audit Logs", icon: ShieldCheck },
     { to: "/admin/reports", label: "Reports", icon: FileBarChart2 },
     { to: "/admin/financial-year", label: "Financial Year", icon: CalendarClock },
-    { to: "/admin/settings", label: "Settings", icon: Settings },
     { to: "/profile", label: "Profile", icon: UserCircle },
   ],
 };

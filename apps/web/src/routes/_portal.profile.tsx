@@ -20,6 +20,7 @@ function ProfilePage() {
   const queryClient = useQueryClient();
   
   const [name, setName] = useState(user?.name || "");
+  const [username, setUsername] = useState(user?.username || "");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
 
@@ -39,6 +40,7 @@ function ProfilePage() {
   const handleSave = () => {
     const payload: any = {};
     if (name && name !== user?.name) payload.name = name;
+    if (username && username !== user?.username) payload.username = username;
     if (newPassword) {
       if (!currentPassword) {
         toast.error("Current password is required to set a new password.");
@@ -71,17 +73,18 @@ function ProfilePage() {
         </div>
         <div className="surface-panel space-y-4 p-6 lg:col-span-2">
           <div className="grid gap-4 sm:grid-cols-2">
-            <div className="sm:col-span-2">
-              <Label>Full name</Label>
-              <Input value={name} onChange={e => setName(e.target.value)} className="mt-1.5" />
+            <div className="space-y-2">
+              <Label>Full Name</Label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} />
             </div>
-            <div className="sm:col-span-2">
+            <div className="space-y-2">
               <Label>Username</Label>
-              <Input defaultValue={user?.username} className="mt-1.5" disabled />
+              <Input value={username} onChange={(e) => setUsername(e.target.value)} />
             </div>
             
             <div className="sm:col-span-2 mt-4 pt-4 border-t">
               <h3 className="text-sm font-semibold mb-4">Change Password</h3>
+              <p className="text-xs text-muted-foreground mb-4">Leave these fields blank if you do not wish to change your password. You must provide your current password to set a new one.</p>
             </div>
             
             <div>
@@ -103,13 +106,10 @@ function ProfilePage() {
               />
             </div>
           </div>
-          <div className="flex justify-end pt-4">
-            <Button 
-              className="rounded-xl" 
-              onClick={handleSave} 
-              disabled={mutation.isPending || (!name && !newPassword)}
-            >
-              {mutation.isPending ? "Saving..." : "Save changes"}
+          
+          <div className="flex justify-end pt-4 border-t mt-6">
+            <Button onClick={handleSave} disabled={mutation.isPending}>
+              {mutation.isPending ? "Saving..." : "Save Changes"}
             </Button>
           </div>
         </div>

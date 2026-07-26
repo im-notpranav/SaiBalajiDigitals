@@ -1,5 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Bell, LogOut, Search, User, Sun, Moon, ChevronDown, CalendarRange } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,8 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth-store";
-import { NOTIFICATIONS } from "@/lib/constants";
+import { fetchMyNotifications } from "@/api/notifications";
+import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
 
 export function TopHeader() {
@@ -22,7 +23,11 @@ export function TopHeader() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [dark, setDark] = useState(false);
-  const unread = NOTIFICATIONS.filter((n) => !n.read).length;
+  const { data: notifications = [] } = useQuery({
+    queryKey: ["notifications"],
+    queryFn: fetchMyNotifications,
+  });
+  const unread = notifications.filter((n) => !n.read).length;
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
@@ -71,7 +76,7 @@ export function TopHeader() {
               <Badge variant="secondary">{unread} new</Badge>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            {NOTIFICATIONS.slice(0, 5).map((n) => (
+            {notifications.slice(0, 5).map((n) => (
               <DropdownMenuItem key={n.id} className="flex-col items-start gap-1 py-3">
                 <div className="flex w-full items-center gap-2">
                   <span
@@ -83,7 +88,7 @@ export function TopHeader() {
                     )}
                   />
                   <span className="font-medium">{n.title}</span>
-                  <span className="ml-auto text-[10px] text-muted-foreground">{n.at}</span>
+                  <span className="ml-auto text-[10px] text-muted-foreground">{formatDistanceToNow(new Date(n.created_at), { addSuffix: true })}</span>
                 </div>
                 <span className="line-clamp-2 text-xs text-muted-foreground">{n.body}</span>
               </DropdownMenuItem>

@@ -59,13 +59,20 @@ export async function submitInvoice(id: number, invoice_no: string, bill_amount:
     method: "PUT",
     data: { invoice_no, bill_amount },
   });
-  return { order: res, matched: res.status === "Completed", difference: 0 };
+  return { order: res };
 }
 
 export async function closeOrder(id: number, payload: { closure_remark_type: string, closure_remark_text?: string | null }) {
   const res = await apiFetch<Order>(`/orders/${id}/close`, {
     method: "PUT",
     data: payload,
+  });
+  return { order: res };
+}
+
+export async function forceCloseOrder(id: number) {
+  const res = await apiFetch<Order>(`/orders/${id}/force-close`, {
+    method: "PUT",
   });
   return { order: res };
 }

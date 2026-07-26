@@ -16,13 +16,11 @@ export const Route = createFileRoute("/_portal/production/dashboard")({
 
 const KANBAN: { status: OrderStatus; label: string }[] = [
   { status: "Active", label: "In Production" },
-  { status: "Pending", label: "Ready to Bill" },
-  { status: "Completed", label: "Closed" },
 ];
 
 function ProductionDashboard() {
   const { data: dash } = useQuery({ queryKey: ["dashboard"], queryFn: fetchDashboard });
-  const { data: ordersData } = useQuery({ queryKey: ["orders", "all"], queryFn: () => fetchOrders({ limit: 50 }) });
+  const { data: ordersData } = useQuery({ queryKey: ["orders", "Active"], queryFn: () => fetchOrders({ status: "Active", limit: 50 }) });
 
   const active = dash?.active_orders || 0;
   const pending = dash?.pending_orders || 0;
@@ -46,7 +44,7 @@ function ProductionDashboard() {
         <KpiCard label="Total Orders" value={total} icon={Timer} accent="primary" delay={0.15} />
       </div>
 
-      <div className="mt-8 grid gap-4 md:grid-cols-3">
+      <div className="mt-8 grid gap-4 md:grid-cols-1">
         {KANBAN.map((col, ci) => {
           const items = allOrders.filter((o: Order) => o.status === col.status).slice(0, 8);
           return (

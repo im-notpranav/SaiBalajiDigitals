@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -66,26 +66,11 @@ function BillingQueue() {
           orders={queue}
           showCreator
           action={(o) => (
-            <AlertDialog open={target?.id === o.id} onOpenChange={(open) => !open && setTarget(null)}>
-              <AlertDialogTrigger asChild>
-                <Button size="sm" className="rounded-lg" onClick={() => setTarget(o)}>
-                  <Receipt className="mr-1 h-3.5 w-3.5" /> Mark billed
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Mark {target?.order_no} as billed?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This calls the billing action on the backend. The status trigger will transition the order and this
-                    action is recorded in the audit log.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel onClick={() => setTarget(null)}>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={confirm}>Confirm billing</AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+            <Button asChild size="sm" className="rounded-lg">
+              <Link to="/accountant/billing/$id" params={{ id: String(o.id) }}>
+                <Receipt className="mr-1 h-3.5 w-3.5" /> Invoice Order
+              </Link>
+            </Button>
           )}
         />
       )}

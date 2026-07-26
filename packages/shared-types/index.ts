@@ -1,6 +1,6 @@
 export type UserRole = "employee" | "production" | "accountant" | "admin";
 
-export type OrderStatus = "Active" | "Pending" | "Completed";
+export type OrderStatus = "Active" | "Pending" | "Unsettled" | "Completed";
 
 export type RemarkType =
   | "Reprint"
@@ -129,4 +129,14 @@ export interface CreateOrderInput {
     rate: number;
     remarks?: RemarkType | null;
   }>;
+}
+
+export interface Notification {
+  id: number | string;
+  user_id: number;
+  title: string;
+  body: string;
+  kind: "info" | "success" | "warning" | string;
+  read: boolean;
+  created_at: string;
 }

@@ -76,11 +76,19 @@ export const updateMe = async (req: Request, res: Response) => {
     if (!parseResult.success) {
       return res.status(400).json({ message: "Invalid input", errors: parseResult.error.errors });
     }
-    const { name, current_password, new_password } = parseResult.data;
+    const { name, username, current_password, new_password } = parseResult.data;
     const userId = req.user!.id;
 
     const updateData: any = {};
     if (name) updateData.name = name;
+    if (username) {
+      // Check for uniqueness if username is being changed
+      const existingUser = await prisma.user.findUnique({ where: { username } });
+      if (existingUser && existingUser.id !== userId) {
+        return res.status(400).json({ message: "Username already exists" });
+      }
+      updateData.username = username;
+    }
 
     if (new_password) {
       if (!current_password) {

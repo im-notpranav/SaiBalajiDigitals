@@ -137,14 +137,14 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false }: Ord
 
           <div className="space-y-3">
             {lines.map((line, idx) => (
-              <div key={line.id} className="rounded-xl border bg-background/60 p-3">
+              <div key={line.id} className="relative rounded-xl border bg-background/60 p-3 pr-10">
                 <div className="grid gap-2 sm:grid-cols-12 items-end">
-                  <div className="sm:col-span-3">
+                  <div className="sm:col-span-2">
                     <Label className="text-[10px] uppercase text-muted-foreground">Media</Label>
                     <Input
                       value={line.media}
                       onChange={(e) => update(line.id, { media: e.target.value })}
-                      placeholder="e.g. Vinyl 8x4"
+                      placeholder="e.g. Vinyl"
                       className="mt-1"
                     />
                   </div>
@@ -168,7 +168,7 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false }: Ord
                       className="mt-1"
                     />
                   </div>
-                  <div className="sm:col-span-1">
+                  <div className="sm:col-span-2">
                     <Label className="text-[10px] uppercase text-muted-foreground">Qty</Label>
                     <Input
                       type="number"
@@ -198,7 +198,7 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false }: Ord
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="flex justify-end sm:col-span-1">
+                  <div className="absolute right-2 top-1/2 -translate-y-1/2">
                     <Button
                       type="button"
                       variant="ghost"
@@ -244,9 +244,6 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false }: Ord
             </div>
             <Button type="submit" size="lg" className="w-full rounded-xl" disabled={isSubmitting}>
               <Send className="mr-2 h-4 w-4" /> {isSubmitting ? "Submitting…" : defaultValues ? "Save Changes" : "Submit Order"}
-            </Button>
-            <Button type="button" variant="outline" size="lg" className="w-full rounded-xl" disabled>
-              <Save className="mr-2 h-4 w-4" /> Save as draft
             </Button>
           </div>
         </div>

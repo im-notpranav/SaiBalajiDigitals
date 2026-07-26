@@ -17,6 +17,7 @@ enum Role {
 enum OrderStatus {
   Active
   Pending
+  Unsettled
   Completed
 }
 
@@ -47,17 +48,18 @@ enum ProductionRemarkType {
 }
 
 model User {
-  id         Int              @id @default(autoincrement())
-  name       String
-  username   String           @unique
-  password   String
-  role       Role
+  id            Int              @id @default(autoincrement())
+  name          String
+  username      String           @unique
+  password      String
+  role          Role
   created_at    DateTime         @default(now())
   updated_at    DateTime         @updatedAt
   last_login_at DateTime?
   is_active     Boolean          @default(true)
   orders        Order[]
   changeLogs    OrderChangeLog[]
+  notifications Notification[]
 }
 
 model OrderSequence {
@@ -67,27 +69,27 @@ model OrderSequence {
 }
 
 model Order {
-  id           Int              @id @default(autoincrement())
-  order_no     String           @unique
-  client_name  String
-  store_name   String
-  location     String
-  date         DateTime         @default(now())
-  po_number    String?
-  status       OrderStatus      @default(Active)
-  invoice_no   String?
-  bill_amount  Decimal?         @db.Decimal(10, 2)
-  created_by   Int
-  creator      User             @relation(fields: [created_by], references: [id])
-  creator_name String
-  closure_remark_type ClosureRemarkType?
-  closure_remark_text String?
+  id                     Int                   @id @default(autoincrement())
+  order_no               String                @unique
+  client_name            String
+  store_name             String
+  location               String
+  date                   DateTime              @default(now())
+  po_number              String?
+  status                 OrderStatus           @default(Active)
+  invoice_no             String?
+  bill_amount            Decimal?              @db.Decimal(10, 2)
+  created_by             Int
+  creator                User                  @relation(fields: [created_by], references: [id])
+  creator_name           String
+  closure_remark_type    ClosureRemarkType?
+  closure_remark_text    String?
   production_remark_type ProductionRemarkType?
   production_remark_text String?
-  items        OrderItem[]
-  changeLogs   OrderChangeLog[]
-  created_at   DateTime         @default(now())
-  updated_at   DateTime         @updatedAt
+  items                  OrderItem[]
+  changeLogs             OrderChangeLog[]
+  created_at             DateTime              @default(now())
+  updated_at             DateTime              @updatedAt
 
   @@index([client_name])
   @@index([store_name])
@@ -96,17 +98,17 @@ model Order {
 }
 
 model OrderItem {
-  id            Int     @id @default(autoincrement())
+  id            Int         @id @default(autoincrement())
   order_id      Int
-  order         Order   @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  order         Order       @relation(fields: [order_id], references: [id], onDelete: Cascade)
   s_no          Int
   media         String
-  width_inches  Decimal @db.Decimal(10, 2)
-  height_inches Decimal @db.Decimal(10, 2)
-  qty           Decimal @db.Decimal(10, 2)
-  total_sft     Decimal @db.Decimal(10, 2)
-  rate          Decimal @db.Decimal(10, 2)
-  amount        Decimal @db.Decimal(10, 2)
+  width_inches  Decimal     @db.Decimal(10, 2)
+  height_inches Decimal     @db.Decimal(10, 2)
+  qty           Decimal     @db.Decimal(10, 2)
+  total_sft     Decimal     @db.Decimal(10, 2)
+  rate          Decimal     @db.Decimal(10, 2)
+  amount        Decimal     @db.Decimal(10, 2)
   remarks       RemarkType?
 }
 
@@ -132,4 +134,17 @@ model AuditLog {
   old_data   Json?
   new_data   Json?
   changed_at DateTime @default(now())
+}
+
+model Notification {
+  id         Int      @id @default(autoincrement())
+  user_id    Int
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  title      String
+  body       String
+  kind       String   @default("info")
+  read       Boolean  @default(false)
+  created_at DateTime @default(now())
+
+  @@index([user_id])
 }

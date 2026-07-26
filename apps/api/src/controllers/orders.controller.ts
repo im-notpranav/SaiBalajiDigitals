@@ -1,6 +1,9 @@
 import { Request, Response } from "express";
 import { prisma } from "../utils/prisma";
 import { generateOrderId } from "../utils/order-sequence";
+
+import { notifyRole, notifyUser } from "../services/notifications.service";
+
 import { sendOrderEditEmail, sendPendingInvoiceEmail } from "../services/email.service";
 import * as xlsx from "xlsx";
 
@@ -169,7 +172,15 @@ export const createOrder = async (req: Request, res: Response) => {
       });
     });
 
+    
+    await notifyRole(
+      "PRODUCTION",
+      `New order ${order.order_no} created`,
+      `Client: ${order.client_name}`,
+      "info"
+    );
     return res.status(201).json(order);
+  
   } catch (err: any) {
     console.error(err);
     if (err.message.includes("Item dimensions")) {
@@ -226,8 +237,6 @@ export const updateOrder = async (req: Request, res: Response) => {
         },
       });
 
-      // Simple implementation: delete old items and recreate new items
-      // (This will trigger delete/insert audit logs)
       if (items && items.length > 0) {
         await tx.orderItem.deleteMany({ where: { order_id: id } });
 
@@ -256,7 +265,6 @@ export const updateOrder = async (req: Request, res: Response) => {
         logChange("Items", "Previous items", "New updated items");
       }
 
-      // Log changes explicitly to OrderChangeLog for email trigger
       if (changes.length > 0 && user.role === "EMPLOYEE") {
         await tx.orderChangeLog.createMany({
           data: changes.map((c) => ({
@@ -314,8 +322,14 @@ export const reconcileInvoice = async (req: Request, res: Response) => {
     }
 
     const orderTotal = order.items.reduce((sum: any, item: any) => sum + Number(item.amount), 0);
+    
+    // Reject overpayment
+    if (Number(bill_amount) > Number(orderTotal)) {
+      return res.status(400).json({ message: "Bill amount cannot exceed order total." });
+    }
+
     const isMatch = Number(bill_amount).toFixed(2) === orderTotal.toFixed(2);
-    const newStatus = isMatch ? "Completed" : "Pending";
+    const newStatus = isMatch ? "Completed" : "Unsettled";
 
     const updated = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT set_config('app.current_user_id', ${user.id.toString()}, true)`;
@@ -332,7 +346,24 @@ export const reconcileInvoice = async (req: Request, res: Response) => {
     if (!isMatch) {
       await sendPendingInvoiceEmail(order.order_no, order.client_name, orderTotal, bill_amount);
     }
+    
+    await notifyUser(
+      order.created_by,
+      `Order ${order.order_no} Billed`,
+      isMatch ? `Fully billed at ${bill_amount}` : `Partially billed at ${bill_amount}`,
+      isMatch ? "success" : "warning"
+    );
 
+    // remove the trailing bracket that is being replaced
+    
+
+
+    await notifyUser(
+      order.created_by,
+      `Order ${order.order_no} Force Closed`,
+      `Reason: Force closed by Administrator`,
+      "warning"
+    );
     return res.status(200).json(updated);
   } catch (err) {
     console.error(err);
@@ -352,8 +383,8 @@ export const closeOrder = async (req: Request, res: Response) => {
     const order = await prisma.order.findUnique({ where: { id } });
     if (!order) return res.status(404).json({ message: "Order not found" });
 
-    if (order.status !== "Pending") {
-      return res.status(400).json({ message: "Only pending orders can be closed." });
+    if (order.status !== "Pending" && order.status !== "Unsettled") {
+      return res.status(400).json({ message: "Only pending or unsettled orders can be closed." });
     }
 
     const updated = await prisma.$transaction(async (tx) => {
@@ -425,6 +456,33 @@ export const exportOrders = async (req: Request, res: Response) => {
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     return res.send(buffer);
   } catch (err) {
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+
+export const forceCloseOrder = async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id as string, 10);
+    const order = await prisma.order.findUnique({ where: { id } });
+    
+    if (!order) return res.status(404).json({ message: "Order not found" });
+
+    const updated = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.current_user_id', ${req.user!.id.toString()}, true)`;
+      return tx.order.update({
+        where: { id },
+        data: {
+          status: "Completed",
+          closure_remark_type: "CustomReason",
+          closure_remark_text: "Force closed by Administrator",
+        },
+      });
+    });
+
+    return res.status(200).json(updated);
+  } catch (err) {
+    console.error(err);
     return res.status(500).json({ message: "Internal server error" });
   }
 };

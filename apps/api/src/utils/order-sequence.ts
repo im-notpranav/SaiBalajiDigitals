@@ -43,8 +43,5 @@ function deriveYY(): string {
   }
   
   // Take last 2 digits of the FY start year. (E.g., FY starting May 2025 -> "25")
-  // Or if it should be the "end" year, adjust accordingly.
-  // Using start year digits, plus 1 to match "26" in ORD260001 (which means FY25-26 ending in 2026).
-  const fyEndYear = fyStartYear + 1;
-  return String(fyEndYear).slice(-2);
+  return String(fyStartYear).slice(-2);
 }

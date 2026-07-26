@@ -13,6 +13,17 @@ export const getDashboard = async (req: Request, res: Response) => {
     const active_orders = await prisma.order.count({ where: { ...baseWhere, status: "Active" } });
     const pending_orders = await prisma.order.count({ where: { ...baseWhere, status: "Pending" } });
     const completed_orders = await prisma.order.count({ where: { ...baseWhere, status: "Completed" } });
+    const unsettled_orders = await prisma.order.count({ where: { ...baseWhere, status: "Unsettled" } });
+
+    if (user.role === "PRODUCTION" || user.role === "EMPLOYEE") {
+      return res.status(200).json({
+        total_orders,
+        active_orders,
+        pending_orders,
+        completed_orders,
+        unsettled_orders,
+      });
+    }
 
     const total_revenue_agg = await prisma.order.aggregate({
       _sum: { bill_amount: true },
@@ -38,6 +49,7 @@ export const getDashboard = async (req: Request, res: Response) => {
       active_orders,
       pending_orders,
       completed_orders,
+      unsettled_orders,
       total_revenue,
       revenue_by_client,
     });
