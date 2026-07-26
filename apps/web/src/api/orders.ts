@@ -70,9 +70,10 @@ export async function closeOrder(id: number, payload: { remarks?: string | null,
   return { order: res };
 }
 
-export async function forceCloseOrder(id: number) {
+export async function forceCloseOrder(id: number, payload: { remarks: string, remarks_other_text?: string | null }) {
   const res = await apiFetch<Order>(`/orders/${id}/force-close`, {
     method: "PUT",
+    data: payload,
   });
   return { order: res };
 }

@@ -1,20 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
-import { toast } from "sonner";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { OrdersTable } from "@/components/orders/OrdersTable";
 import { Button } from "@/components/ui/button";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import { Receipt } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchOrders } from "@/api/orders";
@@ -27,29 +14,19 @@ export const Route = createFileRoute("/_portal/accountant/billing")({
 });
 
 function BillingQueue() {
-  const [target, setTarget] = useState<Order | null>(null);
-
   const { data, isLoading } = useQuery({
-    queryKey: ["orders", "Pending"],
-    queryFn: () => fetchOrders({ status: "Pending" }),
+    queryKey: ["orders", "Active"],
+    queryFn: () => fetchOrders({ status: "Active" }),
   });
 
   const queue = data?.orders || [];
   const total = queue.reduce((s: number, o: Order) => s + (o.total_amount || 0), 0);
 
-  const confirm = () => {
-    if (!target) return;
-    toast.success(`${target.order_no} marked as billed`, {
-      description: "Server transitioned status via billing trigger.",
-    });
-    setTarget(null);
-  };
-
   return (
     <>
       <PageHeader
         title="Billing Queue"
-        description="All orders across employees that have reached 'Pending' (Ready to Bill)."
+        description="All orders across employees that are currently 'Active' (Ready to Bill)."
         crumbs={[{ label: "Accountant" }, { label: "Billing" }]}
         actions={
           <div className="rounded-xl border bg-primary/5 px-4 py-2 text-sm">

@@ -75,7 +75,7 @@ function OrderDetailAccountant() {
       <OrderDetail 
         order={order}
         actions={
-          order.status === "Pending" ? (
+          order.status === "Active" ? (
             <div className="rounded-xl border bg-card p-6">
               <h3 className="mb-4 text-lg font-semibold flex items-center gap-2">
                 <Receipt className="h-5 w-5 text-primary" /> Record Invoice
