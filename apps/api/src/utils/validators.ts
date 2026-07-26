@@ -51,8 +51,14 @@ export const closeOrderSchema = z.object({
 
 export const forceCloseOrderSchema = z.object({
   remarks: remarkEnum,
-  remarks_other_text: z.string().min(1, "Remark text is required for force close").max(500),
-});
+  remarks_other_text: z.string().max(500).optional().nullable(),
+}).refine(
+  (data) => data.remarks !== "Other" || (data.remarks_other_text && data.remarks_other_text.trim().length > 0),
+  {
+    message: "Text is required when Other is selected.",
+    path: ["remarks_other_text"],
+  }
+);
 
 export const createUserSchema = z.object({
   name: z.string().min(1).max(100),
