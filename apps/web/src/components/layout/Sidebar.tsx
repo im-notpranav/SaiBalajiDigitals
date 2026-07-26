@@ -45,7 +45,7 @@ const NAV: Record<UserRole, NavItem[]> = {
   ACCOUNTS: [
     { to: "/accountant/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { to: "/accountant/billing", label: "Billing Queue", icon: Receipt },
-
+    { to: "/accountant/orders", label: "All Orders", icon: Boxes },
     { to: "/accountant/reports", label: "Financial Reports", icon: FileBarChart2 },
     { to: "/accountant/financial-year", label: "Financial Year", icon: CalendarClock },
     { to: "/accountant/notifications", label: "Notifications", icon: Bell },

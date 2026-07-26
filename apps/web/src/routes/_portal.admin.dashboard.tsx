@@ -15,7 +15,7 @@ import { KpiCard } from "@/components/kpi/KpiCard";
 import { StatusBadge } from "@/components/orders/StatusBadge";
 import { REVENUE_TREND, ORDER_STATUSES } from "@/lib/constants";
 import { useQuery } from "@tanstack/react-query";
-import { fetchDashboard, fetchAuditLog } from "@/api/dashboard";
+import { fetchDashboard, fetchAuditLog, fetchAdminDashboard } from "@/api/dashboard";
 import { fetchUsers } from "@/api/users";
 import { inr } from "@/lib/format";
 
@@ -28,6 +28,7 @@ function AdminDashboard() {
   const { data: dash, isLoading: isDashLoading } = useQuery({ queryKey: ["dashboard"], queryFn: fetchDashboard });
   const { data: usersData } = useQuery({ queryKey: ["users"], queryFn: fetchUsers });
   const { data: auditData } = useQuery({ queryKey: ["audit", 1, 6], queryFn: () => fetchAuditLog(1, 6) });
+  const { data: adminDash } = useQuery({ queryKey: ["adminDashboard"], queryFn: fetchAdminDashboard });
 
   const totalRevenue = dash?.total_revenue || 0;
   
@@ -55,11 +56,12 @@ function AdminDashboard() {
         crumbs={[{ label: "Administrator" }, { label: "Dashboard" }]}
       />
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
         <KpiCard label="Total Orders" value={dash?.total_orders || 0} icon={Boxes} accent="primary" delay={0} />
         <KpiCard label="Active Users" value={activeUsers} icon={Users} accent="info" delay={0.05} />
         <KpiCard label="Total Revenue" value={inr(totalRevenue)} icon={TrendingUp} accent="success" delay={0.1} />
-        <KpiCard label="Open Alerts" value={openAlerts} icon={AlertTriangle} accent="warning" delay={0.15} />
+        <KpiCard label="Pending Revenue" value={inr(adminDash?.pendingAmount || 0)} icon={AlertTriangle} accent="warning" delay={0.15} />
+        <KpiCard label="Avg Time to Close" value={`${adminDash?.averageTimeToClose || 0}h`} icon={TrendingUp} accent="info" delay={0.2} />
       </div>
 
       <motion.div
@@ -72,7 +74,7 @@ function AdminDashboard() {
           <h3 className="mb-4 text-sm font-semibold">Revenue trend</h3>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={REVENUE_TREND}>
+              <AreaChart data={adminDash?.revenueTrend || []}>
                 <defs>
                   <linearGradient id="rev2" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="var(--color-primary)" stopOpacity={0.4} />
@@ -80,7 +82,7 @@ function AdminDashboard() {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
-                <XAxis dataKey="month" stroke="var(--color-muted-foreground)" fontSize={12} />
+                <XAxis dataKey="date" stroke="var(--color-muted-foreground)" fontSize={12} />
                 <YAxis stroke="var(--color-muted-foreground)" fontSize={12} tickFormatter={(v) => `₹${(v / 100000).toFixed(0)}L`} />
                 <Tooltip
                   contentStyle={{ background: "var(--color-card)", border: "1px solid var(--color-border)", borderRadius: 12, fontSize: 12 }}
@@ -95,14 +97,14 @@ function AdminDashboard() {
         <div className="surface-panel p-6">
           <h3 className="mb-4 text-sm font-semibold">Pipeline snapshot</h3>
           <div className="space-y-3">
-            {ORDER_STATUSES.map((s) => {
-              const count = getStatusCount(s);
+            {adminDash?.statusBreakdown?.map((s: any) => {
+              const count = s.count;
               const total = dash?.total_orders || 1;
               const pct = (count / total) * 100;
               return (
-                <div key={s}>
+                <div key={s.name}>
                   <div className="mb-1 flex items-center justify-between text-xs">
-                    <StatusBadge status={s as any} />
+                    <StatusBadge status={s.name as any} />
                     <span className="font-semibold">{count}</span>
                   </div>
                   <div className="h-2 overflow-hidden rounded-full bg-muted">
@@ -150,12 +152,21 @@ function AdminDashboard() {
 
         <div className="surface-panel p-6">
           <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold">
-            <AlertTriangle className="h-4 w-4 text-warning" /> Alerts
+            <Users className="h-4 w-4" /> Performance Leaderboard
           </h3>
           <ul className="space-y-3 text-sm">
-            <Alert kind="warning" title="FY rollover due" body="Rollover scheduled 01 May 2027 — verify sequence config." />
-            <Alert kind="info" title="Sequence anomaly" body="Gap between ORD261021 and ORD261024 detected." />
-            <Alert kind="warning" title="Delayed orders" body="4 orders in production >72h." />
+            {adminDash?.performanceLeaderboard?.map((l: any, i: number) => (
+              <li key={i} className="flex items-center justify-between rounded-lg border p-3">
+                <div>
+                  <div className="font-semibold">{l.name}</div>
+                  <div className="text-xs text-muted-foreground">{l.ordersCompleted} orders</div>
+                </div>
+                <div className="font-bold text-success">{inr(l.revenueGenerated)}</div>
+              </li>
+            ))}
+            {(!adminDash?.performanceLeaderboard || adminDash.performanceLeaderboard.length === 0) && (
+              <div className="text-sm text-muted-foreground">No data available</div>
+            )}
           </ul>
         </div>
       </motion.div>

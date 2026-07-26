@@ -17,6 +17,7 @@ import { Route as PortalAccountantBillingRouteImport } from './routes/_portal.ac
 import { Route as PortalAccountantDashboardRouteImport } from './routes/_portal.accountant.dashboard'
 import { Route as PortalAccountantFinancialYearRouteImport } from './routes/_portal.accountant.financial-year'
 import { Route as PortalAccountantNotificationsRouteImport } from './routes/_portal.accountant.notifications'
+import { Route as PortalAccountantOrdersRouteImport } from './routes/_portal.accountant.orders'
 import { Route as PortalAccountantReportsRouteImport } from './routes/_portal.accountant.reports'
 import { Route as PortalAdminAuditRouteImport } from './routes/_portal.admin.audit'
 import { Route as PortalAdminDashboardRouteImport } from './routes/_portal.admin.dashboard'
@@ -80,6 +81,11 @@ const PortalAccountantNotificationsRoute =
     path: '/accountant/notifications',
     getParentRoute: () => PortalRoute,
   } as any)
+const PortalAccountantOrdersRoute = PortalAccountantOrdersRouteImport.update({
+  id: '/accountant/orders',
+  path: '/accountant/orders',
+  getParentRoute: () => PortalRoute,
+} as any)
 const PortalAccountantReportsRoute = PortalAccountantReportsRouteImport.update({
   id: '/accountant/reports',
   path: '/accountant/reports',
@@ -195,6 +201,7 @@ export interface FileRoutesByFullPath {
   '/accountant/dashboard': typeof PortalAccountantDashboardRoute
   '/accountant/financial-year': typeof PortalAccountantFinancialYearRoute
   '/accountant/notifications': typeof PortalAccountantNotificationsRoute
+  '/accountant/orders': typeof PortalAccountantOrdersRoute
   '/accountant/reports': typeof PortalAccountantReportsRoute
   '/admin/audit': typeof PortalAdminAuditRoute
   '/admin/dashboard': typeof PortalAdminDashboardRoute
@@ -224,6 +231,7 @@ export interface FileRoutesByTo {
   '/accountant/dashboard': typeof PortalAccountantDashboardRoute
   '/accountant/financial-year': typeof PortalAccountantFinancialYearRoute
   '/accountant/notifications': typeof PortalAccountantNotificationsRoute
+  '/accountant/orders': typeof PortalAccountantOrdersRoute
   '/accountant/reports': typeof PortalAccountantReportsRoute
   '/admin/audit': typeof PortalAdminAuditRoute
   '/admin/dashboard': typeof PortalAdminDashboardRoute
@@ -255,6 +263,7 @@ export interface FileRoutesById {
   '/_portal/accountant/dashboard': typeof PortalAccountantDashboardRoute
   '/_portal/accountant/financial-year': typeof PortalAccountantFinancialYearRoute
   '/_portal/accountant/notifications': typeof PortalAccountantNotificationsRoute
+  '/_portal/accountant/orders': typeof PortalAccountantOrdersRoute
   '/_portal/accountant/reports': typeof PortalAccountantReportsRoute
   '/_portal/admin/audit': typeof PortalAdminAuditRoute
   '/_portal/admin/dashboard': typeof PortalAdminDashboardRoute
@@ -286,6 +295,7 @@ export interface FileRouteTypes {
     | '/accountant/dashboard'
     | '/accountant/financial-year'
     | '/accountant/notifications'
+    | '/accountant/orders'
     | '/accountant/reports'
     | '/admin/audit'
     | '/admin/dashboard'
@@ -315,6 +325,7 @@ export interface FileRouteTypes {
     | '/accountant/dashboard'
     | '/accountant/financial-year'
     | '/accountant/notifications'
+    | '/accountant/orders'
     | '/accountant/reports'
     | '/admin/audit'
     | '/admin/dashboard'
@@ -345,6 +356,7 @@ export interface FileRouteTypes {
     | '/_portal/accountant/dashboard'
     | '/_portal/accountant/financial-year'
     | '/_portal/accountant/notifications'
+    | '/_portal/accountant/orders'
     | '/_portal/accountant/reports'
     | '/_portal/admin/audit'
     | '/_portal/admin/dashboard'
@@ -429,6 +441,13 @@ declare module '@tanstack/react-router' {
       path: '/accountant/notifications'
       fullPath: '/accountant/notifications'
       preLoaderRoute: typeof PortalAccountantNotificationsRouteImport
+      parentRoute: typeof PortalRoute
+    }
+    '/_portal/accountant/orders': {
+      id: '/_portal/accountant/orders'
+      path: '/accountant/orders'
+      fullPath: '/accountant/orders'
+      preLoaderRoute: typeof PortalAccountantOrdersRouteImport
       parentRoute: typeof PortalRoute
     }
     '/_portal/accountant/reports': {
@@ -616,6 +635,7 @@ interface PortalRouteChildren {
   PortalAccountantDashboardRoute: typeof PortalAccountantDashboardRoute
   PortalAccountantFinancialYearRoute: typeof PortalAccountantFinancialYearRoute
   PortalAccountantNotificationsRoute: typeof PortalAccountantNotificationsRoute
+  PortalAccountantOrdersRoute: typeof PortalAccountantOrdersRoute
   PortalAccountantReportsRoute: typeof PortalAccountantReportsRoute
   PortalAdminAuditRoute: typeof PortalAdminAuditRoute
   PortalAdminDashboardRoute: typeof PortalAdminDashboardRoute
@@ -641,6 +661,7 @@ const PortalRouteChildren: PortalRouteChildren = {
   PortalAccountantDashboardRoute: PortalAccountantDashboardRoute,
   PortalAccountantFinancialYearRoute: PortalAccountantFinancialYearRoute,
   PortalAccountantNotificationsRoute: PortalAccountantNotificationsRoute,
+  PortalAccountantOrdersRoute: PortalAccountantOrdersRoute,
   PortalAccountantReportsRoute: PortalAccountantReportsRoute,
   PortalAdminAuditRoute: PortalAdminAuditRoute,
   PortalAdminDashboardRoute: PortalAdminDashboardRoute,

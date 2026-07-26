@@ -6,9 +6,11 @@ import { OrdersTable } from "@/components/orders/OrdersTable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery } from "@tanstack/react-query";
 import { fetchOrders, exportOrders } from "@/api/orders";
 import { useAuth } from "@/lib/auth-store";
+import { useDebounce } from "@/hooks/use-debounce";
 
 export const Route = createFileRoute("/_portal/employee/orders")({
   head: () => ({ meta: [{ title: "My Orders — SB OMS" }] }),
@@ -18,20 +20,22 @@ export const Route = createFileRoute("/_portal/employee/orders")({
 function MyOrders() {
   const { user } = useAuth();
   const [q, setQ] = useState("");
+  const [searchField, setSearchField] = useState<"client" | "store" | "order_no">("client");
+  const debouncedQ = useDebounce(q, 300);
   const [section, setSection] = useState<"active" | "completed">("active");
 
   const { data, isLoading } = useQuery({
-    queryKey: ["orders", "employee", section, q],
+    queryKey: ["orders", "employee", section, searchField, debouncedQ],
     queryFn: () => {
       const params: any = { section };
-      if (q) params.client = q;
+      if (debouncedQ) params[searchField] = debouncedQ;
       return fetchOrders(params);
     },
   });
 
   const handleExport = async () => {
     const params: any = { section };
-    if (q) params.client = q;
+    if (q) params[searchField] = q;
     await exportOrders(params);
   };
 
@@ -58,15 +62,30 @@ function MyOrders() {
             <TabsTrigger value="completed">Completed</TabsTrigger>
           </TabsList>
         </Tabs>
-        <div className="relative min-w-[240px] flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Search by client name"
-            className="pl-9"
-          />
+        
+        <div className="flex flex-1 items-center gap-2">
+          <Select value={searchField} onValueChange={(v: any) => setSearchField(v)}>
+            <SelectTrigger className="w-[140px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="client">Client Name</SelectItem>
+              <SelectItem value="store">Store Name</SelectItem>
+              <SelectItem value="order_no">Order No</SelectItem>
+            </SelectContent>
+          </Select>
+          
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder={`Search by ${searchField === 'client' ? 'client name' : searchField === 'store' ? 'store name' : 'order number'}...`}
+              className="pl-9"
+            />
+          </div>
         </div>
+
         <div className="ml-auto text-xs text-muted-foreground">
           {total} orders found
         </div>

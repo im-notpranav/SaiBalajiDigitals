@@ -108,7 +108,7 @@ function UsersPage() {
                       <SelectItem value="EMPLOYEE">Employee</SelectItem>
                       <SelectItem value="PRODUCTION">Production</SelectItem>
                       <SelectItem value="ACCOUNTS">Accountant</SelectItem>
-                      <SelectItem value="ADMIN">Admin</SelectItem>
+                      {/* ADMIN role cannot be created via the UI */ }
                     </SelectContent>
                   </Select>
                 </div>

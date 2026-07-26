@@ -57,7 +57,7 @@ function EditOrderEmployee() {
   const order = orderData.order;
 
   // Authorization check (only creator can edit, and only active orders)
-  if (order.creator_id !== user?.id) {
+  if (order.created_by !== user?.id) {
     return <div className="p-8 text-destructive font-medium">You are not authorized to edit an order created by someone else.</div>;
   }
   if (order.status !== "Active") {

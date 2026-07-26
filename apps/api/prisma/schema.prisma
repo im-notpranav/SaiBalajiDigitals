@@ -17,7 +17,6 @@ enum Role {
 enum OrderStatus {
   Active
   Pending
-  Unsettled
   Completed
 }
 
@@ -29,22 +28,7 @@ enum RemarkType {
   ExtraAmount
   LessAmount
   FreeOfCost
-}
-
-enum ClosureRemarkType {
-  Delivered
-  CustomerCancelled
-  DuplicateOrder
-  PaymentCleared
-  CustomReason
-}
-
-enum ProductionRemarkType {
-  Clarification
-  InternalNote
-  CustomerUpdate
-  ProductionHandoff
-  QCHold
+  Other
 }
 
 model User {
@@ -79,13 +63,11 @@ model Order {
   status                 OrderStatus           @default(Active)
   invoice_no             String?
   bill_amount            Decimal?              @db.Decimal(10, 2)
-  created_by             Int
-  creator                User                  @relation(fields: [created_by], references: [id])
+  created_by             Int?
+  creator                User?                 @relation(fields: [created_by], references: [id], onDelete: SetNull)
   creator_name           String
-  closure_remark_type    ClosureRemarkType?
-  closure_remark_text    String?
-  production_remark_type ProductionRemarkType?
-  production_remark_text String?
+  remarks                RemarkType?
+  remarks_other_text     String?
   items                  OrderItem[]
   changeLogs             OrderChangeLog[]
   created_at             DateTime              @default(now())
@@ -109,7 +91,6 @@ model OrderItem {
   total_sft     Decimal     @db.Decimal(10, 2)
   rate          Decimal     @db.Decimal(10, 2)
   amount        Decimal     @db.Decimal(10, 2)
-  remarks       RemarkType?
 }
 
 model OrderChangeLog {

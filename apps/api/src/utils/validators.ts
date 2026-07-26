@@ -8,22 +8,7 @@ export const remarkEnum = z.enum([
   "ExtraAmount",
   "LessAmount",
   "FreeOfCost",
-]);
-
-export const closureRemarkEnum = z.enum([
-  "Delivered",
-  "CustomerCancelled",
-  "DuplicateOrder",
-  "PaymentCleared",
-  "CustomReason",
-]);
-
-export const productionRemarkEnum = z.enum([
-  "Clarification",
-  "InternalNote",
-  "CustomerUpdate",
-  "ProductionHandoff",
-  "QCHold",
+  "Other",
 ]);
 
 export const orderItemSchema = z.object({
@@ -32,7 +17,6 @@ export const orderItemSchema = z.object({
   height_inches: z.coerce.number().positive(),
   qty: z.coerce.number().positive(),
   rate: z.coerce.number().positive(),
-  remarks: remarkEnum.optional().nullable(),
 });
 
 export const createOrderSchema = z.object({
@@ -42,6 +26,8 @@ export const createOrderSchema = z.object({
   // Add 1 day padding to account for timezone differences
   date: z.coerce.date().refine((d) => d.getTime() <= Date.now() + 86400000, "Date cannot be in the future"),
   po_number: z.string().max(50).optional().nullable(),
+  remarks: remarkEnum.optional().nullable(),
+  remarks_other_text: z.string().max(500).optional().nullable(),
   items: z.array(orderItemSchema).min(1),
 });
 
@@ -53,19 +39,19 @@ export const invoiceSchema = z.object({
 });
 
 export const closeOrderSchema = z.object({
-  closure_remark_type: closureRemarkEnum,
-  closure_remark_text: z.string().max(500).optional().nullable(),
+  remarks: remarkEnum,
+  remarks_other_text: z.string().max(500).optional().nullable(),
 }).refine(
-  (data) => data.closure_remark_type !== "CustomReason" || (data.closure_remark_text && data.closure_remark_text.trim().length > 0),
+  (data) => data.remarks !== "Other" || (data.remarks_other_text && data.remarks_other_text.trim().length > 0),
   {
-    message: "Text is required when Custom Reason is selected.",
-    path: ["closure_remark_text"],
+    message: "Text is required when Other is selected.",
+    path: ["remarks_other_text"],
   }
 );
 
-export const advanceOrderSchema = z.object({
-  production_remark_type: productionRemarkEnum,
-  production_remark_text: z.string().max(500).optional().nullable(),
+export const forceCloseOrderSchema = z.object({
+  remarks: remarkEnum,
+  remarks_other_text: z.string().min(1, "Remark text is required for force close").max(500),
 });
 
 export const createUserSchema = z.object({
@@ -76,7 +62,7 @@ export const createUserSchema = z.object({
     .max(50)
     .regex(/^[a-z0-9_]+$/, "Username must be lowercase letters, numbers, or underscores"),
   password: z.string().min(8),
-  role: z.enum(["ADMIN", "EMPLOYEE", "ACCOUNTS", "PRODUCTION"]),
+  role: z.enum(["EMPLOYEE", "ACCOUNTS", "PRODUCTION"]),
 });
 
 export const updateMeSchema = z.object({

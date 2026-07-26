@@ -76,7 +76,7 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false }: Ord
       client_name: clientName,
       store_name: storeName,
       location,
-      date: defaultValues ? new Date(defaultValues.created_at).toISOString().split("T")[0] : new Date().toISOString().split("T")[0],
+      date: defaultValues?.created_at ? new Date(defaultValues.created_at).toISOString().split("T")[0] : new Date().toISOString().split("T")[0],
       po_number: poNumber || undefined,
       items: lines.map((l) => ({
         media: l.media,

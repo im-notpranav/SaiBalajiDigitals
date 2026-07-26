@@ -26,6 +26,10 @@ export const getOrders = async (req: Request, res: Response) => {
     if (store) where.store_name = { contains: String(store), mode: "insensitive" };
     if (status) where.status = status;
 
+    if (user.role === "PRODUCTION") {
+      where.status = "Active";
+    }
+
     const skip = (Number(page) - 1) * Number(limit);
     const take = Number(limit);
 
@@ -58,7 +62,6 @@ export const getOrders = async (req: Request, res: Response) => {
           height_inches: i.height_inches,
           qty: i.qty,
           total_sft: i.total_sft,
-          remarks: i.remarks,
         })),
       }));
       return res.status(200).json({ data: sanitizedOrders, total, page: Number(page) });
@@ -86,6 +89,9 @@ export const getOrder = async (req: Request, res: Response) => {
     }
 
     if (req.user!.role === "PRODUCTION") {
+      if (order.status !== "Active") {
+        return res.status(403).json({ message: "Forbidden" });
+      }
       return res.status(200).json({
         id: order.id,
         order_no: order.order_no,
@@ -102,7 +108,6 @@ export const getOrder = async (req: Request, res: Response) => {
           height_inches: i.height_inches,
           qty: i.qty,
           total_sft: i.total_sft,
-          remarks: i.remarks,
         })),
       });
     }
@@ -113,7 +118,7 @@ export const getOrder = async (req: Request, res: Response) => {
   }
 };
 
-import { createOrderSchema, updateOrderSchema, invoiceSchema, closeOrderSchema, advanceOrderSchema } from "../utils/validators";
+import { createOrderSchema, updateOrderSchema, invoiceSchema, closeOrderSchema, forceCloseOrderSchema } from "../utils/validators";
 
 export const createOrder = async (req: Request, res: Response) => {
   try {
@@ -121,7 +126,7 @@ export const createOrder = async (req: Request, res: Response) => {
     if (!parseResult.success) {
       return res.status(400).json({ message: "Invalid input", errors: parseResult.error.errors });
     }
-    const { client_name, store_name, location, po_number, items } = parseResult.data;
+    const { client_name, store_name, location, po_number, items, remarks, remarks_other_text } = parseResult.data;
     const user = req.user!;
 
     const processedItems = items.map((item: any, index: number) => {
@@ -146,7 +151,6 @@ export const createOrder = async (req: Request, res: Response) => {
         total_sft: parseFloat(total_sft),
         rate: r,
         amount: parseFloat(amount),
-        remarks: item.remarks || null,
       };
     });
 
@@ -164,6 +168,8 @@ export const createOrder = async (req: Request, res: Response) => {
           created_by: user.id,
           creator_name: user.name,
           status: "Active",
+          remarks,
+          remarks_other_text,
           items: {
             create: processedItems,
           },
@@ -197,7 +203,7 @@ export const updateOrder = async (req: Request, res: Response) => {
     if (!parseResult.success) {
       return res.status(400).json({ message: "Invalid input", errors: parseResult.error.errors });
     }
-    const { client_name, store_name, location, po_number, items } = parseResult.data;
+    const { client_name, store_name, location, po_number, items, remarks, remarks_other_text } = parseResult.data;
     const user = req.user!;
 
     const existingOrder = await prisma.order.findUnique({
@@ -209,6 +215,10 @@ export const updateOrder = async (req: Request, res: Response) => {
 
     if (user.role === "EMPLOYEE" && existingOrder.created_by !== user.id) {
       return res.status(403).json({ message: "Forbidden" });
+    }
+
+    if (user.role === "EMPLOYEE" && existingOrder.status === "Completed") {
+      return res.status(403).json({ message: "Completed orders cannot be edited" });
     }
 
     const changes: any[] = [];
@@ -234,6 +244,8 @@ export const updateOrder = async (req: Request, res: Response) => {
           store_name: store_name !== undefined ? store_name : undefined,
           location: location !== undefined ? location : undefined,
           po_number: po_number !== undefined ? po_number : undefined,
+          remarks: remarks !== undefined ? remarks : undefined,
+          remarks_other_text: remarks_other_text !== undefined ? remarks_other_text : undefined,
         },
       });
 
@@ -257,7 +269,6 @@ export const updateOrder = async (req: Request, res: Response) => {
             total_sft: parseFloat(total_sft),
             rate: r,
             amount: parseFloat(amount),
-            remarks: item.remarks || null,
           };
         });
 
@@ -320,6 +331,10 @@ export const reconcileInvoice = async (req: Request, res: Response) => {
     if (order.status === "Completed") {
       return res.status(400).json({ message: "Order is already completed" });
     }
+    
+    if (order.invoice_no) {
+      return res.status(400).json({ message: "Invoice already submitted for this order; corrections must go through an order edit." });
+    }
 
     const orderTotal = order.items.reduce((sum: any, item: any) => sum + Number(item.amount), 0);
     
@@ -329,7 +344,7 @@ export const reconcileInvoice = async (req: Request, res: Response) => {
     }
 
     const isMatch = Number(bill_amount).toFixed(2) === orderTotal.toFixed(2);
-    const newStatus = isMatch ? "Completed" : "Unsettled";
+    const newStatus = isMatch ? "Completed" : "Pending";
 
     const updated = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT set_config('app.current_user_id', ${user.id.toString()}, true)`;
@@ -347,23 +362,15 @@ export const reconcileInvoice = async (req: Request, res: Response) => {
       await sendPendingInvoiceEmail(order.order_no, order.client_name, orderTotal, bill_amount);
     }
     
-    await notifyUser(
-      order.created_by,
-      `Order ${order.order_no} Billed`,
-      isMatch ? `Fully billed at ${bill_amount}` : `Partially billed at ${bill_amount}`,
-      isMatch ? "success" : "warning"
-    );
+    if (order.created_by) {
+      await notifyUser(
+        order.created_by,
+        `Order ${order.order_no} Billed`,
+        isMatch ? `Fully billed at ${bill_amount}` : `Partially billed at ${bill_amount}`,
+        isMatch ? "success" : "warning"
+      );
+    }
 
-    // remove the trailing bracket that is being replaced
-    
-
-
-    await notifyUser(
-      order.created_by,
-      `Order ${order.order_no} Force Closed`,
-      `Reason: Force closed by Administrator`,
-      "warning"
-    );
     return res.status(200).json(updated);
   } catch (err) {
     console.error(err);
@@ -378,13 +385,13 @@ export const closeOrder = async (req: Request, res: Response) => {
     if (!parseResult.success) {
       return res.status(400).json({ message: "Invalid input", errors: parseResult.error.errors });
     }
-    const { closure_remark_type, closure_remark_text } = parseResult.data;
+    const { remarks, remarks_other_text } = parseResult.data;
 
     const order = await prisma.order.findUnique({ where: { id } });
     if (!order) return res.status(404).json({ message: "Order not found" });
 
-    if (order.status !== "Pending" && order.status !== "Unsettled") {
-      return res.status(400).json({ message: "Only pending or unsettled orders can be closed." });
+    if (order.status !== "Pending") {
+      return res.status(400).json({ message: "Only pending orders can be closed." });
     }
 
     const updated = await prisma.$transaction(async (tx) => {
@@ -393,8 +400,8 @@ export const closeOrder = async (req: Request, res: Response) => {
         where: { id },
         data: {
           status: "Completed",
-          closure_remark_type,
-          closure_remark_text: closure_remark_text || null,
+          remarks,
+          remarks_other_text: remarks_other_text || null,
         },
       });
     });
@@ -437,7 +444,7 @@ export const exportOrders = async (req: Request, res: Response) => {
           "Rate": Number(item.rate),
           "Amount": Number(item.amount),
           "PO Number": order.po_number || "",
-          "Remarks": item.remarks || "",
+          "Remarks": order.remarks === "Other" ? (order.remarks_other_text || "") : (order.remarks || ""),
           "Status": order.status,
         };
         if (user.role === "ADMIN") {
@@ -460,10 +467,17 @@ export const exportOrders = async (req: Request, res: Response) => {
   }
 };
 
-
 export const forceCloseOrder = async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id as string, 10);
+    const parseResult = forceCloseOrderSchema.safeParse(req.body);
+    
+    if (!parseResult.success) {
+      return res.status(400).json({ message: "Invalid input", errors: parseResult.error.errors });
+    }
+    
+    const { remarks, remarks_other_text } = parseResult.data;
+    
     const order = await prisma.order.findUnique({ where: { id } });
     
     if (!order) return res.status(404).json({ message: "Order not found" });
@@ -474,8 +488,8 @@ export const forceCloseOrder = async (req: Request, res: Response) => {
         where: { id },
         data: {
           status: "Completed",
-          closure_remark_type: "CustomReason",
-          closure_remark_text: "Force closed by Administrator",
+          remarks,
+          remarks_other_text,
         },
       });
     });
@@ -483,56 +497,6 @@ export const forceCloseOrder = async (req: Request, res: Response) => {
     return res.status(200).json(updated);
   } catch (err) {
     console.error(err);
-    return res.status(500).json({ message: "Internal server error" });
-  }
-};
-
-export const advanceOrder = async (req: Request, res: Response) => {
-  try {
-    const id = parseInt(req.params.id as string, 10);
-    const parseResult = advanceOrderSchema.safeParse(req.body);
-
-    if (!parseResult.success) {
-      return res.status(400).json({ message: "Invalid input", errors: parseResult.error.errors });
-    }
-
-    const { production_remark_type, production_remark_text } = parseResult.data;
-
-    const order = await prisma.order.findUnique({ where: { id } });
-    if (!order) {
-      return res.status(404).json({ message: "Order not found" });
-    }
-    if (order.status !== "Active") {
-      return res.status(400).json({ message: "Only Active orders can be advanced to Pending" });
-    }
-
-    const updatedOrder = await prisma.$transaction(async (tx) => {
-      const updated = await tx.order.update({
-        where: { id },
-        data: {
-          status: "Pending",
-          production_remark_type,
-          production_remark_text,
-        },
-        include: { items: true },
-      });
-
-      await tx.orderChangeLog.create({
-        data: {
-          order_id: id,
-          changed_by: req.user!.id,
-          field_changed: "status",
-          old_value: "Active",
-          new_value: "Pending",
-        },
-      });
-
-      return updated;
-    });
-
-    return res.status(200).json(updatedOrder);
-  } catch (err) {
-    console.error("Advance order error:", err);
     return res.status(500).json({ message: "Internal server error" });
   }
 };

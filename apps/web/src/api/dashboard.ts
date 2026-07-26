@@ -5,6 +5,10 @@ export async function fetchDashboard() {
   return apiFetch<DashboardData>("/dashboard");
 }
 
+export async function fetchAdminDashboard() {
+  return apiFetch<any>("/dashboard/admin");
+}
+
 export async function fetchAuditLog(page = 1, limit = 50) {
   return apiFetch<{
     logs: AuditLogEntry[];
