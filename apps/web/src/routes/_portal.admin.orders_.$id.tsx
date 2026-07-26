@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
-export const Route = createFileRoute("/_portal/admin/orders/$id")({
+export const Route = createFileRoute("/_portal/admin/orders_/$id")({
   head: () => ({ meta: [{ title: "Order Details — SB OMS" }] }),
   component: OrderDetailAdmin,
 });

@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader2, Receipt } from "lucide-react";
 
-export const Route = createFileRoute("/_portal/accountant/billing/$id")({
+export const Route = createFileRoute("/_portal/accountant/billing_/$id")({
   head: () => ({ meta: [{ title: "Order Details — SB OMS" }] }),
   component: OrderDetailAccountant,
 });

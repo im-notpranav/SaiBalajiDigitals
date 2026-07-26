@@ -5,7 +5,7 @@ import { OrderDetail } from "@/components/orders/OrderDetail";
 import { fetchOrder } from "@/api/orders";
 import { Loader2 } from "lucide-react";
 
-export const Route = createFileRoute("/_portal/employee/orders/$id")({
+export const Route = createFileRoute("/_portal/employee/orders_/$id")({
   head: () => ({ meta: [{ title: "Order Details — SB OMS" }] }),
   component: OrderDetailEmployee,
 });
