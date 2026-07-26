@@ -65,7 +65,7 @@ function EmployeeDashboard() {
         {isLoading ? (
           <div className="p-8 text-center text-muted-foreground">Loading recent orders...</div>
         ) : (
-          <OrdersTable orders={recent} detailBase="/employee/orders" />
+          <OrdersTable orders={recent} />
         )}
       </motion.div>
     </>

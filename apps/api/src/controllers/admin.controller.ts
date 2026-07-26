@@ -16,16 +16,29 @@ export const getAuditLog = async (req: Request, res: Response) => {
     ]);
 
     return res.status(200).json({
-      logs: logs.map((l: any) => ({
-        id: l.id.toString(),
-        table_name: l.table_name,
-        record_id: l.record_id,
-        action: l.action,
-        changed_by: l.changed_by,
-        old_data: l.old_data,
-        new_data: l.new_data,
-        changed_at: l.changed_at.toISOString(),
-      })),
+      logs: logs.map((l: any) => {
+        let orderNo = `ID:${l.record_id}`;
+        // Try to extract order_no from JSON snapshots for "Order" table
+        if (l.table_name === "Order") {
+          const data = l.new_data || l.old_data;
+          if (data && data.order_no) {
+            orderNo = data.order_no;
+          }
+        }
+        
+        return {
+          id: l.id.toString(),
+          table_name: l.table_name,
+          record_id: l.record_id,
+          order_no: orderNo,
+          action: l.action,
+          changed_by: l.changed_by,
+          user_name: l.user_name,
+          old_data: l.old_data,
+          new_data: l.new_data,
+          changed_at: l.changed_at.toISOString(),
+        };
+      }),
       pagination: { page, limit, total },
     });
   } catch (err) {

@@ -464,7 +464,8 @@ export const exportOrders = async (req: Request, res: Response) => {
           "Rate": Number(item.rate),
           "Amount": Number(item.amount),
           "PO Number": order.po_number || "",
-          "Remarks": order.remarks === "Other" ? (order.remarks_other_text || "") : (order.remarks || ""),
+          "Remarks": item.remarks === "Other" ? (item.remarks_other_text || "") : (item.remarks || ""),
+          "Closure Remarks": order.remarks === "Other" ? (order.remarks_other_text || "") : (order.remarks || ""),
           "Status": order.status,
         };
         if (user.role === "ADMIN") {

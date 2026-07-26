@@ -38,6 +38,7 @@ import { Route as PortalAdminEditOrderIdRouteImport } from './routes/_portal.adm
 import { Route as PortalAdminOrdersIdRouteImport } from './routes/_portal.admin.orders_.$id'
 import { Route as PortalEmployeeEditOrderIdRouteImport } from './routes/_portal.employee.edit-order.$id'
 import { Route as PortalEmployeeOrdersIdRouteImport } from './routes/_portal.employee.orders_.$id'
+import { Route as PortalProductionOrdersIdRouteImport } from './routes/_portal.production.orders_.$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -192,6 +193,12 @@ const PortalEmployeeOrdersIdRoute = PortalEmployeeOrdersIdRouteImport.update({
   path: '/employee/orders/$id',
   getParentRoute: () => PortalRoute,
 } as any)
+const PortalProductionOrdersIdRoute =
+  PortalProductionOrdersIdRouteImport.update({
+    id: '/production/orders_/$id',
+    path: '/production/orders/$id',
+    getParentRoute: () => PortalRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -222,6 +229,7 @@ export interface FileRoutesByFullPath {
   '/admin/orders/$id': typeof PortalAdminOrdersIdRoute
   '/employee/edit-order/$id': typeof PortalEmployeeEditOrderIdRoute
   '/employee/orders/$id': typeof PortalEmployeeOrdersIdRoute
+  '/production/orders/$id': typeof PortalProductionOrdersIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -252,6 +260,7 @@ export interface FileRoutesByTo {
   '/admin/orders/$id': typeof PortalAdminOrdersIdRoute
   '/employee/edit-order/$id': typeof PortalEmployeeEditOrderIdRoute
   '/employee/orders/$id': typeof PortalEmployeeOrdersIdRoute
+  '/production/orders/$id': typeof PortalProductionOrdersIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -284,6 +293,7 @@ export interface FileRoutesById {
   '/_portal/admin/orders_/$id': typeof PortalAdminOrdersIdRoute
   '/_portal/employee/edit-order/$id': typeof PortalEmployeeEditOrderIdRoute
   '/_portal/employee/orders_/$id': typeof PortalEmployeeOrdersIdRoute
+  '/_portal/production/orders_/$id': typeof PortalProductionOrdersIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -316,6 +326,7 @@ export interface FileRouteTypes {
     | '/admin/orders/$id'
     | '/employee/edit-order/$id'
     | '/employee/orders/$id'
+    | '/production/orders/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -346,6 +357,7 @@ export interface FileRouteTypes {
     | '/admin/orders/$id'
     | '/employee/edit-order/$id'
     | '/employee/orders/$id'
+    | '/production/orders/$id'
   id:
     | '__root__'
     | '/'
@@ -377,6 +389,7 @@ export interface FileRouteTypes {
     | '/_portal/admin/orders_/$id'
     | '/_portal/employee/edit-order/$id'
     | '/_portal/employee/orders_/$id'
+    | '/_portal/production/orders_/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -590,6 +603,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PortalEmployeeOrdersIdRouteImport
       parentRoute: typeof PortalRoute
     }
+    '/_portal/production/orders_/$id': {
+      id: '/_portal/production/orders_/$id'
+      path: '/production/orders/$id'
+      fullPath: '/production/orders/$id'
+      preLoaderRoute: typeof PortalProductionOrdersIdRouteImport
+      parentRoute: typeof PortalRoute
+    }
   }
 }
 
@@ -620,6 +640,7 @@ interface PortalRouteChildren {
   PortalAdminOrdersIdRoute: typeof PortalAdminOrdersIdRoute
   PortalEmployeeEditOrderIdRoute: typeof PortalEmployeeEditOrderIdRoute
   PortalEmployeeOrdersIdRoute: typeof PortalEmployeeOrdersIdRoute
+  PortalProductionOrdersIdRoute: typeof PortalProductionOrdersIdRoute
 }
 
 const PortalRouteChildren: PortalRouteChildren = {
@@ -649,6 +670,7 @@ const PortalRouteChildren: PortalRouteChildren = {
   PortalAdminOrdersIdRoute: PortalAdminOrdersIdRoute,
   PortalEmployeeEditOrderIdRoute: PortalEmployeeEditOrderIdRoute,
   PortalEmployeeOrdersIdRoute: PortalEmployeeOrdersIdRoute,
+  PortalProductionOrdersIdRoute: PortalProductionOrdersIdRoute,
 }
 
 const PortalRouteWithChildren =

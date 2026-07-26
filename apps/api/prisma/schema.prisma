@@ -91,6 +91,8 @@ model OrderItem {
   total_sft     Decimal     @db.Decimal(10, 2)
   rate          Decimal     @db.Decimal(10, 2)
   amount        Decimal     @db.Decimal(10, 2)
+  remarks       RemarkType?
+  remarks_other_text String?
 }
 
 model OrderChangeLog {
@@ -98,8 +100,8 @@ model OrderChangeLog {
   order_id      Int
   order         Order    @relation(fields: [order_id], references: [id])
   order_item_id Int?
-  changed_by    Int
-  changer       User     @relation(fields: [changed_by], references: [id])
+  changed_by    Int?
+  changer       User?    @relation(fields: [changed_by], references: [id], onDelete: SetNull)
   field_changed String
   old_value     String
   new_value     String
@@ -112,6 +114,7 @@ model AuditLog {
   record_id  Int
   action     String
   changed_by Int?
+  user_name  String?
   old_data   Json?
   new_data   Json?
   changed_at DateTime @default(now())

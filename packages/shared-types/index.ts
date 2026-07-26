@@ -9,7 +9,8 @@ export type RemarkType =
   | "Revised"
   | "ExtraAmount"
   | "LessAmount"
-  | "FreeOfCost";
+  | "FreeOfCost"
+  | "Other";
 
 
 
@@ -33,7 +34,8 @@ export interface OrderItem {
   total_sft: number;
   rate?: number;
   amount?: number;
-
+  remarks?: RemarkType | null;
+  remarks_other_text?: string | null;
 }
 
 export interface Order {
@@ -115,7 +117,8 @@ export interface CreateOrderInput {
     height_inches: number;
     qty: number;
     rate: number;
-
+    remarks?: RemarkType | null;
+    remarks_other_text?: string | null;
   }>;
 }
 

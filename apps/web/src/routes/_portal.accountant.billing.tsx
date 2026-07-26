@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { OrdersTable } from "@/components/orders/OrdersTable";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Receipt } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchOrders } from "@/api/orders";
@@ -43,11 +43,13 @@ function BillingQueue() {
           orders={queue}
           showCreator
           action={(o) => (
-            <Button asChild size="sm" className="rounded-lg">
-              <Link to="/accountant/billing/$id" params={{ id: String(o.id) }}>
-                <Receipt className="mr-1 h-3.5 w-3.5" /> Invoice Order
-              </Link>
-            </Button>
+            <Link 
+              to="/accountant/billing/$id" 
+              params={{ id: String(o.id) }}
+              className={buttonVariants({ variant: "default", size: "sm", className: "rounded-lg" })}
+            >
+              <Receipt className="mr-1 h-3.5 w-3.5" /> Invoice Order
+            </Link>
           )}
         />
       )}

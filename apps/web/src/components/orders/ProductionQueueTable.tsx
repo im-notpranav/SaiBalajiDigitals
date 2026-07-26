@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import {
   Table,
   TableBody,
@@ -20,6 +21,7 @@ interface QueueRow {
   qty: number;
   total_sft: number;
   showOrderNo: boolean;
+  id: number;
 }
 
 function flattenOrders(orders: ProductionOrder[]): QueueRow[] {
@@ -36,6 +38,7 @@ function flattenOrders(orders: ProductionOrder[]): QueueRow[] {
         qty: item.qty,
         total_sft: item.total_sft,
         showOrderNo: idx === 0,
+        id: order.id,
       });
     });
   }
@@ -95,7 +98,11 @@ export function ProductionQueueTable({ orders }: { orders: ProductionOrder[] }) 
             {sorted.map((row, i) => (
               <TableRow key={`${row.order_no}-${i}`}>
                 <TableCell className="font-mono text-xs font-semibold text-primary">
-                  {row.showOrderNo ? row.order_no : <span className="text-muted-foreground">↳</span>}
+                  {row.showOrderNo ? (
+                    <Link to="/production/orders/$id" params={{ id: String(row.id) }} className="hover:underline text-primary">
+                      {row.order_no}
+                    </Link>
+                  ) : <span className="text-muted-foreground">↳</span>}
                 </TableCell>
                 <TableCell>{row.client_name}</TableCell>
                 <TableCell className="text-sm text-muted-foreground">{row.store_name}</TableCell>

@@ -17,6 +17,8 @@ export const orderItemSchema = z.object({
   height_inches: z.coerce.number().positive(),
   qty: z.coerce.number().positive(),
   rate: z.coerce.number().positive(),
+  remarks: remarkEnum.optional().nullable(),
+  remarks_other_text: z.string().max(500).optional().nullable(),
 });
 
 export const createOrderSchema = z.object({

@@ -89,6 +89,7 @@ export function OrderDetail({ order, actions }: OrderDetailProps) {
               <TableHead className="text-right">Total Sft</TableHead>
               {hasFinancials && <TableHead className="text-right">Rate (₹)</TableHead>}
               {hasFinancials && <TableHead className="text-right">Amount (₹)</TableHead>}
+              <TableHead>Remarks</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -101,6 +102,16 @@ export function OrderDetail({ order, actions }: OrderDetailProps) {
                 <TableCell className="text-right">{(item.total_sft || 0).toFixed(2)}</TableCell>
                 {hasFinancials && <TableCell className="text-right">{item.rate}</TableCell>}
                 {hasFinancials && <TableCell className="text-right font-semibold">{inr(item.amount || 0)}</TableCell>}
+                <TableCell>
+                  {item.remarks ? (
+                    <div className="text-xs">
+                      <span className="font-medium">{remarkLabel(item.remarks)}</span>
+                      {item.remarks_other_text && <div className="text-muted-foreground mt-0.5 whitespace-pre-wrap max-w-[200px] truncate" title={item.remarks_other_text}>{item.remarks_other_text}</div>}
+                    </div>
+                  ) : (
+                    <span className="text-muted-foreground">-</span>
+                  )}
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
