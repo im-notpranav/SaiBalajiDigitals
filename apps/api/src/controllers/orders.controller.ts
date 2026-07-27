@@ -65,12 +65,7 @@ export const getOrders = async (req: Request, res: Response) => {
           total_sft: i.total_sft,
         })),
       }));
-      
-      const sanitizedWithTotal = sanitizedOrders.map((o: any) => {
-        const total_amount = o.items.reduce((sum: number, i: any) => sum + Number(i.amount), 0);
-        return { ...o, total_amount };
-      });
-      return res.status(200).json(serializeDecimals({ data: sanitizedWithTotal, total, page: Number(page) }));
+      return res.status(200).json(serializeDecimals({ data: sanitizedOrders, total, page: Number(page) }));
     }
 
     
@@ -104,7 +99,6 @@ export const getOrder = async (req: Request, res: Response) => {
         return res.status(403).json({ message: "Forbidden" });
       }
       
-      const total_amount = order.items.reduce((sum: number, i: any) => sum + Number(i.amount), 0);
       return res.status(200).json(serializeDecimals({
         id: order.id,
         order_no: order.order_no,
@@ -113,7 +107,6 @@ export const getOrder = async (req: Request, res: Response) => {
         location: order.location,
         status: order.status,
         date: order.date,
-        total_amount,
         items: order.items.map((i: any) => ({
           id: i.id,
           s_no: i.s_no,
@@ -251,6 +244,34 @@ export const updateOrder = async (req: Request, res: Response) => {
     if (location !== undefined) logChange("Location", existingOrder.location, location);
     if (po_number !== undefined) logChange("PO Number", existingOrder.po_number || "", po_number || "");
 
+    if (items) {
+      const oldItems = existingOrder.items;
+      items.forEach((newItem: any, index: number) => {
+        const oldItem = oldItems[index];
+        if (!oldItem) {
+          logChange(`Item ${index + 1} (new)`, "—", `${newItem.media}`);
+          return;
+        }
+        const fields: [string, string, any, any][] = [
+          ["Media", "media", oldItem.media, newItem.media],
+          ["Width (in)", "width_inches", Number(oldItem.width_inches).toFixed(2), Number(newItem.width_inches).toFixed(2)],
+          ["Height (in)", "height_inches", Number(oldItem.height_inches).toFixed(2), Number(newItem.height_inches).toFixed(2)],
+          ["Qty", "qty", Number(oldItem.qty).toFixed(2), Number(newItem.qty).toFixed(2)],
+          ["Rate (per Sq.Ft.)", "rate", Number(oldItem.rate).toFixed(2), Number(newItem.rate).toFixed(2)],
+        ];
+        fields.forEach(([label, , oldVal, newVal]) => {
+          if (String(oldVal) !== String(newVal)) {
+            logChange(`Item ${index + 1} – ${label}`, String(oldVal), String(newVal));
+          }
+        });
+      });
+      if (oldItems.length > items.length) {
+        for (let i = items.length; i < oldItems.length; i++) {
+          logChange(`Item ${i + 1} (removed)`, oldItems[i].media, "—");
+        }
+      }
+    }
+
     const updatedOrder = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT set_config('app.current_user_id', ${user.id.toString()}, true)`;
 
@@ -291,7 +312,6 @@ export const updateOrder = async (req: Request, res: Response) => {
         });
 
         await tx.orderItem.createMany({ data: processedItems });
-        logChange("Items", "Previous items", "New updated items");
       }
 
       if (changes.length > 0 && user.role === "EMPLOYEE") {
@@ -434,11 +454,17 @@ export const closeOrder = async (req: Request, res: Response) => {
 
 export const exportOrders = async (req: Request, res: Response) => {
   try {
+    const { section, status } = req.query;
     const user = req.user!;
     const where: any = {};
+    
     if (user.role === "EMPLOYEE") {
       where.created_by = user.id;
     }
+
+    if (section === "active") where.status = { in: ["Active", "Pending"] };
+    if (section === "completed") where.status = "Completed";
+    if (status) where.status = status;
 
     const orders = await prisma.order.findMany({
       where,

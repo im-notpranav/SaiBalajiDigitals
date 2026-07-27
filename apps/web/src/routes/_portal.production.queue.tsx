@@ -1,6 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { OrdersTable } from "@/components/orders/OrdersTable";
+import { ProductionQueueTable } from "@/components/orders/ProductionQueueTable";
+import { buttonVariants } from "@/components/ui/button";
 import { useQuery } from "@tanstack/react-query";
 import { fetchOrders } from "@/api/orders";
 
@@ -27,9 +28,17 @@ function ProductionQueue() {
       {isLoading ? (
         <div className="p-8 text-center text-muted-foreground">Loading production queue...</div>
       ) : (
-        <OrdersTable
+        <ProductionQueueTable
           orders={queue}
-          showCreator
+          action={(o) => (
+            <Link 
+              to="/production/orders/$id" 
+              params={{ id: String(o.id) }} 
+              className={buttonVariants({ size: "sm", variant: "ghost" })}
+            >
+              View
+            </Link>
+          )}
         />
       )}
     </>

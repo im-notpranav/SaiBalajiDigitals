@@ -1,6 +1,10 @@
 import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
 import { prisma } from "../utils/prisma";
+
+const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret";
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "7d";
 
 import { createUserSchema, updateMeSchema } from "../utils/validators";
 
@@ -109,6 +113,22 @@ export const updateMe = async (req: Request, res: Response) => {
       where: { id: userId },
       data: updateData,
       select: { id: true, name: true, username: true, role: true },
+    });
+
+    const payload = {
+      id: updatedUser.id,
+      username: updatedUser.username,
+      name: updatedUser.name,
+      role: updatedUser.role,
+    };
+
+    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN as any });
+
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
     return res.status(200).json(updatedUser);

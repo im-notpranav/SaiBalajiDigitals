@@ -1,12 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { ShieldAlert, Edit, Lock } from "lucide-react";
+import { ShieldAlert, Edit, Lock, Download } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { OrdersTable } from "@/components/orders/OrdersTable";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { fetchOrders, closeOrder } from "@/api/orders";
+import { fetchOrders, closeOrder, exportOrders } from "@/api/orders";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -74,6 +74,16 @@ function AdminOrders() {
         title="Order Oversight"
         description="Full unfiltered view — every order, every creator, every status. Override edits generate audit entries."
         crumbs={[{ label: "Administrator" }, { label: "Orders" }]}
+        actions={
+          <div className="flex gap-2">
+            <Button variant="outline" className="rounded-xl shadow-soft" onClick={() => exportOrders({ section })}>
+              <Download className="mr-2 h-4 w-4" /> Export {section === "active" ? "Active" : "Completed"}
+            </Button>
+            <Button variant="secondary" className="rounded-xl shadow-soft" onClick={() => exportOrders({})}>
+              <Download className="mr-2 h-4 w-4" /> Export All
+            </Button>
+          </div>
+        }
       />
       <div className="mb-4 rounded-xl border border-warning/40 bg-warning/10 p-3 text-sm text-warning-foreground">
         <ShieldAlert className="mr-2 inline h-4 w-4" />
