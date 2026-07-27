@@ -39,16 +39,32 @@ export function TopHeader() {
     navigate({ to: "/login" });
   };
 
+  const handleSearch = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      const q = e.currentTarget.value;
+      if (user?.role === "ADMIN") {
+        navigate({ to: "/admin/orders", search: { q } as any });
+      } else if (user?.role === "ACCOUNTS") {
+        navigate({ to: "/accountant/orders", search: { q } as any });
+      } else if (user?.role === "EMPLOYEE") {
+        navigate({ to: "/employee/orders", search: { q } as any });
+      }
+    }
+  };
+
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b bg-card/80 px-4 backdrop-blur-xl sm:px-6">
-      <div className="relative hidden max-w-md flex-1 md:block">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <input
-          type="search"
-          placeholder="Search orders, customers, users…    ⌘K"
-          className="h-10 w-full rounded-xl border bg-background pl-9 pr-3 text-sm outline-none ring-primary/40 transition focus:ring-2"
-        />
-      </div>
+      {user?.role !== "PRODUCTION" && (
+        <div className="relative hidden max-w-md flex-1 md:block">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            type="search"
+            placeholder="Search orders, clients, stores…    ↵"
+            className="h-10 w-full rounded-xl border bg-background pl-9 pr-3 text-sm outline-none ring-primary/40 transition focus:ring-2"
+            onKeyDown={handleSearch}
+          />
+        </div>
+      )}
       <div className="flex-1 md:hidden" />
       <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
         <Badge variant="outline" className="hidden gap-1.5 rounded-full border-primary/30 bg-primary/5 px-3 py-1 text-primary sm:inline-flex">
@@ -118,10 +134,7 @@ export function TopHeader() {
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem
-              onClick={() => {
-                if (user?.role === "ADMIN") navigate({ to: "/admin/settings" });
-                else navigate({ to: `/${user?.role.toLowerCase()}/profile` });
-              }}
+              onClick={() => navigate({ to: "/profile" })}
             >
               <User className="mr-2 h-4 w-4" /> Profile
             </DropdownMenuItem>

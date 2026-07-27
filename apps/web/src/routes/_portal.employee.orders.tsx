@@ -14,12 +14,16 @@ import { useDebounce } from "@/hooks/use-debounce";
 
 export const Route = createFileRoute("/_portal/employee/orders")({
   head: () => ({ meta: [{ title: "My Orders — SB OMS" }] }),
+  validateSearch: (search: Record<string, unknown>) => ({
+    q: (search.q as string) || "",
+  }),
   component: MyOrders,
 });
 
 function MyOrders() {
   const { user } = useAuth();
-  const [q, setQ] = useState("");
+  const search = Route.useSearch();
+  const [q, setQ] = useState(search.q || "");
   const [searchField, setSearchField] = useState<"client" | "store" | "order_no">("client");
   const debouncedQ = useDebounce(q, 300);
   const [section, setSection] = useState<"active" | "completed">("active");
@@ -49,9 +53,14 @@ function MyOrders() {
         description="All orders you originated, filtered server-side by your user ID."
         crumbs={[{ label: "Employee" }, { label: "My Orders" }]}
         actions={
-          <Button variant="outline" className="rounded-xl" onClick={handleExport}>
-            <Download className="mr-2 h-4 w-4" /> Export
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" className="rounded-xl" onClick={handleExport}>
+              <Download className="mr-2 h-4 w-4" /> Export {section === "active" ? "Active" : "Completed"}
+            </Button>
+            <Button variant="secondary" className="rounded-xl shadow-soft" onClick={() => exportOrders({})}>
+              <Download className="mr-2 h-4 w-4" /> Export All
+            </Button>
+          </div>
         }
       />
 

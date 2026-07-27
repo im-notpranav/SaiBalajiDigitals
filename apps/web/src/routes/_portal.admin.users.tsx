@@ -18,7 +18,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { fetchUsers, createUser, toggleUserStatus } from "@/api/users";
+import { fetchUsers, createUser, toggleUserStatus, updateUser } from "@/api/users";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_portal/admin/users")({
@@ -29,7 +29,9 @@ export const Route = createFileRoute("/_portal/admin/users")({
 function UsersPage() {
   const [q, setQ] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [newUser, setNewUser] = useState({ name: "", username: "", password: "", role: "EMPLOYEE" as any });
+  const [editUser, setEditUser] = useState<any>(null);
 
   const queryClient = useQueryClient();
   const { data: usersData, isLoading } = useQuery({ queryKey: ["users"], queryFn: fetchUsers });
@@ -49,6 +51,20 @@ function UsersPage() {
       } else {
         toast.error(data?.message || "Failed to create user");
       }
+    }
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: (data: any) => updateUser(data.id, { name: data.name, username: data.username, role: data.role }),
+    onSuccess: () => {
+      toast.success("User updated successfully");
+      setIsEditDialogOpen(false);
+      setEditUser(null);
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+    },
+    onError: (err: any) => {
+      const data = err?.response?.data;
+      toast.error(data?.message || "Failed to update user");
     }
   });
 
@@ -125,6 +141,44 @@ function UsersPage() {
         }
       />
 
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit User</DialogTitle>
+          </DialogHeader>
+          {editUser && (
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label>Name</Label>
+                <Input value={editUser.name} onChange={(e) => setEditUser({ ...editUser, name: e.target.value })} />
+              </div>
+              <div className="grid gap-2">
+                <Label>Username</Label>
+                <Input value={editUser.username} onChange={(e) => setEditUser({ ...editUser, username: e.target.value })} />
+              </div>
+              <div className="grid gap-2">
+                <Label>Role</Label>
+                <Select value={editUser.role} onValueChange={(val) => setEditUser({ ...editUser, role: val })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="EMPLOYEE">Employee</SelectItem>
+                    <SelectItem value="PRODUCTION">Production</SelectItem>
+                    <SelectItem value="ACCOUNTS">Accountant</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>Cancel</Button>
+            <Button onClick={() => updateMutation.mutate(editUser)} disabled={updateMutation.isPending || !editUser?.name || !editUser?.username}>
+              {updateMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <div className="surface-panel mb-4 p-3">
         <div className="relative max-w-sm">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -176,7 +230,10 @@ function UsersPage() {
                     {new Date(u.created_at).toLocaleDateString()}
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="sm" onClick={() => toast.info(`Edit ${u.name}`)}>Edit</Button>
+                    <Button variant="ghost" size="sm" onClick={() => {
+                      setEditUser(u);
+                      setIsEditDialogOpen(true);
+                    }}>Edit</Button>
                     <Button
                       variant="ghost"
                       size="sm"

@@ -58,6 +58,7 @@ const NAV: Record<UserRole, NavItem[]> = {
     { to: "/admin/audit", label: "Audit Logs", icon: ShieldCheck },
     { to: "/admin/reports", label: "Reports", icon: FileBarChart2 },
     { to: "/admin/financial-year", label: "Financial Year", icon: CalendarClock },
+    { to: "/admin/settings", label: "Settings", icon: Settings },
     { to: "/profile", label: "Profile", icon: UserCircle },
   ],
 };

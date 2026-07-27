@@ -46,3 +46,11 @@ export async function toggleUserStatus(id: number, is_active: boolean) {
   });
   return { user: res };
 }
+
+export async function updateUser(id: number, data: { name: string; username: string; role: string }) {
+  const res = await apiFetch<AuthUser>(`/users/${id}`, {
+    method: "PUT",
+    data,
+  });
+  return { user: res };
+}

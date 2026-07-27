@@ -161,3 +161,40 @@ export const toggleUserStatus = async (req: Request, res: Response) => {
     return res.status(500).json({ message: "Internal server error" });
   }
 };
+
+export const updateUser = async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id as string, 10);
+    const { name, username, role } = req.body;
+
+    if (!name || !username || !role) {
+      return res.status(400).json({ message: "Name, username, and role are required." });
+    }
+
+    if (role === "ADMIN") {
+      return res.status(400).json({ message: "Cannot set role to ADMIN." });
+    }
+
+    const existingUser = await prisma.user.findUnique({ where: { username } });
+    if (existingUser && existingUser.id !== id) {
+      return res.status(400).json({ message: "Username already exists" });
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id },
+      data: {
+        name,
+        username,
+        role: role as any,
+      },
+      select: { id: true, name: true, username: true, role: true, is_active: true },
+    });
+
+    return res.status(200).json(updatedUser);
+  } catch (err: any) {
+    if (err.code === "P2025") {
+      return res.status(404).json({ message: "User not found" });
+    }
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};

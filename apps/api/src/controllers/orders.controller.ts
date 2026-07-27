@@ -11,7 +11,7 @@ import * as xlsx from "xlsx";
 
 export const getOrders = async (req: Request, res: Response) => {
   try {
-    const { section, order_no, client, store, status, page = "1", limit = "50" } = req.query;
+    const { section, order_no, client, store, status, q, page = "1", limit = "50" } = req.query;
     const user = req.user!;
 
     const where: any = {};
@@ -26,6 +26,14 @@ export const getOrders = async (req: Request, res: Response) => {
     if (client) where.client_name = { contains: String(client), mode: "insensitive" };
     if (store) where.store_name = { contains: String(store), mode: "insensitive" };
     if (status) where.status = status;
+    
+    if (q) {
+      where.OR = [
+        { order_no: { contains: String(q), mode: "insensitive" } },
+        { client_name: { contains: String(q), mode: "insensitive" } },
+        { store_name: { contains: String(q), mode: "insensitive" } }
+      ];
+    }
 
     if (user.role === "PRODUCTION") {
       where.status = "Active";
@@ -454,7 +462,7 @@ export const closeOrder = async (req: Request, res: Response) => {
 
 export const exportOrders = async (req: Request, res: Response) => {
   try {
-    const { section, status } = req.query;
+    const { section, status, q } = req.query;
     const user = req.user!;
     const where: any = {};
     
@@ -466,14 +474,23 @@ export const exportOrders = async (req: Request, res: Response) => {
     if (section === "completed") where.status = "Completed";
     if (status) where.status = status;
 
+    if (q) {
+      where.OR = [
+        { order_no: { contains: String(q), mode: "insensitive" } },
+        { client_name: { contains: String(q), mode: "insensitive" } },
+        { store_name: { contains: String(q), mode: "insensitive" } }
+      ];
+    }
+
     const orders = await prisma.order.findMany({
       where,
       include: { items: true, creator: true },
-      orderBy: { created_at: "desc" },
+      orderBy: { order_no: "asc" },
     });
 
     const rows: any[] = [];
     for (const order of orders) {
+      const total = order.items.reduce((sum, item) => sum + Number(item.amount), 0);
       for (const item of order.items) {
         const row: any = {
           "S.No": item.s_no,
@@ -494,6 +511,11 @@ export const exportOrders = async (req: Request, res: Response) => {
           "Closure Remarks": order.remarks === "Other" ? (order.remarks_other_text || "") : (order.remarks || ""),
           "Status": order.status,
         };
+        if (user.role === "ADMIN" || user.role === "ACCOUNTS") {
+          row["Invoice No"] = order.invoice_no || "";
+          row["Bill Amount"] = order.bill_amount !== null ? Number(order.bill_amount) : "";
+          row["Pending Amount"] = (order.status === "Pending" && order.bill_amount !== null) ? total - Number(order.bill_amount) : (order.status === "Pending" && order.bill_amount === null ? total : "");
+        }
         if (user.role === "ADMIN") {
           row["Created By"] = order.creator_name;
         }

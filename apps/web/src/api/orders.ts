@@ -7,6 +7,7 @@ export interface OrdersQuery {
   store?: string;
   status?: string;
   section?: "active" | "completed";
+  q?: string;
   page?: number;
   limit?: number;
 }

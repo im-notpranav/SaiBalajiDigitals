@@ -1,12 +1,14 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { ShieldAlert, Edit, Lock, Download } from "lucide-react";
+import { ShieldAlert, Edit, Lock, Download, Search } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { OrdersTable } from "@/components/orders/OrdersTable";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchOrders, closeOrder, exportOrders } from "@/api/orders";
+import { useDebounce } from "@/hooks/use-debounce";
+import { Input } from "@/components/ui/input";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,12 +33,19 @@ import type { Order, RemarkType } from "@sb-oms/shared-types";
 
 export const Route = createFileRoute("/_portal/admin/orders")({
   head: () => ({ meta: [{ title: "Order Oversight — SB OMS" }] }),
+  validateSearch: (search: Record<string, unknown>) => ({
+    q: (search.q as string) || "",
+  }),
   component: AdminOrders,
 });
 
 function AdminOrders() {
   const queryClient = useQueryClient();
+  const search = Route.useSearch();
   const [section, setSection] = useState<"active" | "completed">("active");
+  const [q, setQ] = useState(search.q || "");
+  const [searchField, setSearchField] = useState<"client" | "store" | "order_no">("client");
+  const debouncedQ = useDebounce(q, 300);
 
   const [closingOrder, setClosingOrder] = useState<Order | null>(null);
   const [remark, setRemark] = useState<RemarkType | "Other">(REMARK_TYPES[0]!.value);
@@ -46,8 +55,12 @@ function AdminOrders() {
   const canSubmitClose = !isCustom || custom.trim().length > 0;
 
   const { data, isLoading } = useQuery({
-    queryKey: ["orders", "admin", section],
-    queryFn: () => fetchOrders({ section }),
+    queryKey: ["orders", "admin", section, searchField, debouncedQ],
+    queryFn: () => {
+      const params: any = { section };
+      if (debouncedQ) params[searchField] = debouncedQ;
+      return fetchOrders(params);
+    },
   });
 
   const handleClose = async () => {
@@ -91,13 +104,40 @@ function AdminOrders() {
         the audit log with a distinct action type.
       </div>
       
-      <div className="surface-panel mb-4 p-3">
+      <div className="surface-panel mb-4 flex flex-wrap items-center gap-3 p-3">
         <Tabs value={section} onValueChange={(v) => setSection(v as "active" | "completed")} className="w-[300px]">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="active">Active</TabsTrigger>
             <TabsTrigger value="completed">Completed</TabsTrigger>
           </TabsList>
         </Tabs>
+        
+        <div className="flex flex-1 items-center gap-2">
+          <Select value={searchField} onValueChange={(v: any) => setSearchField(v)}>
+            <SelectTrigger className="w-[140px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="client">Client Name</SelectItem>
+              <SelectItem value="store">Store Name</SelectItem>
+              <SelectItem value="order_no">Order No</SelectItem>
+            </SelectContent>
+          </Select>
+          
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder={`Search by ${searchField === 'client' ? 'client name' : searchField === 'store' ? 'store name' : 'order number'}...`}
+              className="pl-9"
+            />
+          </div>
+        </div>
+
+        <div className="ml-auto text-xs text-muted-foreground">
+          {data?.pagination?.total || data?.orders?.length || 0} orders found
+        </div>
       </div>
 
       {isLoading ? (

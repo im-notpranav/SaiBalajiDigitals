@@ -47,9 +47,10 @@ model User {
 }
 
 model OrderSequence {
-  id          Int    @id @default(1)
+  id          Int     @id @default(1)
   year_code   String
-  last_number Int    @default(0)
+  last_number Int     @default(0)
+  is_locked   Boolean @default(false)
 }
 
 model Order {
