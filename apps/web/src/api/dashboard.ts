@@ -19,3 +19,11 @@ export async function fetchAuditLog(page = 1, limit = 50) {
 export async function fetchFinancialYearConfig() {
   return apiFetch<{ year_code: string; last_number: number }>("/admin/financial-year-config");
 }
+
+export async function fetchLossReport(params?: { from?: string; to?: string }) {
+  const qs = new URLSearchParams();
+  if (params?.from) qs.set("from", params.from);
+  if (params?.to) qs.set("to", params.to);
+  const q = qs.toString();
+  return apiFetch<any>(`/admin/loss-report${q ? `?${q}` : ""}`);
+}

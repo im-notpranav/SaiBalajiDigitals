@@ -37,6 +37,10 @@ model User {
   username      String           @unique
   password      String
   role          Role
+  email         String?
+  phone         String?
+  photo_url     String?
+  is_super_admin Boolean         @default(false)
   created_at    DateTime         @default(now())
   updated_at    DateTime         @updatedAt
   last_login_at DateTime?
@@ -44,6 +48,8 @@ model User {
   orders        Order[]
   changeLogs    OrderChangeLog[]
   notifications Notification[]
+  remarkedItems OrderItem[]      @relation("ItemRemarkSetter")
+  flaggedItems  OrderItem[]      @relation("ItemFlagger")
 }
 
 model OrderSequence {
@@ -94,6 +100,14 @@ model OrderItem {
   amount        Decimal     @db.Decimal(10, 2)
   remarks       RemarkType?
   remarks_other_text String?
+  remarks_set_at DateTime?
+  remarks_set_by Int?
+  remarksSetter  User?     @relation("ItemRemarkSetter", fields: [remarks_set_by], references: [id], onDelete: SetNull)
+  is_flagged     Boolean   @default(false)
+  flag_reason    String?
+  flagged_at     DateTime?
+  flagged_by     Int?
+  flagger        User?     @relation("ItemFlagger", fields: [flagged_by], references: [id], onDelete: SetNull)
 }
 
 model OrderChangeLog {
@@ -132,4 +146,16 @@ model Notification {
   created_at DateTime @default(now())
 
   @@index([user_id])
+}
+
+model Client {
+  id         Int      @id @default(autoincrement())
+  name       String   @unique
+  created_at DateTime @default(now())
+}
+
+model Media {
+  id         Int      @id @default(autoincrement())
+  name       String   @unique
+  created_at DateTime @default(now())
 }

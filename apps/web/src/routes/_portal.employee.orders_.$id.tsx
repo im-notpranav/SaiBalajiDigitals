@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { OrderDetail } from "@/components/orders/OrderDetail";
 import { fetchOrder } from "@/api/orders";
 import { Loader2 } from "lucide-react";
+import { useAuth } from "@/lib/auth-store";
 
 export const Route = createFileRoute("/_portal/employee/orders_/$id")({
   head: () => ({ meta: [{ title: "Order Details — SB OMS" }] }),
@@ -12,6 +13,7 @@ export const Route = createFileRoute("/_portal/employee/orders_/$id")({
 
 function OrderDetailEmployee() {
   const { id } = Route.useParams();
+  const { user } = useAuth();
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["order", id],
@@ -33,7 +35,7 @@ function OrderDetailEmployee() {
         description="Full order details and line items."
         crumbs={[{ label: "Employee" }, { label: "Orders", to: "/employee/orders" }, { label: "Details" }]}
       />
-      <OrderDetail order={data.order} />
+      <OrderDetail order={data.order} userRole={user?.role} />
     </>
   );
 }

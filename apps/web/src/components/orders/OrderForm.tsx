@@ -12,27 +12,27 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { inr } from "@/lib/format";
-import { REMARK_TYPES } from "@/lib/constants";
-import type { RemarkType, CreateOrderInput, Order } from "@sb-oms/shared-types";
+import type { CreateOrderInput, Order, UserRole } from "@sb-oms/shared-types";
+import { ClientCombobox, MediaCombobox } from "./AutocompleteComboboxes";
 
 interface Line {
   id: string;
+  originalId?: number;
   media: string;
   width_inches: number;
   height_inches: number;
   qty: number;
   rate: number;
-  remarks: RemarkType | "none" | "Other";
-  remarks_other_text: string;
 }
 
 export interface OrderFormProps {
   defaultValues?: Order;
   onSubmit: (data: CreateOrderInput) => Promise<void>;
   isSubmitting?: boolean;
+  userRole?: UserRole;
 }
 
-export function OrderForm({ defaultValues, onSubmit, isSubmitting = false }: OrderFormProps) {
+export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userRole }: OrderFormProps) {
   const [clientName, setClientName] = useState(defaultValues?.client_name || "");
   const [storeName, setStoreName] = useState(defaultValues?.store_name || "");
   const [location, setLocation] = useState(defaultValues?.location || "");
@@ -43,15 +43,14 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false }: Ord
     defaultValues?.items?.length
       ? defaultValues.items.map((item) => ({
           id: crypto.randomUUID(),
+          originalId: item.id,
           media: item.media,
           width_inches: item.width_inches,
           height_inches: item.height_inches,
           qty: item.qty,
           rate: Number(item.rate),
-          remarks: item.remarks || "none",
-          remarks_other_text: item.remarks_other_text || "",
         }))
-      : [{ id: crypto.randomUUID(), media: "", width_inches: 0, height_inches: 0, qty: 1, rate: 0, remarks: "none", remarks_other_text: "" }]
+      : [{ id: crypto.randomUUID(), media: "", width_inches: 0, height_inches: 0, qty: 1, rate: 0 }]
   );
 
   const getSft = (l: Line) => (l.width_inches * l.height_inches) / 144;
@@ -63,7 +62,7 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false }: Ord
   const update = (id: string, patch: Partial<Line>) =>
     setLines((ls) => ls.map((l) => (l.id === id ? { ...l, ...patch } : l)));
   const addLine = () =>
-    setLines((ls) => [...ls, { id: crypto.randomUUID(), media: "", width_inches: 0, height_inches: 0, qty: 1, rate: 0, remarks: "none", remarks_other_text: "" }]);
+    setLines((ls) => [...ls, { id: crypto.randomUUID(), media: "", width_inches: 0, height_inches: 0, qty: 1, rate: 0 }]);
   const removeLine = (id: string) => setLines((ls) => (ls.length > 1 ? ls.filter((l) => l.id !== id) : ls));
 
   const submit = async (e: React.FormEvent) => {
@@ -82,13 +81,12 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false }: Ord
       date: defaultValues?.created_at ? new Date(defaultValues.created_at).toISOString().split("T")[0] : new Date().toISOString().split("T")[0],
       po_number: poNumber || undefined,
       items: lines.map((l) => ({
+        id: l.originalId,
         media: l.media,
         width_inches: l.width_inches,
         height_inches: l.height_inches,
         qty: l.qty,
         rate: l.rate,
-        remarks: l.remarks === "none" ? undefined : (l.remarks as RemarkType),
-        remarks_other_text: l.remarks === "Other" && l.remarks_other_text.trim() ? l.remarks_other_text.trim() : undefined,
       })),
     };
     
@@ -109,7 +107,7 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false }: Ord
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <Label htmlFor="clientName">Client Name *</Label>
-              <Input id="clientName" value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="e.g. Acme Corp" className="mt-1.5" />
+              <ClientCombobox value={clientName} onChange={setClientName} className="mt-1.5" />
             </div>
             <div>
               <Label htmlFor="storeName">Store Name *</Label>
@@ -140,16 +138,19 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false }: Ord
           </div>
 
           <div className="space-y-3">
-            {lines.map((line, idx) => (
+            {lines.map((line, idx) => {
+              const isReadOnlyItem = userRole === "EMPLOYEE" && !!line.originalId;
+
+              return (
               <div key={line.id} className="relative rounded-xl border bg-background/60 p-3 pr-10">
                 <div className="grid gap-2 sm:grid-cols-12 items-end">
-                  <div className="sm:col-span-2">
+                  <div className="sm:col-span-4">
                     <Label className="text-[10px] uppercase text-muted-foreground">Media</Label>
-                    <Input
+                    <MediaCombobox
                       value={line.media}
-                      onChange={(e) => update(line.id, { media: e.target.value })}
-                      placeholder="e.g. Vinyl"
-                      className="mt-1"
+                      onChange={(val) => update(line.id, { media: val })}
+                      className="mt-1 h-9"
+                      disabled={isReadOnlyItem}
                     />
                   </div>
                   <div className="sm:col-span-2">
@@ -160,6 +161,7 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false }: Ord
                       value={line.width_inches || ""}
                       onChange={(e) => update(line.id, { width_inches: Number(e.target.value) })}
                       className="mt-1"
+                      disabled={isReadOnlyItem}
                     />
                   </div>
                   <div className="sm:col-span-2">
@@ -170,6 +172,7 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false }: Ord
                       value={line.height_inches || ""}
                       onChange={(e) => update(line.id, { height_inches: Number(e.target.value) })}
                       className="mt-1"
+                      disabled={isReadOnlyItem}
                     />
                   </div>
                   <div className="sm:col-span-2">
@@ -180,6 +183,7 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false }: Ord
                       value={line.qty || ""}
                       onChange={(e) => update(line.id, { qty: Number(e.target.value) })}
                       className="mt-1"
+                      disabled={isReadOnlyItem}
                     />
                   </div>
                   <div className="sm:col-span-2">
@@ -190,39 +194,18 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false }: Ord
                       value={line.rate || ""}
                       onChange={(e) => update(line.id, { rate: Number(e.target.value) })}
                       className="mt-1"
+                      disabled={isReadOnlyItem}
                     />
                   </div>
                 </div>
                 <div className="grid gap-2 sm:grid-cols-12 items-end mt-3">
-                  <div className="sm:col-span-3">
-                    <Label className="text-[10px] uppercase text-muted-foreground">Remarks</Label>
-                    <Select value={line.remarks} onValueChange={(val) => update(line.id, { remarks: val as any })}>
-                      <SelectTrigger className="mt-1 h-9"><SelectValue placeholder="None" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none" className="text-muted-foreground italic">None</SelectItem>
-                        {REMARK_TYPES.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
-                        <SelectItem value="Other">Other</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {line.remarks === "Other" && (
-                    <div className="sm:col-span-5">
-                      <Label className="text-[10px] uppercase text-muted-foreground">Custom Remarks *</Label>
-                      <Input 
-                        value={line.remarks_other_text} 
-                        onChange={(e) => update(line.id, { remarks_other_text: e.target.value })} 
-                        placeholder="Enter reason..." 
-                        className="mt-1 h-9" 
-                      />
-                    </div>
-                  )}
                   <div className="absolute right-2 top-2">
                     <Button
                       type="button"
                       variant="ghost"
                       size="icon"
                       onClick={() => removeLine(line.id)}
-                      disabled={lines.length === 1}
+                      disabled={lines.length === 1 || isReadOnlyItem}
                       aria-label={`Remove item ${idx + 1}`}
                     >
                       <Trash2 className="h-4 w-4 text-destructive" />
@@ -236,7 +219,7 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false }: Ord
                   <span className="font-semibold">{inr(getLineTotal(line))}</span>
                 </div>
               </div>
-            ))}
+            );})}
           </div>
         </motion.section>
       </div>

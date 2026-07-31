@@ -79,8 +79,21 @@ export async function forceCloseOrder(id: number, payload: { remarks: string, re
   return { order: res };
 }
 
+export async function flagOrderItem(orderId: number, itemId: number, is_flagged: boolean, flag_reason?: string | null) {
+  const res = await apiFetch<any>(`/orders/${orderId}/items/${itemId}/flag`, {
+    method: "PATCH",
+    data: { is_flagged, flag_reason },
+  });
+  return res;
+}
 
-
+export async function setItemLossRemark(orderId: number, itemId: number, remarks: string | null, remarks_other_text?: string | null) {
+  const res = await apiFetch<any>(`/orders/${orderId}/items/${itemId}/remark`, {
+    method: "PUT",
+    data: { remarks, remarks_other_text },
+  });
+  return res;
+}
 export async function exportOrders(params: OrdersQuery = {}) {
   const qs = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {

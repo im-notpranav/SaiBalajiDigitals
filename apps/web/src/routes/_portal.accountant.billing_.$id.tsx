@@ -8,6 +8,7 @@ import { fetchOrder, submitInvoice } from "@/api/orders";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader2, Receipt } from "lucide-react";
+import { useAuth } from "@/lib/auth-store";
 
 export const Route = createFileRoute("/_portal/accountant/billing_/$id")({
   head: () => ({ meta: [{ title: "Order Details — SB OMS" }] }),
@@ -18,6 +19,7 @@ function OrderDetailAccountant() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
   const [invoiceNo, setInvoiceNo] = useState("");
   const [billAmount, setBillAmount] = useState("");
@@ -74,6 +76,7 @@ function OrderDetailAccountant() {
       
       <OrderDetail 
         order={order}
+        userRole={user?.role}
         actions={
           order.status === "Active" ? (
             <div className="rounded-xl border bg-card p-6">

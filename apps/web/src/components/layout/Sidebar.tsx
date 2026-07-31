@@ -55,6 +55,7 @@ const NAV: Record<UserRole, NavItem[]> = {
     { to: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { to: "/admin/users", label: "Users", icon: Users },
     { to: "/admin/orders", label: "Orders", icon: Boxes },
+    { to: "/admin/loss-report", label: "Loss Report", icon: FileBarChart2 },
     { to: "/admin/audit", label: "Audit Logs", icon: ShieldCheck },
     { to: "/admin/reports", label: "Reports", icon: FileBarChart2 },
     { to: "/admin/financial-year", label: "Financial Year", icon: CalendarClock },

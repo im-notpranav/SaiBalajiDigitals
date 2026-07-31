@@ -61,3 +61,42 @@ export const getFinancialYearConfig = async (req: Request, res: Response) => {
     return res.status(500).json({ message: "Internal server error" });
   }
 };
+
+export const getLossReport = async (req: Request, res: Response) => {
+  try {
+    const { from, to } = req.query;
+    const where: any = { remarks: { not: null } };
+    if (from || to) {
+      where.remarks_set_at = {};
+      if (from) where.remarks_set_at.gte = new Date(String(from));
+      if (to) where.remarks_set_at.lte = new Date(String(to));
+    }
+
+    const items = await prisma.orderItem.findMany({
+      where,
+      include: { order: { select: { order_no: true, created_by: true, creator_name: true } } },
+    });
+
+    const byCategory: Record<string, number> = {};
+    const byEmployee: Record<string, { name: string; total: number }> = {};
+
+    for (const item of items) {
+      const amount = Number(item.amount);
+      if (!item.remarks) continue;
+      
+      byCategory[item.remarks] = (byCategory[item.remarks] || 0) + amount;
+      const empKey = String(item.order.created_by ?? "unassigned");
+      if (!byEmployee[empKey]) byEmployee[empKey] = { name: item.order.creator_name, total: 0 };
+      byEmployee[empKey].total += amount;
+    }
+
+    return res.status(200).json({
+      by_category: byCategory,
+      by_employee: Object.values(byEmployee),
+      total_loss: items.reduce((s: number, i: any) => s + Number(i.amount), 0),
+    });
+  } catch (err) {
+    console.error("Loss report error:", err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};

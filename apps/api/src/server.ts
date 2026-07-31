@@ -26,6 +26,8 @@ import authRoutes from "./routes/auth.routes";
 import ordersRoutes from "./routes/orders.routes";
 import usersRoutes from "./routes/users.routes";
 import dashboardRoutes from "./routes/dashboard.routes";
+import clientsRoutes from "./routes/clients.routes";
+import mediaRoutes from "./routes/media.routes";
 import adminRoutes from "./routes/admin.routes";
 import notificationsRoutes from "./routes/notifications.routes";
 import { initEmailService } from "./services/email.service";
@@ -34,6 +36,8 @@ app.use("/api/auth", authRoutes);
 app.use("/api/orders", ordersRoutes);
 app.use("/api/users", usersRoutes);
 app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/clients", clientsRoutes);
+app.use("/api/media", mediaRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/notifications", notificationsRoutes);
 

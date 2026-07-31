@@ -14,7 +14,7 @@ export async function createUser(data: {
   name: string;
   username: string;
   password: string;
-  role: Exclude<UserRole, "admin">;
+  role: UserRole;
 }) {
   const res = await apiFetch<AuthUser>("/users", {
     method: "POST",
@@ -29,6 +29,9 @@ export async function deleteUser(id: number) {
 
 export async function updateMe(data: {
   name?: string;
+  email?: string | null;
+  phone?: string | null;
+  photo_url?: string | null;
   current_password?: string;
   new_password?: string;
 }) {

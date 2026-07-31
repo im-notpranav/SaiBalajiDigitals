@@ -11,7 +11,7 @@ import { createUserSchema, updateMeSchema } from "../utils/validators";
 export const getUsers = async (req: Request, res: Response) => {
   try {
     const users = await prisma.user.findMany({
-      select: { id: true, name: true, username: true, role: true, created_at: true, is_active: true, last_login_at: true },
+      select: { id: true, name: true, username: true, role: true, email: true, phone: true, photo_url: true, is_super_admin: true, created_at: true, is_active: true, last_login_at: true },
     });
     return res.status(200).json({ users });
   } catch (err) {
@@ -67,6 +67,12 @@ export const deleteUser = async (req: Request, res: Response) => {
     if (req.user!.id === id) {
       return res.status(400).json({ message: "You cannot delete yourself." });
     }
+
+    const targetUser = await prisma.user.findUnique({ where: { id }, select: { is_super_admin: true } });
+    if (targetUser?.is_super_admin) {
+      return res.status(400).json({ message: "You cannot delete the super administrator." });
+    }
+
     await prisma.user.delete({ where: { id } });
     return res.status(200).json({ message: "User deleted" });
   } catch (err) {
@@ -80,19 +86,14 @@ export const updateMe = async (req: Request, res: Response) => {
     if (!parseResult.success) {
       return res.status(400).json({ message: "Invalid input", errors: parseResult.error.errors });
     }
-    const { name, username, current_password, new_password } = parseResult.data;
+    const { name, email, phone, photo_url, current_password, new_password } = parseResult.data;
     const userId = req.user!.id;
 
     const updateData: any = {};
     if (name) updateData.name = name;
-    if (username) {
-      // Check for uniqueness if username is being changed
-      const existingUser = await prisma.user.findUnique({ where: { username } });
-      if (existingUser && existingUser.id !== userId) {
-        return res.status(400).json({ message: "Username already exists" });
-      }
-      updateData.username = username;
-    }
+    if (email !== undefined) updateData.email = email;
+    if (phone !== undefined) updateData.phone = phone;
+    if (photo_url !== undefined) updateData.photo_url = photo_url;
 
     if (new_password) {
       if (!current_password) {
@@ -112,7 +113,7 @@ export const updateMe = async (req: Request, res: Response) => {
     const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: updateData,
-      select: { id: true, name: true, username: true, role: true },
+      select: { id: true, name: true, username: true, role: true, email: true, phone: true, photo_url: true, is_super_admin: true },
     });
 
     const payload = {
@@ -150,6 +151,11 @@ export const toggleUserStatus = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "You cannot deactivate yourself." });
     }
 
+    const targetUser = await prisma.user.findUnique({ where: { id }, select: { is_super_admin: true } });
+    if (targetUser?.is_super_admin && !is_active) {
+      return res.status(400).json({ message: "You cannot deactivate the super administrator." });
+    }
+
     const updatedUser = await prisma.user.update({
       where: { id },
       data: { is_active },
@@ -169,10 +175,6 @@ export const updateUser = async (req: Request, res: Response) => {
 
     if (!name || !username || !role) {
       return res.status(400).json({ message: "Name, username, and role are required." });
-    }
-
-    if (role === "ADMIN") {
-      return res.status(400).json({ message: "Cannot set role to ADMIN." });
     }
 
     const existingUser = await prisma.user.findUnique({ where: { username } });

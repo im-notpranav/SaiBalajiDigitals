@@ -4,7 +4,7 @@ import { UserPlus, Search, Loader2 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { fetchUsers, createUser, toggleUserStatus, updateUser } from "@/api/users";
 import { toast } from "sonner";
+import { useAuth } from "@/lib/auth-store";
 
 export const Route = createFileRoute("/_portal/admin/users")({
   head: () => ({ meta: [{ title: "User Management — SB OMS" }] }),
@@ -32,6 +33,8 @@ function UsersPage() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [newUser, setNewUser] = useState({ name: "", username: "", password: "", role: "EMPLOYEE" as any });
   const [editUser, setEditUser] = useState<any>(null);
+  
+  const { user: currentUser } = useAuth();
 
   const queryClient = useQueryClient();
   const { data: usersData, isLoading } = useQuery({ queryKey: ["users"], queryFn: fetchUsers });
@@ -93,12 +96,13 @@ function UsersPage() {
         description="Deactivate rather than delete — historical audit attribution stays intact."
         crumbs={[{ label: "Administrator" }, { label: "Users" }]}
         actions={
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="rounded-xl">
-                <UserPlus className="mr-2 h-4 w-4" /> New user
-              </Button>
-            </DialogTrigger>
+          currentUser?.is_super_admin ? (
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <DialogTrigger asChild>
+                <Button className="rounded-xl">
+                  <UserPlus className="mr-2 h-4 w-4" /> New user
+                </Button>
+              </DialogTrigger>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Create New User</DialogTitle>
@@ -124,7 +128,7 @@ function UsersPage() {
                       <SelectItem value="EMPLOYEE">Employee</SelectItem>
                       <SelectItem value="PRODUCTION">Production</SelectItem>
                       <SelectItem value="ACCOUNTS">Accountant</SelectItem>
-                      {/* ADMIN role cannot be created via the UI */ }
+                      <SelectItem value="ADMIN">Administrator</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -136,8 +140,9 @@ function UsersPage() {
                   Create
                 </Button>
               </DialogFooter>
-            </DialogContent>
-          </Dialog>
+              </DialogContent>
+            </Dialog>
+          ) : null
         }
       />
 
@@ -164,6 +169,7 @@ function UsersPage() {
                     <SelectItem value="EMPLOYEE">Employee</SelectItem>
                     <SelectItem value="PRODUCTION">Production</SelectItem>
                     <SelectItem value="ACCOUNTS">Accountant</SelectItem>
+                    <SelectItem value="ADMIN">Administrator</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -206,8 +212,9 @@ function UsersPage() {
                   <TableCell>
                     <div className="flex items-center gap-3">
                       <Avatar className="h-9 w-9">
+                        {u.photo_url && <AvatarImage src={u.photo_url} alt={u.name} className="object-cover" />}
                         <AvatarFallback className="bg-gradient-to-br from-primary to-primary-deep text-xs font-bold text-primary-foreground">
-                          {u.name.split(" ").map((n: string) => n[0]).join("")}
+                          {u.name.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
                       <div>
@@ -217,7 +224,14 @@ function UsersPage() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline" className="capitalize">{u.role.toLowerCase()}</Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="capitalize">{u.role.toLowerCase()}</Badge>
+                      {u.is_super_admin && (
+                        <Badge className="bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 capitalize border-rose-500/20">
+                          Super Admin
+                        </Badge>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell>
                     {u.is_active ? (
@@ -230,19 +244,23 @@ function UsersPage() {
                     {new Date(u.created_at).toLocaleDateString()}
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="sm" onClick={() => {
-                      setEditUser(u);
-                      setIsEditDialogOpen(true);
-                    }}>Edit</Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className={u.is_active ? "text-destructive" : "text-success"}
-                      onClick={() => toggleMutation.mutate({ id: u.id, is_active: !u.is_active })}
-                      disabled={toggleMutation.isPending}
-                    >
-                      {u.is_active ? "Deactivate" : "Reactivate"}
-                    </Button>
+                    {currentUser?.is_super_admin && (
+                      <Button variant="ghost" size="sm" onClick={() => {
+                        setEditUser(u);
+                        setIsEditDialogOpen(true);
+                      }}>Edit</Button>
+                    )}
+                    {(!u.is_super_admin) && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className={u.is_active ? "text-destructive" : "text-success"}
+                        onClick={() => toggleMutation.mutate({ id: u.id, is_active: !u.is_active })}
+                        disabled={toggleMutation.isPending}
+                      >
+                        {u.is_active ? "Deactivate" : "Reactivate"}
+                      </Button>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}

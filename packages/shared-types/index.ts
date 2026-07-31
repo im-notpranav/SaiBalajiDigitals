@@ -19,6 +19,10 @@ export interface AuthUser {
   name: string;
   username: string;
   role: UserRole;
+  email?: string | null;
+  phone?: string | null;
+  photo_url?: string | null;
+  is_super_admin?: boolean;
   is_active?: boolean;
   last_login_at?: string | null;
   initials: string;
@@ -36,6 +40,12 @@ export interface OrderItem {
   amount?: number;
   remarks?: RemarkType | null;
   remarks_other_text?: string | null;
+  remarks_set_at?: string | null;
+  remarks_set_by?: number | null;
+  is_flagged?: boolean;
+  flag_reason?: string | null;
+  flagged_at?: string | null;
+  flagged_by?: number | null;
 }
 
 export interface Order {
@@ -112,13 +122,12 @@ export interface CreateOrderInput {
   remarks?: RemarkType | null;
   remarks_other_text?: string | null;
   items: Array<{
+    id?: number;
     media: string;
     width_inches: number;
     height_inches: number;
     qty: number;
     rate: number;
-    remarks?: RemarkType | null;
-    remarks_other_text?: string | null;
   }>;
 }
 

@@ -10,6 +10,10 @@ export interface AuthUser {
   name: string;
   username: string;
   role: UserRole;
+  email?: string | null;
+  phone?: string | null;
+  photo_url?: string | null;
+  is_super_admin?: boolean;
 }
 
 interface AuthState {

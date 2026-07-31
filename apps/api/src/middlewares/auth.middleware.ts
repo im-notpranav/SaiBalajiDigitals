@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
+import { prisma } from "../utils/prisma";
 
 const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret";
 
@@ -43,4 +44,18 @@ export function authorize(...roles: string[]) {
     }
     next();
   };
+}
+
+export async function requireSuperAdmin(req: Request, res: Response, next: NextFunction) {
+  if (!req.user) {
+    return res.status(401).json({ message: "Not authenticated" });
+  }
+  const dbUser = await prisma.user.findUnique({
+    where: { id: req.user.id },
+    select: { is_super_admin: true },
+  });
+  if (!dbUser?.is_super_admin) {
+    return res.status(403).json({ message: "Only the super administrator can perform this action." });
+  }
+  next();
 }

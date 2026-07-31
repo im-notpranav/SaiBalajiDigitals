@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { getUsers, createUser, deleteUser, updateMe, checkUsername, toggleUserStatus, updateUser } from "../controllers/users.controller";
-import { authenticate, authorize } from "../middlewares/auth.middleware";
+import { authenticate, authorize, requireSuperAdmin } from "../middlewares/auth.middleware";
 
 const router = Router();
 
@@ -11,9 +11,9 @@ router.put("/me", updateMe);
 
 router.get("/check", authorize("ADMIN"), checkUsername);
 router.get("/", authorize("ADMIN"), getUsers);
-router.post("/", authorize("ADMIN"), createUser);
+router.post("/", authorize("ADMIN"), requireSuperAdmin, createUser);
 router.delete("/:id", authorize("ADMIN"), deleteUser);
 router.put("/:id/status", authorize("ADMIN"), toggleUserStatus);
-router.put("/:id", authorize("ADMIN"), updateUser);
+router.put("/:id", authorize("ADMIN"), requireSuperAdmin, updateUser);
 
 export default router;

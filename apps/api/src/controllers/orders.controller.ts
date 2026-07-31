@@ -146,11 +146,29 @@ export const createOrder = async (req: Request, res: Response) => {
     const { client_name, store_name, location, po_number, items, remarks, remarks_other_text } = parseResult.data;
     const user = req.user!;
 
+    if (user.role === "EMPLOYEE" && remarks) {
+      return res.status(403).json({ message: "Only an administrator can set order remarks." });
+    }
+
+    const ensureLookupValue = async (model: "client" | "media", name: string) => {
+      try {
+        const trimmed = name.trim();
+        if (!trimmed) return;
+        const existing = await (prisma as any)[model].findFirst({ where: { name: { equals: trimmed, mode: "insensitive" } } });
+        if (!existing) await (prisma as any)[model].create({ data: { name: trimmed } });
+      } catch (e) {
+        console.error(`Lookup upsert failed for ${model}:`, e);
+      }
+    };
+
+    ensureLookupValue("client", client_name);
+    items.forEach((item: any) => ensureLookupValue("media", item.media));
+
     const processedItems = items.map((item: any, index: number) => {
-      const w = parseFloat(item.width_inches);
-      const h = parseFloat(item.height_inches);
-      const q = parseFloat(item.qty);
-      const r = parseFloat(item.rate);
+      const w = Number(item.width_inches);
+      const h = Number(item.height_inches);
+      const q = Number(item.qty);
+      const r = Number(item.rate);
 
       if (w <= 0 || h <= 0 || q <= 0 || r <= 0) {
         throw new Error("Item dimensions, qty, and rate must be positive numbers.");
@@ -225,6 +243,24 @@ export const updateOrder = async (req: Request, res: Response) => {
     const { client_name, store_name, location, po_number, items, remarks, remarks_other_text } = parseResult.data;
     const user = req.user!;
 
+    const ensureLookupValue = async (model: "client" | "media", name: string) => {
+      try {
+        const trimmed = name.trim();
+        if (!trimmed) return;
+        const existing = await (prisma as any)[model].findFirst({ where: { name: { equals: trimmed, mode: "insensitive" } } });
+        if (!existing) await (prisma as any)[model].create({ data: { name: trimmed } });
+      } catch (e) {
+        console.error(`Lookup upsert failed for ${model}:`, e);
+      }
+    };
+
+    if (client_name) ensureLookupValue("client", client_name);
+    if (items) {
+      items.forEach((item: any) => {
+        if (item.media) ensureLookupValue("media", item.media);
+      });
+    }
+
     const existingOrder = await prisma.order.findUnique({
       where: { id },
       include: { items: true },
@@ -233,11 +269,46 @@ export const updateOrder = async (req: Request, res: Response) => {
     if (!existingOrder) return res.status(404).json({ message: "Order not found" });
 
     if (user.role === "EMPLOYEE" && existingOrder.created_by !== user.id) {
+      console.log(`403 - Employee did not create order. Employee ID: ${user.id}, Order Created By: ${existingOrder.created_by}`);
       return res.status(403).json({ message: "Forbidden" });
     }
 
     if (user.role === "EMPLOYEE" && existingOrder.status === "Completed") {
+      console.log(`403 - Completed order edit attempt`);
       return res.status(403).json({ message: "Completed orders cannot be edited" });
+    }
+
+    if (user.role === "EMPLOYEE" && remarks !== undefined && remarks !== (existingOrder.remarks ?? null)) {
+      return res.status(403).json({ message: "Only an administrator can set order remarks." });
+    }
+
+    if (items && items.length > 0) {
+      const oldItemsById = new Map(existingOrder.items.map((i: any) => [i.id, i]));
+      const incomingIds = new Set(items.filter((i: any) => i.id).map((i: any) => i.id));
+
+      if (user.role === "EMPLOYEE") {
+        for (const oldItem of existingOrder.items) {
+          if (!incomingIds.has(oldItem.id)) {
+            console.log(`403 - Line item removed: ${oldItem.id}`);
+            return res.status(403).json({ message: "Line items cannot be removed once saved." });
+          }
+        }
+        for (const newItem of items) {
+          if (!newItem.id) continue;
+          const oldItem = oldItemsById.get(newItem.id);
+          if (!oldItem) continue;
+          const changed =
+            newItem.media !== oldItem.media ||
+            Number(newItem.width_inches) !== Number(oldItem.width_inches) ||
+            Number(newItem.height_inches) !== Number(oldItem.height_inches) ||
+            Number(newItem.qty) !== Number(oldItem.qty) ||
+            Number(newItem.rate) !== Number(oldItem.rate);
+          if (changed) {
+            console.log(`403 - Existing line item edited: ${oldItem.id}. Values: ${JSON.stringify({ newItem, oldItem })}`);
+            return res.status(403).json({ message: "Existing line items cannot be edited — flag it and add a corrected line instead." });
+          }
+        }
+      }
     }
 
     const changes: any[] = [];
@@ -254,30 +325,25 @@ export const updateOrder = async (req: Request, res: Response) => {
 
     if (items) {
       const oldItems = existingOrder.items;
-      items.forEach((newItem: any, index: number) => {
-        const oldItem = oldItems[index];
+      items.forEach((newItem: any) => {
+        const oldItem = newItem.id ? oldItems.find((i: any) => i.id === newItem.id) : undefined;
         if (!oldItem) {
-          logChange(`Item ${index + 1} (new)`, "—", `${newItem.media}`);
+          logChange(`Item (new)`, "—", `${newItem.media}`);
           return;
         }
-        const fields: [string, string, any, any][] = [
-          ["Media", "media", oldItem.media, newItem.media],
+        const fields: [string, string, string, string][] = [
+          ["Media", "media", String(oldItem.media), String(newItem.media)],
           ["Width (in)", "width_inches", Number(oldItem.width_inches).toFixed(2), Number(newItem.width_inches).toFixed(2)],
           ["Height (in)", "height_inches", Number(oldItem.height_inches).toFixed(2), Number(newItem.height_inches).toFixed(2)],
           ["Qty", "qty", Number(oldItem.qty).toFixed(2), Number(newItem.qty).toFixed(2)],
           ["Rate (per Sq.Ft.)", "rate", Number(oldItem.rate).toFixed(2), Number(newItem.rate).toFixed(2)],
         ];
         fields.forEach(([label, , oldVal, newVal]) => {
-          if (String(oldVal) !== String(newVal)) {
-            logChange(`Item ${index + 1} – ${label}`, String(oldVal), String(newVal));
+          if (oldVal !== newVal) {
+            logChange(`Item ${oldItem.s_no} – ${label}`, oldVal, newVal);
           }
         });
       });
-      if (oldItems.length > items.length) {
-        for (let i = items.length; i < oldItems.length; i++) {
-          logChange(`Item ${i + 1} (removed)`, oldItems[i].media, "—");
-        }
-      }
     }
 
     const updatedOrder = await prisma.$transaction(async (tx) => {
@@ -297,29 +363,35 @@ export const updateOrder = async (req: Request, res: Response) => {
       });
 
       if (items && items.length > 0) {
-        await tx.orderItem.deleteMany({ where: { order_id: id } });
+        const oldItemsById = new Map(existingOrder.items.map((i: any) => [i.id, i]));
+        let nextSNo = existingOrder.items.length > 0 ? Math.max(...existingOrder.items.map((i: any) => i.s_no)) + 1 : 1;
 
-        const processedItems = items.map((item: any, index: number) => {
-          const w = parseFloat(item.width_inches);
-          const h = parseFloat(item.height_inches);
-          const q = parseFloat(item.qty);
-          const r = parseFloat(item.rate);
+        for (const newItem of items) {
+          const w = Number(newItem.width_inches);
+          const h = Number(newItem.height_inches);
+          const q = Number(newItem.qty);
+          const r = Number(newItem.rate);
           const total_sft = Number(((w * h) / 144) * q).toFixed(2);
           const amount = Number(parseFloat(total_sft) * r).toFixed(2);
-          return {
-            order_id: id,
-            s_no: index + 1,
-            media: item.media,
-            width_inches: w,
-            height_inches: h,
-            qty: q,
-            total_sft: parseFloat(total_sft),
-            rate: r,
-            amount: parseFloat(amount),
-          };
-        });
 
-        await tx.orderItem.createMany({ data: processedItems });
+          if (newItem.id && oldItemsById.has(newItem.id)) {
+            await tx.orderItem.update({
+              where: { id: newItem.id },
+              data: {
+                media: newItem.media, width_inches: w, height_inches: h,
+                qty: q, total_sft: parseFloat(total_sft), rate: r, amount: parseFloat(amount),
+              },
+            });
+          } else {
+            await tx.orderItem.create({
+              data: {
+                order_id: id, s_no: nextSNo++, media: newItem.media,
+                width_inches: w, height_inches: h, qty: q,
+                total_sft: parseFloat(total_sft), rate: r, amount: parseFloat(amount),
+              },
+            });
+          }
+        }
       }
 
       if (changes.length > 0 && user.role === "EMPLOYEE") {
@@ -564,6 +636,60 @@ export const forceCloseOrder = async (req: Request, res: Response) => {
     });
 
     return res.status(200).json(serializeDecimals(updated));
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+import { flagItemSchema, itemLossRemarkSchema } from "../utils/validators";
+
+export const flagOrderItem = async (req: Request, res: Response) => {
+  try {
+    const parseResult = flagItemSchema.safeParse(req.body);
+    if (!parseResult.success) return res.status(400).json({ message: "Invalid input", errors: parseResult.error.errors });
+    const { is_flagged, flag_reason } = parseResult.data;
+    const orderId = parseInt(req.params.orderId as string, 10);
+    const itemId = parseInt(req.params.itemId as string, 10);
+    const user = req.user!;
+
+    const order = await prisma.order.findUnique({ where: { id: orderId } });
+    if (!order) return res.status(404).json({ message: "Order not found" });
+    if (user.role === "EMPLOYEE" && order.created_by !== user.id) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
+    const item = await prisma.orderItem.update({
+      where: { id: itemId },
+      data: is_flagged
+        ? { is_flagged: true, flag_reason, flagged_at: new Date(), flagged_by: user.id }
+        : { is_flagged: false, flag_reason: null, flagged_at: null, flagged_by: null },
+    });
+    return res.status(200).json(serializeDecimals(item));
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+export const setItemLossRemark = async (req: Request, res: Response) => {
+  try {
+    const parseResult = itemLossRemarkSchema.safeParse(req.body);
+    if (!parseResult.success) return res.status(400).json({ message: "Invalid input", errors: parseResult.error.errors });
+    const { remarks, remarks_other_text } = parseResult.data;
+    const itemId = parseInt(req.params.itemId as string, 10);
+    const user = req.user!;
+
+    const item = await prisma.orderItem.update({
+      where: { id: itemId },
+      data: {
+        remarks,
+        remarks_other_text: remarks === "Other" ? remarks_other_text : null,
+        remarks_set_at: remarks ? new Date() : null,
+        remarks_set_by: remarks ? user.id : null,
+      },
+    });
+    return res.status(200).json(serializeDecimals(item));
   } catch (err) {
     console.error(err);
     return res.status(500).json({ message: "Internal server error" });

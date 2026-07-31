@@ -9,6 +9,8 @@ import {
   closeOrder,
   exportOrders,
   forceCloseOrder,
+  flagOrderItem,
+  setItemLossRemark,
 } from "../controllers/orders.controller";
 import { authenticate, authorize } from "../middlewares/auth.middleware";
 
@@ -25,5 +27,7 @@ router.delete("/:id", authorize("ADMIN"), deleteOrder);
 router.put("/:id/invoice", authorize("ACCOUNTS", "ADMIN"), reconcileInvoice);
 router.put("/:id/close", authorize("ADMIN"), closeOrder);
 router.put("/:id/force-close", authorize("ADMIN"), forceCloseOrder);
+router.patch("/:orderId/items/:itemId/flag", authorize("EMPLOYEE", "ADMIN"), flagOrderItem);
+router.put("/:orderId/items/:itemId/remark", authorize("ADMIN"), setItemLossRemark);
 
 export default router;

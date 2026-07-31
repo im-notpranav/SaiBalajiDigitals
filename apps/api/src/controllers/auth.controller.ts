@@ -51,7 +51,18 @@ export const login = async (req: Request, res: Response) => {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
-    return res.status(200).json({ user: payload });
+    return res.status(200).json({
+      user: {
+        id: user.id,
+        name: user.name,
+        username: user.username,
+        role: user.role,
+        email: user.email,
+        phone: user.phone,
+        photo_url: user.photo_url,
+        is_super_admin: user.is_super_admin,
+      }
+    });
   } catch (error) {
     console.error("Login error:", error);
     return res.status(500).json({ message: "Internal server error" });
@@ -63,6 +74,24 @@ export const logout = (req: Request, res: Response) => {
   return res.status(200).json({ message: "Logged out successfully" });
 };
 
-export const getMe = (req: Request, res: Response) => {
-  return res.status(200).json({ user: req.user });
+export const getMe = async (req: Request, res: Response) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user!.id },
+      select: {
+        id: true,
+        name: true,
+        username: true,
+        role: true,
+        email: true,
+        phone: true,
+        photo_url: true,
+        is_super_admin: true,
+      }
+    });
+    if (!user) return res.status(404).json({ message: "User not found" });
+    return res.status(200).json({ user });
+  } catch (error) {
+    return res.status(500).json({ message: "Internal server error" });
+  }
 };

@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { useAuth } from "@/lib/auth-store";
 
 export const Route = createFileRoute("/_portal/admin/orders_/$id")({
   head: () => ({ meta: [{ title: "Order Details — SB OMS" }] }),
@@ -27,6 +28,7 @@ function OrderDetailAdmin() {
   const { id } = Route.useParams();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["order", id],
@@ -141,7 +143,7 @@ function OrderDetailAdmin() {
         description="Full administrative view of order details."
         crumbs={[{ label: "Administrator" }, { label: "Orders", to: "/admin/orders" }, { label: "Details" }]}
       />
-      <OrderDetail order={data.order} actions={actions} />
+      <OrderDetail order={data.order} actions={actions} userRole={user?.role} />
     </>
   );
 }

@@ -39,7 +39,7 @@ function EditOrderEmployee() {
       if (data?.errors && Array.isArray(data.errors)) {
         toast.error(`Validation Error: ${data.errors.map((e: any) => `${e.path.join(".")}: ${e.message}`).join(", ")}`);
       } else {
-        toast.error("Failed to update order", { description: err.message });
+        toast.error("Failed to update order", { description: data?.message || err.message });
       }
     } finally {
       setSaving(false);
@@ -72,7 +72,7 @@ function EditOrderEmployee() {
         crumbs={[{ label: "Employee" }, { label: "Orders" }, { label: "Edit" }]}
       />
 
-      <OrderForm defaultValues={order} onSubmit={submit} isSubmitting={saving} />
+      <OrderForm defaultValues={order} onSubmit={submit} isSubmitting={saving} userRole={user?.role} />
     </>
   );
 }

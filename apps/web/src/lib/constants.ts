@@ -15,6 +15,15 @@ export const REMARK_TYPES: { value: RemarkType; label: string }[] = [
   { value: "ExtraAmount", label: "Extra Amount" },
   { value: "LessAmount", label: "Less Amount" },
   { value: "FreeOfCost", label: "Free of Cost" },
+  { value: "Other", label: "Other" },
+];
+
+export const LOSS_REMARK_TYPES: { value: RemarkType; label: string }[] = [
+  { value: "Reprint", label: "Reprint" },
+  { value: "Sample", label: "Sample" },
+  { value: "UnderWarranty", label: "Under Warranty" },
+  { value: "FreeOfCost", label: "Free of Cost" },
+  { value: "Other", label: "Other" },
 ];
 
 export const ORDER_STATUSES = ["Active", "Pending", "Completed"] as const;
