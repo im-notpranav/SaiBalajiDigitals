@@ -1,6 +1,6 @@
 import { serializeDecimals } from "../utils/serialize";
 import { computeTotals } from "../utils/order-totals";
-import { isClosed } from "../utils/order-status";
+import { isClosed, OPEN_STATUSES, CLOSED_STATUSES } from "../utils/order-status";
 import { Request, Response } from "express";
 import { prisma } from "../utils/prisma";
 import { generateOrderId } from "../utils/order-sequence";
@@ -21,10 +21,10 @@ export const getOrders = async (req: Request, res: Response) => {
       where.created_by = user.id;
     }
 
-    // "Active" = still in flight (incl. billed-but-unpaid); "completed" = closed either
-    // by payment received or by an admin closure.
-    if (section === "active") where.status = { in: ["Active", "Pending", "BillingCompleted"] };
-    if (section === "completed") where.status = { in: ["PaymentReceived", "Completed"] };
+    // "Active" = still in flight (incl. installed / billed-but-unpaid); "completed" =
+    // closed either by payment received or by an admin closure.
+    if (section === "active") where.status = { in: OPEN_STATUSES };
+    if (section === "completed") where.status = { in: CLOSED_STATUSES };
 
     if (order_no) where.order_no = { contains: String(order_no), mode: "insensitive" };
     if (client) where.client_name = { contains: String(client), mode: "insensitive" };
@@ -46,7 +46,7 @@ export const getOrders = async (req: Request, res: Response) => {
     }
 
     if (user.role === "OPERATOR") {
-      where.status = { in: ["Active", "Pending", "BillingCompleted"] };
+      where.status = { in: OPEN_STATUSES };
     }
 
     const skip = (Number(page) - 1) * Number(limit);
@@ -571,12 +571,22 @@ export const reconcileInvoice = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Invoice already submitted for this order; corrections must go through an order edit." });
     }
 
-    // Production gate: an order cannot be billed until every assigned item is complete.
-    const pendingProduction = order.items.filter((i: any) => i.assignments.length > 0 && !i.production_completed);
-    if (pendingProduction.length > 0) {
-      return res.status(400).json({
-        message: `Cannot bill yet — ${pendingProduction.length} assigned item(s) are still pending production completion.`,
-      });
+    // Production + installation gate. Orders that went through production must be
+    // produced AND installation-confirmed by the employee before they can be billed.
+    // Supply-only orders (nothing assigned) skip this and bill directly from Active.
+    const hasProduction = order.items.some((i: any) => i.assignments.length > 0);
+    if (hasProduction) {
+      const pendingProduction = order.items.filter((i: any) => i.assignments.length > 0 && !i.production_completed);
+      if (pendingProduction.length > 0) {
+        return res.status(400).json({
+          message: `Cannot bill yet — ${pendingProduction.length} assigned item(s) are still pending production completion.`,
+        });
+      }
+      if (order.status !== "Installed") {
+        return res.status(400).json({
+          message: "Cannot bill yet — the order creator must confirm installation first.",
+        });
+      }
     }
 
     // Bill only against the chargeable items — confirmed losses are excluded.
@@ -617,6 +627,66 @@ export const reconcileInvoice = async (req: Request, res: Response) => {
         order.id
       );
     }
+
+    return res.status(200).json(serializeDecimals(updated));
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+/**
+ * The order creator confirms the produced order has been installed. This is the
+ * hand-off from production to billing: only after installation can Accounts invoice.
+ * Applies to orders that went through production (have assigned items).
+ */
+export const markOrderInstalled = async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id as string, 10);
+    const user = req.user!;
+
+    const order = await prisma.order.findUnique({
+      where: { id },
+      include: { items: { include: { assignments: true } } },
+    });
+    if (!order) return res.status(404).json({ message: "Order not found" });
+
+    // Only the creating employee (or an admin) may confirm installation.
+    if (user.role === "EMPLOYEE" && order.created_by !== user.id) {
+      return res.status(403).json({ message: "Only the order's creator can confirm installation." });
+    }
+
+    if (order.status !== "Active") {
+      return res.status(400).json({ message: "Only active orders can be marked installed." });
+    }
+
+    const assignedItems = order.items.filter((i: any) => i.assignments.length > 0);
+    if (assignedItems.length === 0) {
+      return res.status(400).json({ message: "This order has no production work, so it goes straight to billing." });
+    }
+    const stillInProduction = assignedItems.filter((i: any) => !i.production_completed);
+    if (stillInProduction.length > 0) {
+      return res.status(400).json({
+        message: `Cannot confirm installation — ${stillInProduction.length} item(s) are still in production.`,
+      });
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.current_user_id', ${user.id.toString()}, true)`;
+      return tx.order.update({
+        where: { id },
+        data: { status: "Installed", installed_at: new Date(), installed_by: user.id },
+      });
+    });
+
+    // Now it's the accountant's turn.
+    await notifyRole(
+      "ACCOUNTS",
+      `Order ${order.order_no} installed — ready to bill`,
+      `${user.name} confirmed installation. Produced and installed; ready for invoicing.`,
+      "success",
+      order.id
+    );
 
     return res.status(200).json(serializeDecimals(updated));
   } catch (err) {
@@ -733,10 +803,10 @@ export const exportOrders = async (req: Request, res: Response) => {
       where.created_by = user.id;
     }
 
-    // "Active" = still in flight (incl. billed-but-unpaid); "completed" = closed either
-    // by payment received or by an admin closure.
-    if (section === "active") where.status = { in: ["Active", "Pending", "BillingCompleted"] };
-    if (section === "completed") where.status = { in: ["PaymentReceived", "Completed"] };
+    // "Active" = still in flight (incl. installed / billed-but-unpaid); "completed" =
+    // closed either by payment received or by an admin closure.
+    if (section === "active") where.status = { in: OPEN_STATUSES };
+    if (section === "completed") where.status = { in: CLOSED_STATUSES };
     if (status) where.status = status;
 
     if (q) {
@@ -997,28 +1067,20 @@ export const completeOrderItem = async (req: Request, res: Response) => {
       );
     }
 
-    // When every assigned item on the order is done, notify Accounts and the employee.
+    // When every assigned item on the order is done, prompt the employee to confirm
+    // installation. Billing only opens up after that confirmation.
     if (nowComplete) {
       const remaining = await prisma.orderItem.count({
         where: { order_id: orderId, assignments: { some: {} }, production_completed: false },
       });
-      if (remaining === 0) {
-        await notifyRole(
-          "ACCOUNTS",
+      if (remaining === 0 && order.created_by) {
+        await notifyUser(
+          order.created_by,
           `Order ${order.order_no} is production complete`,
-          `All assigned items are finished — ready for billing.`,
+          `All items are produced. Confirm installation to send it for billing.`,
           "success",
           order.id
         );
-        if (order.created_by) {
-          await notifyUser(
-            order.created_by,
-            `Order ${order.order_no} is production complete`,
-            `All assigned line items have been produced.`,
-            "success",
-            order.id
-          );
-        }
       }
     }
 

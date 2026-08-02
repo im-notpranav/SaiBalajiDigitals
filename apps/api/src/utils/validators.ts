@@ -100,6 +100,10 @@ export const completeItemSchema = z.object({
   production_completed: z.boolean(),
 });
 
+export const markInstalledSchema = z.object({
+  installed: z.boolean().optional().default(true),
+});
+
 export const paymentSchema = z.object({
   amount_received: z.coerce.number().min(0),
   payment_date: z.coerce.date().refine((d) => d.getTime() <= Date.now() + 86400000, "Payment date cannot be in the future"),

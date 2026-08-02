@@ -44,6 +44,10 @@ function OrderDetailAccountant() {
   }
 
   const order = data.order;
+  const hasProduction = (order.items ?? []).some((i) => (i.assignments?.length ?? 0) > 0);
+  // Production orders bill only once installed; supply-only orders bill from Active.
+  const canInvoice = order.status === "Installed" || (order.status === "Active" && !hasProduction);
+  const awaitingInstall = order.status === "Active" && hasProduction;
 
   const handlePayment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -120,7 +124,13 @@ function OrderDetailAccountant() {
               </span>
             </div>
 
-            {order.status === "Active" && (
+            {awaitingInstall && (
+              <div className="rounded-xl border bg-muted/30 p-6 text-sm text-muted-foreground">
+                This order is still in production / awaiting installation confirmation from the employee. It can't be invoiced yet.
+              </div>
+            )}
+
+            {canInvoice && (
               <div className="rounded-xl border bg-card p-6">
                 <h3 className="mb-2 text-lg font-semibold flex items-center gap-2">
                   <Receipt className="h-5 w-5 text-primary" /> Record Invoice

@@ -3,6 +3,7 @@ import type { OrderStatus } from "@sb-oms/shared-types";
 
 const styles: Record<string, { label: string; className: string }> = {
   Active: { label: "Active", className: "bg-info/15 text-info border border-info/30" },
+  Installed: { label: "Installed", className: "bg-primary/15 text-primary border border-primary/30" },
   Pending: { label: "Pending", className: "bg-warning/15 text-warning-foreground border border-warning/30" },
   BillingCompleted: { label: "Awaiting Payment", className: "bg-primary/15 text-primary border border-primary/30" },
   PaymentReceived: { label: "Payment Received", className: "bg-success/15 text-success border border-success/30" },
