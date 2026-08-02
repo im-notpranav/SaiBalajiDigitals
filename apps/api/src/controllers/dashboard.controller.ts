@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { prisma } from "../utils/prisma";
+import { CLOSED_STATUSES, REVENUE_STATUSES } from "../utils/order-status";
 
 export const getDashboard = async (req: Request, res: Response) => {
   try {
@@ -12,7 +13,7 @@ export const getDashboard = async (req: Request, res: Response) => {
     const total_orders = await prisma.order.count({ where: baseWhere });
     const active_orders = await prisma.order.count({ where: { ...baseWhere, status: "Active" } });
     const pending_orders = await prisma.order.count({ where: { ...baseWhere, status: "Pending" } });
-    const completed_orders = await prisma.order.count({ where: { ...baseWhere, status: "Completed" } });
+    const completed_orders = await prisma.order.count({ where: { ...baseWhere, status: { in: CLOSED_STATUSES } } });
 
     if (user.role === "PRODUCTION" || user.role === "EMPLOYEE" || user.role === "OPERATOR") {
       return res.status(200).json({
@@ -25,14 +26,14 @@ export const getDashboard = async (req: Request, res: Response) => {
 
     const total_revenue_agg = await prisma.order.aggregate({
       _sum: { bill_amount: true },
-      where: { ...baseWhere, status: "Completed" },
+      where: { ...baseWhere, status: { in: CLOSED_STATUSES } },
     });
     const total_revenue = Number(total_revenue_agg._sum.bill_amount) || 0;
 
     const clients = await prisma.order.groupBy({
       by: ["client_name"],
       _sum: { bill_amount: true },
-      where: { ...baseWhere, status: "Completed" },
+      where: { ...baseWhere, status: { in: CLOSED_STATUSES } },
       orderBy: { _sum: { bill_amount: "desc" } },
       take: 5,
     });
@@ -46,7 +47,7 @@ export const getDashboard = async (req: Request, res: Response) => {
     sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
     
     const recentOrders = await prisma.order.findMany({
-      where: { ...baseWhere, status: "Completed", date: { gte: sixMonthsAgo } },
+      where: { ...baseWhere, status: { in: REVENUE_STATUSES }, date: { gte: sixMonthsAgo } },
       select: { date: true, bill_amount: true, id: true },
     });
     
@@ -99,7 +100,7 @@ export const getAdminDashboard = async (req: Request, res: Response) => {
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     const recentOrders = await prisma.order.findMany({
-      where: { status: "Completed", date: { gte: sevenDaysAgo } },
+      where: { status: { in: REVENUE_STATUSES }, date: { gte: sevenDaysAgo } },
       select: { date: true, bill_amount: true },
     });
     
@@ -122,7 +123,7 @@ export const getAdminDashboard = async (req: Request, res: Response) => {
     // 3. Status Breakdown
     const active_orders = await prisma.order.count({ where: { status: "Active" } });
     const pending_orders = await prisma.order.count({ where: { status: "Pending" } });
-    const completed_orders = await prisma.order.count({ where: { status: "Completed" } });
+    const completed_orders = await prisma.order.count({ where: { status: { in: CLOSED_STATUSES } } });
     const statusBreakdown = [
       { name: "Active", count: active_orders },
       { name: "Pending", count: pending_orders },
@@ -134,7 +135,7 @@ export const getAdminDashboard = async (req: Request, res: Response) => {
       by: ["creator_name"],
       _count: { id: true },
       _sum: { bill_amount: true },
-      where: { status: "Completed" },
+      where: { status: { in: CLOSED_STATUSES } },
       orderBy: { _count: { id: "desc" } },
       take: 5,
     });
@@ -147,7 +148,7 @@ export const getAdminDashboard = async (req: Request, res: Response) => {
 
     // 5. Time-to-Close (average hours)
     const completedOrdersList = await prisma.order.findMany({
-      where: { status: "Completed" },
+      where: { status: { in: CLOSED_STATUSES } },
       select: { created_at: true, updated_at: true },
     });
     

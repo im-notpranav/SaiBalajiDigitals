@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Flag, MessageSquare, Ban } from "lucide-react";
+import { Flag, MessageSquare, Ban, CheckCircle2, Factory } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { StatusBadge } from "./StatusBadge";
@@ -66,6 +66,11 @@ export function OrderDetail({ order, actions, userRole }: OrderDetailProps) {
   };
 
   const hasFinancials = order.items && order.items.length > 0 && order.items[0].rate !== undefined;
+
+  const assignedItems = (order.items ?? []).filter((i: OrderItem) => (i.assignments?.length ?? 0) > 0);
+  const showProduction = assignedItems.length > 0;
+  const producedItems = assignedItems.filter((i: OrderItem) => i.production_completed).length;
+  const allProduced = showProduction && producedItems === assignedItems.length;
 
   return (
     <div className="space-y-6">
@@ -128,8 +133,14 @@ export function OrderDetail({ order, actions, userRole }: OrderDetailProps) {
         transition={{ delay: 0.05 }}
         className="surface-panel p-0 overflow-hidden"
       >
-        <div className="p-6 pb-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 p-6 pb-4">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Line Items</h2>
+          {showProduction && (
+            <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${allProduced ? "bg-success/15 text-success" : "bg-info/15 text-info"}`}>
+              {allProduced ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Factory className="h-3.5 w-3.5" />}
+              {allProduced ? "Production complete" : `In production — ${producedItems} of ${assignedItems.length} items done`}
+            </span>
+          )}
         </div>
         <Table>
           <TableHeader>
@@ -141,6 +152,7 @@ export function OrderDetail({ order, actions, userRole }: OrderDetailProps) {
               <TableHead className="text-right">Total Sft</TableHead>
               {hasFinancials && <TableHead className="text-right">Rate (₹)</TableHead>}
               {hasFinancials && <TableHead className="text-right">Amount (₹)</TableHead>}
+              {showProduction && <TableHead>Production</TableHead>}
               <TableHead>Remarks / Flags</TableHead>
               {userRole && <TableHead className="text-right">Actions</TableHead>}
             </TableRow>
@@ -155,6 +167,11 @@ export function OrderDetail({ order, actions, userRole }: OrderDetailProps) {
                 <TableCell className="text-right">{(item.total_sft || 0).toFixed(2)}</TableCell>
                 {hasFinancials && <TableCell className="text-right">{item.rate}</TableCell>}
                 {hasFinancials && <TableCell className="text-right font-semibold">{inr(item.amount || 0)}</TableCell>}
+                {showProduction && (
+                  <TableCell>
+                    <ProductionCell item={item} />
+                  </TableCell>
+                )}
                 <TableCell>
                   <div className="space-y-1">
                     {item.is_flagged && (
@@ -248,6 +265,37 @@ export function OrderDetail({ order, actions, userRole }: OrderDetailProps) {
           {actions}
         </motion.section>
       )}
+    </div>
+  );
+}
+
+function ProductionCell({ item }: { item: OrderItem }) {
+  const assignments = item.assignments ?? [];
+  if (assignments.length === 0) {
+    return <span className="text-xs text-muted-foreground">—</span>;
+  }
+  return (
+    <div className="space-y-1">
+      {item.production_completed ? (
+        <span className="inline-flex items-center gap-1 text-xs font-medium text-success">
+          <CheckCircle2 className="h-3.5 w-3.5" /> Produced
+        </span>
+      ) : (
+        <span className="text-xs text-muted-foreground">
+          {assignments.filter((a) => a.completed).length} of {assignments.length} teams done
+        </span>
+      )}
+      <div className="flex flex-wrap gap-1">
+        {assignments.map((a) => (
+          <span
+            key={a.id}
+            className={`rounded px-1.5 py-0.5 text-[10px] ${a.completed ? "bg-success/15 text-success" : "bg-muted text-muted-foreground"}`}
+            title={a.completed ? "Completed" : "In progress"}
+          >
+            {a.user?.name ?? `#${a.user_id}`}{a.completed ? " ✓" : ""}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }

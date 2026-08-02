@@ -34,6 +34,8 @@ function ProductionQueue() {
 
   const orders: Order[] = data?.orders ?? [];
   const totalItems = orders.reduce((n, o) => n + (o.items?.length ?? 0), 0);
+  // "Mine" is my own assignment on the item, which may differ from the item's overall completion.
+  const isMineDone = (item: OrderItem) => item.my_assignment_completed ?? item.production_completed ?? false;
 
   return (
     <>
@@ -55,7 +57,7 @@ function ProductionQueue() {
           {orders.map((order) => {
             const items = order.items ?? [];
             if (items.length === 0) return null;
-            const done = items.filter((i) => i.production_completed).length;
+            const done = items.filter(isMineDone).length;
 
             return (
               <section key={order.id} className="surface-panel p-0 overflow-hidden">
@@ -100,10 +102,10 @@ function ProductionQueue() {
                         <TableCell className="text-right">{item.qty}</TableCell>
                         <TableCell className="text-right">{(item.total_sft || 0).toFixed(2)}</TableCell>
                         <TableCell className="text-right">
-                          {item.production_completed ? (
+                          {isMineDone(item) ? (
                             <div className="flex items-center justify-end gap-2">
                               <span className="inline-flex items-center gap-1 text-xs font-medium text-success">
-                                <CheckCircle2 className="h-3.5 w-3.5" /> Complete
+                                <CheckCircle2 className="h-3.5 w-3.5" /> {item.production_completed ? "Complete" : "Done (mine)"}
                               </span>
                               <Button
                                 variant="ghost"

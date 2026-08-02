@@ -1,6 +1,17 @@
 export type UserRole = "employee" | "production" | "accountant" | "admin";
 
-export type OrderStatus = "Active" | "Pending" | "Completed";
+export type OrderStatus = "Active" | "Pending" | "BillingCompleted" | "PaymentReceived" | "Completed";
+
+export interface ItemAssignment {
+  id: number;
+  order_item_id: number;
+  user_id: number;
+  user?: { id: number; name: string };
+  assigned_at?: string;
+  assigned_by?: number | null;
+  completed: boolean;
+  completed_at?: string | null;
+}
 
 export type RemarkType =
   | "Reprint"
@@ -49,12 +60,11 @@ export interface OrderItem {
   flag_reason?: string | null;
   flagged_at?: string | null;
   flagged_by?: number | null;
-  assigned_to?: number | null;
-  assigned_at?: string | null;
-  assigned_by?: number | null;
+  assignments?: ItemAssignment[];
+  /** Present on production-scoped responses: this user's own completion state. */
+  my_assignment_completed?: boolean;
   production_completed?: boolean;
   production_completed_at?: string | null;
-  production_completed_by?: number | null;
 }
 
 export interface Order {
@@ -70,6 +80,9 @@ export interface Order {
   remarks_other_text?: string | null;
   invoice_no?: string | null;
   bill_amount?: number | null;
+  billing_completed_at?: string | null;
+  amount_received?: number | null;
+  payment_received_at?: string | null;
   created_by?: number;
   creator_name?: string;
   items: OrderItem[];
