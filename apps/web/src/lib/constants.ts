@@ -26,7 +26,7 @@ export const LOSS_REMARK_TYPES: { value: RemarkType; label: string }[] = [
   { value: "Other", label: "Other" },
 ];
 
-export const ORDER_STATUSES = ["Active", "Pending", "BillingCompleted", "PaymentReceived", "Completed"] as const;
+export const ORDER_STATUSES = ["Active", "Installed", "Pending", "BillingCompleted", "PaymentReceived", "Completed"] as const;
 
 export function remarkLabel(value: RemarkType | null | undefined): string {
   if (!value) return "—";

@@ -20,9 +20,17 @@ function BillingQueue() {
     queryFn: () => fetchOrders({ section: "active", limit: 100 }),
   });
 
-  const queue = data?.orders || [];
+  const all = data?.orders || [];
+  // An order still in production/awaiting installation isn't the accountant's yet.
+  const hasProduction = (o: Order) => (o.items ?? []).some((i) => (i.assignments?.length ?? 0) > 0);
+  const isBillable = (o: Order) =>
+    o.status === "Installed" || o.status === "Pending" || o.status === "BillingCompleted" ||
+    (o.status === "Active" && !hasProduction(o));
+
+  const queue = all.filter(isBillable);
   const total = queue.reduce((s: number, o: Order) => s + (o.total_amount || 0), 0);
   const awaitingPayment = queue.filter((o: Order) => o.status === "BillingCompleted").length;
+  const inProduction = all.length - queue.length;
 
   return (
     <>
@@ -32,6 +40,12 @@ function BillingQueue() {
         crumbs={[{ label: "Accountant" }, { label: "Billing" }]}
         actions={
           <div className="flex items-center gap-2">
+            {inProduction > 0 && (
+              <div className="rounded-xl border bg-muted/40 px-4 py-2 text-sm">
+                <span className="text-muted-foreground">In production:</span>{" "}
+                <span className="font-semibold">{inProduction}</span>
+              </div>
+            )}
             {awaitingPayment > 0 && (
               <div className="rounded-xl border border-primary/30 bg-primary/5 px-4 py-2 text-sm">
                 <span className="text-muted-foreground">Awaiting payment:</span>{" "}

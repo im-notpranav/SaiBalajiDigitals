@@ -18,6 +18,7 @@ enum Role {
 enum OrderStatus {
   Active
   Pending
+  Installed
   BillingCompleted
   PaymentReceived
   Completed
@@ -57,6 +58,7 @@ model User {
   assignments   OrderItemAssignment[] @relation("AssignmentAssignee")
   assignmentsMade OrderItemAssignment[] @relation("AssignmentAssigner")
   paymentsReceived Order[]         @relation("OrderPaymentReceiver")
+  installedOrders Order[]         @relation("OrderInstaller")
 }
 
 model OrderSequence {
@@ -77,6 +79,9 @@ model Order {
   status                 OrderStatus           @default(Active)
   invoice_no             String?
   bill_amount            Decimal?              @db.Decimal(10, 2)
+  installed_at           DateTime?
+  installed_by           Int?
+  installer              User?                 @relation("OrderInstaller", fields: [installed_by], references: [id], onDelete: SetNull)
   billing_completed_at   DateTime?
   amount_received        Decimal?              @db.Decimal(10, 2)
   payment_received_at    DateTime?

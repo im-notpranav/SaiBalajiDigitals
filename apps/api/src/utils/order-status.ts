@@ -1,7 +1,8 @@
 /**
  * Billing-split status vocabulary (Phase 5).
  *
- * Active            → in flight, not yet billed
+ * Active            → in flight (being created / in production)
+ * Installed         → produced and installation-confirmed by the employee; ready to bill
  * Pending           → billed short, or part-paid: needs attention
  * BillingCompleted  → invoice raised in full, awaiting payment
  * PaymentReceived   → paid in full — the happy-path terminal state
@@ -14,7 +15,7 @@ import type { OrderStatus } from "@prisma/client";
 export const CLOSED_STATUSES: OrderStatus[] = ["PaymentReceived", "Completed"];
 
 /** Orders still moving through the pipeline. */
-export const OPEN_STATUSES: OrderStatus[] = ["Active", "Pending", "BillingCompleted"];
+export const OPEN_STATUSES: OrderStatus[] = ["Active", "Pending", "Installed", "BillingCompleted"];
 
 /** Statuses whose value counts as realised revenue. */
 export const REVENUE_STATUSES: OrderStatus[] = ["PaymentReceived", "Completed"];

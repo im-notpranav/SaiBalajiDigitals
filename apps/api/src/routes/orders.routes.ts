@@ -13,6 +13,7 @@ import {
   setItemLossRemark,
   assignOrderItem,
   completeOrderItem,
+  markOrderInstalled,
   recordPayment,
 } from "../controllers/orders.controller";
 import { authenticate, authorize } from "../middlewares/auth.middleware";
@@ -27,6 +28,7 @@ router.get("/:id", getOrder);
 router.post("/", authorize("EMPLOYEE", "ADMIN"), createOrder);
 router.put("/:id", authorize("EMPLOYEE", "ADMIN"), updateOrder);
 router.delete("/:id", authorize("ADMIN"), deleteOrder);
+router.put("/:id/install", authorize("EMPLOYEE", "ADMIN"), markOrderInstalled);
 router.put("/:id/invoice", authorize("ACCOUNTS", "ADMIN"), reconcileInvoice);
 router.put("/:id/payment", authorize("ACCOUNTS", "ADMIN"), recordPayment);
 router.put("/:id/close", authorize("ADMIN"), closeOrder);

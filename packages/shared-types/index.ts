@@ -1,6 +1,6 @@
 export type UserRole = "employee" | "production" | "accountant" | "admin";
 
-export type OrderStatus = "Active" | "Pending" | "BillingCompleted" | "PaymentReceived" | "Completed";
+export type OrderStatus = "Active" | "Installed" | "Pending" | "BillingCompleted" | "PaymentReceived" | "Completed";
 
 export interface ItemAssignment {
   id: number;
@@ -80,6 +80,8 @@ export interface Order {
   remarks_other_text?: string | null;
   invoice_no?: string | null;
   bill_amount?: number | null;
+  installed_at?: string | null;
+  installed_by?: number | null;
   billing_completed_at?: string | null;
   amount_received?: number | null;
   payment_received_at?: string | null;

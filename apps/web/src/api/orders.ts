@@ -101,6 +101,11 @@ export async function assignOrderItem(orderId: number, itemId: number, assigned_
   });
 }
 
+export async function markOrderInstalled(id: number) {
+  const res = await apiFetch<Order>(`/orders/${id}/install`, { method: "PUT", data: {} });
+  return { order: res };
+}
+
 export async function recordPayment(id: number, amount_received: number, payment_date: string) {
   const res = await apiFetch<Order>(`/orders/${id}/payment`, {
     method: "PUT",
