@@ -49,6 +49,12 @@ export interface OrderItem {
   flag_reason?: string | null;
   flagged_at?: string | null;
   flagged_by?: number | null;
+  assigned_to?: number | null;
+  assigned_at?: string | null;
+  assigned_by?: number | null;
+  production_completed?: boolean;
+  production_completed_at?: string | null;
+  production_completed_by?: number | null;
 }
 
 export interface Order {

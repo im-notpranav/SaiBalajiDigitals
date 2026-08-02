@@ -91,6 +91,15 @@ export const flagItemSchema = z.object({
   { message: "A reason is required when flagging an item.", path: ["flag_reason"] }
 );
 
+export const assignItemSchema = z.object({
+  // null clears the assignment
+  assigned_to: z.number().int().positive().nullable(),
+});
+
+export const completeItemSchema = z.object({
+  production_completed: z.boolean(),
+});
+
 export const createUserSchema = z.object({
   name: z.string().min(1).max(100),
   username: z
@@ -99,7 +108,7 @@ export const createUserSchema = z.object({
     .max(50)
     .regex(/^[a-z0-9_]+$/, "Username must be lowercase letters, numbers, or underscores"),
   password: z.string().min(8),
-  role: z.enum(["ADMIN", "EMPLOYEE", "ACCOUNTS", "PRODUCTION"]),
+  role: z.enum(["ADMIN", "EMPLOYEE", "ACCOUNTS", "PRODUCTION", "OPERATOR"]),
 });
 
 export const updateMeSchema = z.object({

@@ -14,7 +14,7 @@ export const getDashboard = async (req: Request, res: Response) => {
     const pending_orders = await prisma.order.count({ where: { ...baseWhere, status: "Pending" } });
     const completed_orders = await prisma.order.count({ where: { ...baseWhere, status: "Completed" } });
 
-    if (user.role === "PRODUCTION" || user.role === "EMPLOYEE") {
+    if (user.role === "PRODUCTION" || user.role === "EMPLOYEE" || user.role === "OPERATOR") {
       return res.status(200).json({
         total_orders,
         active_orders,

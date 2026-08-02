@@ -31,6 +31,8 @@ import { Route as PortalEmployeeDashboardRouteImport } from './routes/_portal.em
 import { Route as PortalEmployeeNewOrderRouteImport } from './routes/_portal.employee.new-order'
 import { Route as PortalEmployeeNotificationsRouteImport } from './routes/_portal.employee.notifications'
 import { Route as PortalEmployeeOrdersRouteImport } from './routes/_portal.employee.orders'
+import { Route as PortalOperatorAssignRouteImport } from './routes/_portal.operator.assign'
+import { Route as PortalOperatorNotificationsRouteImport } from './routes/_portal.operator.notifications'
 import { Route as PortalProductionDashboardRouteImport } from './routes/_portal.production.dashboard'
 import { Route as PortalProductionNotificationsRouteImport } from './routes/_portal.production.notifications'
 import { Route as PortalProductionQueueRouteImport } from './routes/_portal.production.queue'
@@ -155,6 +157,17 @@ const PortalEmployeeOrdersRoute = PortalEmployeeOrdersRouteImport.update({
   path: '/employee/orders',
   getParentRoute: () => PortalRoute,
 } as any)
+const PortalOperatorAssignRoute = PortalOperatorAssignRouteImport.update({
+  id: '/operator/assign',
+  path: '/operator/assign',
+  getParentRoute: () => PortalRoute,
+} as any)
+const PortalOperatorNotificationsRoute =
+  PortalOperatorNotificationsRouteImport.update({
+    id: '/operator/notifications',
+    path: '/operator/notifications',
+    getParentRoute: () => PortalRoute,
+  } as any)
 const PortalProductionDashboardRoute =
   PortalProductionDashboardRouteImport.update({
     id: '/production/dashboard',
@@ -228,6 +241,8 @@ export interface FileRoutesByFullPath {
   '/employee/new-order': typeof PortalEmployeeNewOrderRoute
   '/employee/notifications': typeof PortalEmployeeNotificationsRoute
   '/employee/orders': typeof PortalEmployeeOrdersRoute
+  '/operator/assign': typeof PortalOperatorAssignRoute
+  '/operator/notifications': typeof PortalOperatorNotificationsRoute
   '/production/dashboard': typeof PortalProductionDashboardRoute
   '/production/notifications': typeof PortalProductionNotificationsRoute
   '/production/queue': typeof PortalProductionQueueRoute
@@ -260,6 +275,8 @@ export interface FileRoutesByTo {
   '/employee/new-order': typeof PortalEmployeeNewOrderRoute
   '/employee/notifications': typeof PortalEmployeeNotificationsRoute
   '/employee/orders': typeof PortalEmployeeOrdersRoute
+  '/operator/assign': typeof PortalOperatorAssignRoute
+  '/operator/notifications': typeof PortalOperatorNotificationsRoute
   '/production/dashboard': typeof PortalProductionDashboardRoute
   '/production/notifications': typeof PortalProductionNotificationsRoute
   '/production/queue': typeof PortalProductionQueueRoute
@@ -294,6 +311,8 @@ export interface FileRoutesById {
   '/_portal/employee/new-order': typeof PortalEmployeeNewOrderRoute
   '/_portal/employee/notifications': typeof PortalEmployeeNotificationsRoute
   '/_portal/employee/orders': typeof PortalEmployeeOrdersRoute
+  '/_portal/operator/assign': typeof PortalOperatorAssignRoute
+  '/_portal/operator/notifications': typeof PortalOperatorNotificationsRoute
   '/_portal/production/dashboard': typeof PortalProductionDashboardRoute
   '/_portal/production/notifications': typeof PortalProductionNotificationsRoute
   '/_portal/production/queue': typeof PortalProductionQueueRoute
@@ -328,6 +347,8 @@ export interface FileRouteTypes {
     | '/employee/new-order'
     | '/employee/notifications'
     | '/employee/orders'
+    | '/operator/assign'
+    | '/operator/notifications'
     | '/production/dashboard'
     | '/production/notifications'
     | '/production/queue'
@@ -360,6 +381,8 @@ export interface FileRouteTypes {
     | '/employee/new-order'
     | '/employee/notifications'
     | '/employee/orders'
+    | '/operator/assign'
+    | '/operator/notifications'
     | '/production/dashboard'
     | '/production/notifications'
     | '/production/queue'
@@ -393,6 +416,8 @@ export interface FileRouteTypes {
     | '/_portal/employee/new-order'
     | '/_portal/employee/notifications'
     | '/_portal/employee/orders'
+    | '/_portal/operator/assign'
+    | '/_portal/operator/notifications'
     | '/_portal/production/dashboard'
     | '/_portal/production/notifications'
     | '/_portal/production/queue'
@@ -566,6 +591,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PortalEmployeeOrdersRouteImport
       parentRoute: typeof PortalRoute
     }
+    '/_portal/operator/assign': {
+      id: '/_portal/operator/assign'
+      path: '/operator/assign'
+      fullPath: '/operator/assign'
+      preLoaderRoute: typeof PortalOperatorAssignRouteImport
+      parentRoute: typeof PortalRoute
+    }
+    '/_portal/operator/notifications': {
+      id: '/_portal/operator/notifications'
+      path: '/operator/notifications'
+      fullPath: '/operator/notifications'
+      preLoaderRoute: typeof PortalOperatorNotificationsRouteImport
+      parentRoute: typeof PortalRoute
+    }
     '/_portal/production/dashboard': {
       id: '/_portal/production/dashboard'
       path: '/production/dashboard'
@@ -652,6 +691,8 @@ interface PortalRouteChildren {
   PortalEmployeeNewOrderRoute: typeof PortalEmployeeNewOrderRoute
   PortalEmployeeNotificationsRoute: typeof PortalEmployeeNotificationsRoute
   PortalEmployeeOrdersRoute: typeof PortalEmployeeOrdersRoute
+  PortalOperatorAssignRoute: typeof PortalOperatorAssignRoute
+  PortalOperatorNotificationsRoute: typeof PortalOperatorNotificationsRoute
   PortalProductionDashboardRoute: typeof PortalProductionDashboardRoute
   PortalProductionNotificationsRoute: typeof PortalProductionNotificationsRoute
   PortalProductionQueueRoute: typeof PortalProductionQueueRoute
@@ -683,6 +724,8 @@ const PortalRouteChildren: PortalRouteChildren = {
   PortalEmployeeNewOrderRoute: PortalEmployeeNewOrderRoute,
   PortalEmployeeNotificationsRoute: PortalEmployeeNotificationsRoute,
   PortalEmployeeOrdersRoute: PortalEmployeeOrdersRoute,
+  PortalOperatorAssignRoute: PortalOperatorAssignRoute,
+  PortalOperatorNotificationsRoute: PortalOperatorNotificationsRoute,
   PortalProductionDashboardRoute: PortalProductionDashboardRoute,
   PortalProductionNotificationsRoute: PortalProductionNotificationsRoute,
   PortalProductionQueueRoute: PortalProductionQueueRoute,

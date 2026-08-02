@@ -3,7 +3,7 @@ import { authApi } from "../api/auth";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
 
-export type UserRole = "EMPLOYEE" | "PRODUCTION" | "ACCOUNTS" | "ADMIN";
+export type UserRole = "EMPLOYEE" | "PRODUCTION" | "ACCOUNTS" | "ADMIN" | "OPERATOR";
 
 export interface AuthUser {
   id: number;
@@ -42,6 +42,7 @@ export const roleHome: Record<UserRole, string> = {
   PRODUCTION: "/production/dashboard",
   ACCOUNTS: "/accountant/dashboard",
   ADMIN: "/admin/dashboard",
+  OPERATOR: "/operator/assign",
 };
 
 export const useAuth = () => {

@@ -38,6 +38,12 @@ export const getOrders = async (req: Request, res: Response) => {
 
     if (user.role === "PRODUCTION") {
       where.status = "Active";
+      // Production users only see orders that have at least one item assigned to them.
+      where.items = { some: { assigned_to: user.id } };
+    }
+
+    if (user.role === "OPERATOR") {
+      where.status = { in: ["Active", "Pending"] };
     }
 
     const skip = (Number(page) - 1) * Number(limit);
@@ -54,7 +60,7 @@ export const getOrders = async (req: Request, res: Response) => {
       prisma.order.count({ where }),
     ]);
 
-    // Role-based field stripping for PRODUCTION
+    // Role-based field stripping for PRODUCTION — no financials, and only their own items.
     if (user.role === "PRODUCTION") {
       const sanitizedOrders = orders.map((o: any) => ({
         id: o.id,
@@ -64,15 +70,23 @@ export const getOrders = async (req: Request, res: Response) => {
         location: o.location,
         status: o.status,
         date: o.date,
-        items: o.items.map((i: any) => ({
-          id: i.id,
-          s_no: i.s_no,
-          media: i.media,
-          width_inches: i.width_inches,
-          height_inches: i.height_inches,
-          qty: i.qty,
-          total_sft: i.total_sft,
-        })),
+        items: o.items
+          .filter((i: any) => i.assigned_to === user.id)
+          .map((i: any) => ({
+            id: i.id,
+            s_no: i.s_no,
+            media: i.media,
+            width_inches: i.width_inches,
+            height_inches: i.height_inches,
+            qty: i.qty,
+            total_sft: i.total_sft,
+            assigned_to: i.assigned_to,
+            assigned_at: i.assigned_at,
+            production_completed: i.production_completed,
+            production_completed_at: i.production_completed_at,
+            is_flagged: i.is_flagged,
+            flag_reason: i.flag_reason,
+          })),
       }));
       return res.status(200).json(serializeDecimals({ data: sanitizedOrders, total, page: Number(page) }));
     }
@@ -107,7 +121,12 @@ export const getOrder = async (req: Request, res: Response) => {
       if (order.status !== "Active") {
         return res.status(403).json({ message: "Forbidden" });
       }
-      
+
+      const myItems = order.items.filter((i: any) => i.assigned_to === req.user!.id);
+      if (myItems.length === 0) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+
       return res.status(200).json(serializeDecimals({
         id: order.id,
         order_no: order.order_no,
@@ -116,7 +135,7 @@ export const getOrder = async (req: Request, res: Response) => {
         location: order.location,
         status: order.status,
         date: order.date,
-        items: order.items.map((i: any) => ({
+        items: myItems.map((i: any) => ({
           id: i.id,
           s_no: i.s_no,
           media: i.media,
@@ -124,6 +143,12 @@ export const getOrder = async (req: Request, res: Response) => {
           height_inches: i.height_inches,
           qty: i.qty,
           total_sft: i.total_sft,
+          assigned_to: i.assigned_to,
+          assigned_at: i.assigned_at,
+          production_completed: i.production_completed,
+          production_completed_at: i.production_completed_at,
+          is_flagged: i.is_flagged,
+          flag_reason: i.flag_reason,
         })),
       }));
     }
@@ -337,6 +362,26 @@ export const updateOrder = async (req: Request, res: Response) => {
           }
         }
       }
+
+      // Phase 3: no silent adjustments. An admin changing an existing item's billable
+      // figures must attach a loss remark to that line explaining the change.
+      if (isAdmin) {
+        for (const newItem of items) {
+          if (!newItem.id) continue;
+          const oldItem: any = oldItemsById.get(newItem.id);
+          if (!oldItem) continue;
+          const amountChanged =
+            Number(newItem.width_inches) !== Number(oldItem.width_inches) ||
+            Number(newItem.height_inches) !== Number(oldItem.height_inches) ||
+            Number(newItem.qty) !== Number(oldItem.qty) ||
+            Number(newItem.rate) !== Number(oldItem.rate);
+          if (amountChanged && !newItem.remarks) {
+            return res.status(400).json({
+              message: `A remark is required to adjust the amount on item #${oldItem.s_no}. Select a reason for the change.`,
+            });
+          }
+        }
+      }
     }
 
     const changes: any[] = [];
@@ -517,6 +562,14 @@ export const reconcileInvoice = async (req: Request, res: Response) => {
     
     if (order.invoice_no) {
       return res.status(400).json({ message: "Invoice already submitted for this order; corrections must go through an order edit." });
+    }
+
+    // Production gate: an order cannot be billed until every assigned item is complete.
+    const pendingProduction = order.items.filter((i: any) => i.assigned_to && !i.production_completed);
+    if (pendingProduction.length > 0) {
+      return res.status(400).json({
+        message: `Cannot bill yet — ${pendingProduction.length} assigned item(s) are still pending production completion.`,
+      });
     }
 
     // Bill only against the chargeable items — confirmed losses are excluded.
@@ -710,7 +763,127 @@ export const forceCloseOrder = async (req: Request, res: Response) => {
   }
 };
 
-import { flagItemSchema, itemLossRemarkSchema } from "../utils/validators";
+import { flagItemSchema, itemLossRemarkSchema, assignItemSchema, completeItemSchema } from "../utils/validators";
+
+/**
+ * Operator assigns (or clears) a line item to a specific PRODUCTION user.
+ * Reassigning resets any completion so the new assignee must mark it done themselves.
+ */
+export const assignOrderItem = async (req: Request, res: Response) => {
+  try {
+    const parseResult = assignItemSchema.safeParse(req.body);
+    if (!parseResult.success) return res.status(400).json({ message: "Invalid input", errors: parseResult.error.errors });
+    const { assigned_to } = parseResult.data;
+    const orderId = parseInt(req.params.orderId as string, 10);
+    const itemId = parseInt(req.params.itemId as string, 10);
+    const user = req.user!;
+
+    const order = await prisma.order.findUnique({ where: { id: orderId } });
+    if (!order) return res.status(404).json({ message: "Order not found" });
+    if (order.status === "Completed") {
+      return res.status(400).json({ message: "Completed orders cannot be reassigned." });
+    }
+
+    const item = await prisma.orderItem.findUnique({ where: { id: itemId } });
+    if (!item || item.order_id !== orderId) return res.status(404).json({ message: "Line item not found" });
+
+    if (assigned_to !== null) {
+      const assignee = await prisma.user.findUnique({ where: { id: assigned_to } });
+      if (!assignee || assignee.role !== "PRODUCTION" || !assignee.is_active) {
+        return res.status(400).json({ message: "Items can only be assigned to an active production user." });
+      }
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.current_user_id', ${user.id.toString()}, true)`;
+      return tx.orderItem.update({
+        where: { id: itemId },
+        data: assigned_to === null
+          ? { assigned_to: null, assigned_at: null, assigned_by: null, production_completed: false, production_completed_at: null, production_completed_by: null }
+          : { assigned_to, assigned_at: new Date(), assigned_by: user.id, production_completed: false, production_completed_at: null, production_completed_by: null },
+      });
+    });
+
+    if (assigned_to !== null) {
+      const itemLabel = `#${updated.s_no} — ${updated.media} (${Number(updated.width_inches)}x${Number(updated.height_inches)} in, qty ${Number(updated.qty)})`;
+      await notifyUser(
+        assigned_to,
+        `New item assigned on ${order.order_no}`,
+        `${user.name} assigned you item ${itemLabel}.`,
+        "info",
+        order.id
+      );
+    }
+
+    return res.status(200).json(serializeDecimals(updated));
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+/**
+ * Production user marks their own assigned line item complete (or reopens it).
+ * A flagged item is blocked until an admin resolves the flag.
+ */
+export const completeOrderItem = async (req: Request, res: Response) => {
+  try {
+    const parseResult = completeItemSchema.safeParse(req.body);
+    if (!parseResult.success) return res.status(400).json({ message: "Invalid input", errors: parseResult.error.errors });
+    const { production_completed } = parseResult.data;
+    const orderId = parseInt(req.params.orderId as string, 10);
+    const itemId = parseInt(req.params.itemId as string, 10);
+    const user = req.user!;
+
+    const order = await prisma.order.findUnique({ where: { id: orderId } });
+    if (!order) return res.status(404).json({ message: "Order not found" });
+
+    const item = await prisma.orderItem.findUnique({ where: { id: itemId } });
+    if (!item || item.order_id !== orderId) return res.status(404).json({ message: "Line item not found" });
+
+    // Production users may only touch their own assigned items; operators/admins can correct any.
+    if (user.role === "PRODUCTION" && item.assigned_to !== user.id) {
+      return res.status(403).json({ message: "You can only update items assigned to you." });
+    }
+    if (!item.assigned_to) {
+      return res.status(400).json({ message: "This item has not been assigned yet." });
+    }
+    if (production_completed && item.is_flagged) {
+      return res.status(400).json({ message: "This item is flagged as mistaken — an admin must resolve the flag before it can be completed." });
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.current_user_id', ${user.id.toString()}, true)`;
+      return tx.orderItem.update({
+        where: { id: itemId },
+        data: production_completed
+          ? { production_completed: true, production_completed_at: new Date(), production_completed_by: user.id }
+          : { production_completed: false, production_completed_at: null, production_completed_by: null },
+      });
+    });
+
+    // When the last assigned item lands, tell Accounts the order is ready to bill.
+    if (production_completed) {
+      const remaining = await prisma.orderItem.count({
+        where: { order_id: orderId, assigned_to: { not: null }, production_completed: false },
+      });
+      if (remaining === 0) {
+        await notifyRole(
+          "ACCOUNTS",
+          `Order ${order.order_no} is production complete`,
+          `All assigned items are finished — ready for billing.`,
+          "success",
+          order.id
+        );
+      }
+    }
+
+    return res.status(200).json(serializeDecimals(updated));
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
 
 export const flagOrderItem = async (req: Request, res: Response) => {
   try {
