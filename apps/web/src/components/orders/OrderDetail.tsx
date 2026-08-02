@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Flag, MessageSquare } from "lucide-react";
+import { Flag, MessageSquare, Ban } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { StatusBadge } from "./StatusBadge";
@@ -34,6 +34,19 @@ export function OrderDetail({ order, actions, userRole }: OrderDetailProps) {
       queryClient.invalidateQueries({ queryKey: ["order", order.id.toString()] });
     } catch (err: any) {
       toast.error("Failed to flag item", { description: err.message });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleRejectFlag = async (itemId: number) => {
+    setIsSubmitting(true);
+    try {
+      await flagOrderItem(order.id, itemId, false);
+      toast.success("Flag rejected", { description: "The employee has been notified." });
+      queryClient.invalidateQueries({ queryKey: ["order", order.id.toString()] });
+    } catch (err: any) {
+      toast.error("Failed to reject flag", { description: err.message });
     } finally {
       setIsSubmitting(false);
     }
@@ -150,9 +163,18 @@ export function OrderDetail({ order, actions, userRole }: OrderDetailProps) {
                         {item.flag_reason && <span className="ml-1 font-normal opacity-80">({item.flag_reason})</span>}
                       </div>
                     )}
-                    {item.remarks && (
+                    {item.remarks && item.remarks_confirmed && (
                       <div className="text-xs">
-                        <span className="font-medium text-amber-600 dark:text-amber-500">{remarkLabel(item.remarks)}</span>
+                        <span className="font-medium text-amber-600 dark:text-amber-500">Loss: {remarkLabel(item.remarks)}</span>
+                        {item.remarks_other_text && <div className="text-muted-foreground mt-0.5 whitespace-pre-wrap max-w-[200px] truncate" title={item.remarks_other_text}>{item.remarks_other_text}</div>}
+                      </div>
+                    )}
+                    {item.remarks && !item.remarks_confirmed && (
+                      <div className="text-xs">
+                        <span className="inline-flex items-center rounded-md bg-blue-500/10 px-2 py-0.5 font-medium text-blue-600 dark:text-blue-400">
+                          Proposed loss: {remarkLabel(item.remarks)}
+                        </span>
+                        <div className="text-muted-foreground mt-0.5">pending admin approval</div>
                         {item.remarks_other_text && <div className="text-muted-foreground mt-0.5 whitespace-pre-wrap max-w-[200px] truncate" title={item.remarks_other_text}>{item.remarks_other_text}</div>}
                       </div>
                     )}
@@ -164,18 +186,30 @@ export function OrderDetail({ order, actions, userRole }: OrderDetailProps) {
                 {userRole && (
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end space-x-2">
-                      {(userRole === "employee" || userRole === "admin") && order.status === "Active" && (
+                      {(userRole === "EMPLOYEE" || userRole === "ADMIN") && order.status === "Active" && (
                         <FlagDialog 
                           item={item} 
                           onSave={(flagged, reason) => handleFlagItem(item.id!, flagged, reason)} 
                           isSubmitting={isSubmitting} 
                         />
                       )}
-                      {userRole === "admin" && (
-                        <RemarkDialog 
-                          item={item} 
-                          onSave={(remark, custom) => handleSetRemark(item.id!, remark, custom)} 
-                          isSubmitting={isSubmitting} 
+                      {userRole === "ADMIN" && item.is_flagged && (
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="h-7 w-7 border-destructive/40 text-destructive hover:bg-destructive/10"
+                          title="Reject flag"
+                          onClick={() => handleRejectFlag(item.id!)}
+                          disabled={isSubmitting}
+                        >
+                          <Ban className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                      {userRole === "ADMIN" && (
+                        <RemarkDialog
+                          item={item}
+                          onSave={(remark, custom) => handleSetRemark(item.id!, remark, custom)}
+                          isSubmitting={isSubmitting}
                         />
                       )}
                     </div>
@@ -187,9 +221,17 @@ export function OrderDetail({ order, actions, userRole }: OrderDetailProps) {
         </Table>
         
         {hasFinancials && order.total_amount !== undefined && (
-          <div className="bg-muted/30 p-6 flex justify-end">
+          <div className="bg-muted/30 p-6 flex flex-wrap justify-end gap-8">
+            {order.loss_amount ? (
+              <div className="text-right">
+                <div className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Loss (written off)</div>
+                <div className="text-xl font-semibold text-amber-600 dark:text-amber-500">{inr(order.loss_amount)}</div>
+              </div>
+            ) : null}
             <div className="text-right">
-              <div className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Total Order Value</div>
+              <div className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
+                {order.loss_amount ? "Billable Total" : "Total Order Value"}
+              </div>
               <div className="text-3xl font-bold text-primary">{inr(order.total_amount)}</div>
             </div>
           </div>
@@ -259,6 +301,8 @@ function RemarkDialog({ item, onSave, isSubmitting }: { item: OrderItem, onSave:
   const [remark, setRemark] = useState<string>(item.remarks || "none");
   const [custom, setCustom] = useState(item.remarks_other_text || "");
 
+  const isProposed = !!item.remarks && !item.remarks_confirmed;
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (remark === "Other" && !custom.trim()) return toast.error("Custom remark is required");
@@ -269,15 +313,26 @@ function RemarkDialog({ item, onSave, isSubmitting }: { item: OrderItem, onSave:
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant={item.remarks ? "secondary" : "outline"} size="icon" className="h-7 w-7" title={item.remarks ? "Update Remark" : "Add Remark"}>
+        <Button
+          variant={isProposed ? "default" : item.remarks ? "secondary" : "outline"}
+          size="icon"
+          className="h-7 w-7"
+          title={isProposed ? "Review proposed loss" : item.remarks ? "Update loss remark" : "Add loss remark"}
+        >
           <MessageSquare className="h-3.5 w-3.5" />
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Item Loss Remark</DialogTitle>
+          <DialogTitle>{isProposed ? "Review Proposed Loss" : "Item Loss Remark"}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
+          {isProposed && (
+            <div className="rounded-md bg-blue-500/10 p-3 text-xs text-blue-700 dark:text-blue-300">
+              An employee proposed this line as a loss. Confirm to write it off (it will be excluded from the
+              billable total), change the category, or set to <strong>None</strong> to reject and keep it billable.
+            </div>
+          )}
           <div className="space-y-2">
             <Label>Remark Category</Label>
             <Select value={remark} onValueChange={setRemark}>
@@ -295,7 +350,9 @@ function RemarkDialog({ item, onSave, isSubmitting }: { item: OrderItem, onSave:
             </div>
           )}
           <DialogFooter>
-            <Button type="submit" disabled={isSubmitting}>Save</Button>
+            <Button type="submit" disabled={isSubmitting}>
+              {isProposed ? (remark === "none" ? "Reject" : "Confirm loss") : "Save"}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

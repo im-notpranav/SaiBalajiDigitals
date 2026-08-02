@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { prisma } from "../utils/prisma";
+import { serializeDecimals } from "../utils/serialize";
 
 export const getAuditLog = async (req: Request, res: Response) => {
   try {
@@ -65,16 +66,21 @@ export const getFinancialYearConfig = async (req: Request, res: Response) => {
 export const getLossReport = async (req: Request, res: Response) => {
   try {
     const { from, to } = req.query;
-    const where: any = { remarks: { not: null } };
+    // Only admin-confirmed losses are real losses; employee proposals are excluded until approved.
+    const where: any = { remarks: { not: null }, remarks_confirmed: true };
     if (from || to) {
       where.remarks_set_at = {};
       if (from) where.remarks_set_at.gte = new Date(String(from));
-      if (to) where.remarks_set_at.lte = new Date(String(to));
+      // Make `to` inclusive of the entire end day.
+      if (to) where.remarks_set_at.lte = new Date(String(to) + "T23:59:59.999Z");
     }
 
     const items = await prisma.orderItem.findMany({
       where,
-      include: { order: { select: { order_no: true, created_by: true, creator_name: true } } },
+      orderBy: { remarks_set_at: "desc" },
+      include: {
+        order: { select: { order_no: true, client_name: true, created_by: true, creator_name: true } },
+      },
     });
 
     const byCategory: Record<string, number> = {};
@@ -83,18 +89,21 @@ export const getLossReport = async (req: Request, res: Response) => {
     for (const item of items) {
       const amount = Number(item.amount);
       if (!item.remarks) continue;
-      
+
       byCategory[item.remarks] = (byCategory[item.remarks] || 0) + amount;
       const empKey = String(item.order.created_by ?? "unassigned");
       if (!byEmployee[empKey]) byEmployee[empKey] = { name: item.order.creator_name, total: 0 };
       byEmployee[empKey].total += amount;
     }
 
-    return res.status(200).json({
-      by_category: byCategory,
-      by_employee: Object.values(byEmployee),
-      total_loss: items.reduce((s: number, i: any) => s + Number(i.amount), 0),
-    });
+    return res.status(200).json(
+      serializeDecimals({
+        items,
+        by_category: byCategory,
+        by_employee: Object.values(byEmployee),
+        total_loss: items.reduce((s: number, i: any) => s + Number(i.amount), 0),
+      })
+    );
   } catch (err) {
     console.error("Loss report error:", err);
     return res.status(500).json({ message: "Internal server error" });

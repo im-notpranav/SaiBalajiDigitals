@@ -24,7 +24,7 @@ function LossReportPage() {
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["loss-report", queryDates.start, queryDates.end],
-    queryFn: () => fetchLossReport(queryDates.start, queryDates.end),
+    queryFn: () => fetchLossReport({ from: queryDates.start, to: queryDates.end }),
   });
 
   const handleFilter = (e: React.FormEvent) => {

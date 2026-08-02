@@ -1,11 +1,12 @@
 import { serializeDecimals } from "../utils/serialize";
+import { computeTotals } from "../utils/order-totals";
 import { Request, Response } from "express";
 import { prisma } from "../utils/prisma";
 import { generateOrderId } from "../utils/order-sequence";
 
 import { notifyRole, notifyUser } from "../services/notifications.service";
 
-import { sendOrderEditEmail, sendPendingInvoiceEmail } from "../services/email.service";
+import { sendOrderEditEmail, sendPendingInvoiceEmail, sendItemFlagEmail } from "../services/email.service";
 import * as xlsx from "xlsx";
 
 
@@ -78,8 +79,8 @@ export const getOrders = async (req: Request, res: Response) => {
 
     
     const ordersWithTotal = orders.map((o: any) => {
-      const total_amount = o.items.reduce((sum: number, i: any) => sum + Number(i.amount), 0);
-      return { ...o, total_amount };
+      const { total_amount, loss_amount } = computeTotals(o.items);
+      return { ...o, total_amount, loss_amount };
     });
     return res.status(200).json(serializeDecimals({ data: ordersWithTotal, total, page: Number(page) }));
   } catch (err) {
@@ -128,8 +129,8 @@ export const getOrder = async (req: Request, res: Response) => {
     }
 
     
-    const total_amount = order.items.reduce((sum: number, i: any) => sum + Number(i.amount), 0);
-    return res.status(200).json(serializeDecimals({ ...order, total_amount }));
+    const { total_amount, loss_amount } = computeTotals(order.items);
+    return res.status(200).json(serializeDecimals({ ...order, total_amount, loss_amount }));
   } catch (err) {
     return res.status(500).json({ message: "Internal server error" });
   }
@@ -145,6 +146,7 @@ export const createOrder = async (req: Request, res: Response) => {
     }
     const { client_name, store_name, location, po_number, items, remarks, remarks_other_text } = parseResult.data;
     const user = req.user!;
+    const isAdmin = user.role === "ADMIN";
 
     if (user.role === "EMPLOYEE" && remarks) {
       return res.status(403).json({ message: "Only an administrator can set order remarks." });
@@ -186,8 +188,20 @@ export const createOrder = async (req: Request, res: Response) => {
         total_sft: parseFloat(total_sft),
         rate: r,
         amount: parseFloat(amount),
+        // Loss remarks: employees may PROPOSE (remarks_confirmed=false, still billable until admin approves);
+        // an admin setting a remark auto-confirms it (excluded from the billable total).
+        remarks: item.remarks ?? null,
+        remarks_other_text: item.remarks === "Other" ? item.remarks_other_text : null,
+        remarks_set_at: item.remarks ? new Date() : null,
+        remarks_set_by: item.remarks ? user.id : null,
+        remarks_confirmed: item.remarks ? isAdmin : false,
+        remarks_confirmed_at: item.remarks && isAdmin ? new Date() : null,
+        remarks_confirmed_by: item.remarks && isAdmin ? user.id : null,
       };
     });
+
+    // If a non-admin proposed any loss remarks, flag the order for admin review.
+    const hasProposedLoss = !isAdmin && processedItems.some((i: any) => i.remarks != null);
 
     const order_no = await generateOrderId();
 
@@ -218,11 +232,22 @@ export const createOrder = async (req: Request, res: Response) => {
       "PRODUCTION",
       `New order ${order.order_no} created`,
       `Client: ${order.client_name}`,
-      "info"
+      "info",
+      order.id
     );
-    
-    const total_amount = order.items.reduce((sum: number, i: any) => sum + Number(i.amount), 0);
-    return res.status(201).json(serializeDecimals({ ...order, total_amount }));
+
+    if (hasProposedLoss) {
+      await notifyRole(
+        "ADMIN",
+        `Loss remark proposed on ${order.order_no}`,
+        `${user.name} proposed a loss on one or more line items. Review and confirm to write it off.`,
+        "warning",
+        order.id
+      );
+    }
+
+    const { total_amount, loss_amount } = computeTotals(order.items);
+    return res.status(201).json(serializeDecimals({ ...order, total_amount, loss_amount }));
   
   } catch (err: any) {
     console.error(err);
@@ -242,6 +267,7 @@ export const updateOrder = async (req: Request, res: Response) => {
     }
     const { client_name, store_name, location, po_number, items, remarks, remarks_other_text } = parseResult.data;
     const user = req.user!;
+    const isAdmin = user.role === "ADMIN";
 
     const ensureLookupValue = async (model: "client" | "media", name: string) => {
       try {
@@ -302,7 +328,9 @@ export const updateOrder = async (req: Request, res: Response) => {
             Number(newItem.width_inches) !== Number(oldItem.width_inches) ||
             Number(newItem.height_inches) !== Number(oldItem.height_inches) ||
             Number(newItem.qty) !== Number(oldItem.qty) ||
-            Number(newItem.rate) !== Number(oldItem.rate);
+            Number(newItem.rate) !== Number(oldItem.rate) ||
+            (newItem.remarks ?? null) !== (oldItem.remarks ?? null) ||
+            (newItem.remarks_other_text ?? null) !== (oldItem.remarks_other_text ?? null);
           if (changed) {
             console.log(`403 - Existing line item edited: ${oldItem.id}. Values: ${JSON.stringify({ newItem, oldItem })}`);
             return res.status(403).json({ message: "Existing line items cannot be edited — flag it and add a corrected line instead." });
@@ -346,6 +374,7 @@ export const updateOrder = async (req: Request, res: Response) => {
       });
     }
 
+    let proposedLossDuringUpdate = false;
     const updatedOrder = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT set_config('app.current_user_id', ${user.id.toString()}, true)`;
 
@@ -375,11 +404,27 @@ export const updateOrder = async (req: Request, res: Response) => {
           const amount = Number(parseFloat(total_sft) * r).toFixed(2);
 
           if (newItem.id && oldItemsById.has(newItem.id)) {
+            const oldItem = oldItemsById.get(newItem.id)!;
+            const remarkChanged = (newItem.remarks ?? null) !== (oldItem?.remarks ?? null);
+            // Only admins can reach here with a changed remark (employees are blocked by the
+            // append-only check above). An admin changing a remark sets AND confirms it.
+            const adminRemarkUpdate = isAdmin && remarkChanged
+              ? {
+                  remarks_set_at: newItem.remarks ? new Date() : null,
+                  remarks_set_by: newItem.remarks ? user.id : null,
+                  remarks_confirmed: newItem.remarks ? true : false,
+                  remarks_confirmed_at: newItem.remarks ? new Date() : null,
+                  remarks_confirmed_by: newItem.remarks ? user.id : null,
+                }
+              : {};
             await tx.orderItem.update({
               where: { id: newItem.id },
               data: {
                 media: newItem.media, width_inches: w, height_inches: h,
                 qty: q, total_sft: parseFloat(total_sft), rate: r, amount: parseFloat(amount),
+                remarks: newItem.remarks ?? null,
+                remarks_other_text: newItem.remarks === "Other" ? newItem.remarks_other_text : null,
+                ...adminRemarkUpdate,
               },
             });
           } else {
@@ -388,8 +433,17 @@ export const updateOrder = async (req: Request, res: Response) => {
                 order_id: id, s_no: nextSNo++, media: newItem.media,
                 width_inches: w, height_inches: h, qty: q,
                 total_sft: parseFloat(total_sft), rate: r, amount: parseFloat(amount),
+                // Loss remarks: employees propose (unconfirmed, still billable); admins auto-confirm.
+                remarks: newItem.remarks ?? null,
+                remarks_other_text: newItem.remarks === "Other" ? newItem.remarks_other_text : null,
+                remarks_set_at: newItem.remarks ? new Date() : null,
+                remarks_set_by: newItem.remarks ? user.id : null,
+                remarks_confirmed: newItem.remarks ? isAdmin : false,
+                remarks_confirmed_at: newItem.remarks && isAdmin ? new Date() : null,
+                remarks_confirmed_by: newItem.remarks && isAdmin ? user.id : null,
               },
             });
+            if (newItem.remarks && !isAdmin) proposedLossDuringUpdate = true;
           }
         }
       }
@@ -413,9 +467,18 @@ export const updateOrder = async (req: Request, res: Response) => {
       await sendOrderEditEmail(existingOrder.order_no, user.name, changes);
     }
 
-    
-    const total_amount = updatedOrder?.items?.reduce((sum: number, i: any) => sum + Number(i.amount), 0) || 0;
-    return res.status(200).json(serializeDecimals({ ...updatedOrder, total_amount }));
+    if (proposedLossDuringUpdate) {
+      await notifyRole(
+        "ADMIN",
+        `Loss remark proposed on ${existingOrder.order_no}`,
+        `${user.name} proposed a loss on a line item. Review and confirm to write it off.`,
+        "warning",
+        id
+      );
+    }
+
+    const { total_amount, loss_amount } = computeTotals(updatedOrder?.items);
+    return res.status(200).json(serializeDecimals({ ...updatedOrder, total_amount, loss_amount }));
   } catch (err) {
     console.error(err);
     return res.status(500).json({ message: "Internal server error" });
@@ -456,8 +519,9 @@ export const reconcileInvoice = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Invoice already submitted for this order; corrections must go through an order edit." });
     }
 
-    const orderTotal = order.items.reduce((sum: any, item: any) => sum + Number(item.amount), 0);
-    
+    // Bill only against the chargeable items — confirmed losses are excluded.
+    const orderTotal = computeTotals(order.items).total_amount;
+
     // Reject overpayment
     if (Number(bill_amount) > Number(orderTotal)) {
       return res.status(400).json({ message: "Bill amount cannot exceed order total." });
@@ -487,7 +551,8 @@ export const reconcileInvoice = async (req: Request, res: Response) => {
         order.created_by,
         `Order ${order.order_no} Billed`,
         isMatch ? `Fully billed at ${bill_amount}` : `Partially billed at ${bill_amount}`,
-        isMatch ? "success" : "warning"
+        isMatch ? "success" : "warning",
+        order.id
       );
     }
 
@@ -562,8 +627,10 @@ export const exportOrders = async (req: Request, res: Response) => {
 
     const rows: any[] = [];
     for (const order of orders) {
-      const total = order.items.reduce((sum, item) => sum + Number(item.amount), 0);
+      // Billable total excludes confirmed losses; used for the Pending Amount column.
+      const total = computeTotals(order.items).total_amount;
       for (const item of order.items) {
+        const lossStatus = item.remarks == null ? "" : (item.remarks_confirmed ? "Loss (confirmed)" : "Loss (proposed)");
         const row: any = {
           "S.No": item.s_no,
           "Date": order.date.toLocaleDateString("en-IN"),
@@ -580,6 +647,7 @@ export const exportOrders = async (req: Request, res: Response) => {
           "Amount": Number(item.amount),
           "PO Number": order.po_number || "",
           "Remarks": item.remarks === "Other" ? (item.remarks_other_text || "") : (item.remarks || ""),
+          "Loss": lossStatus,
           "Closure Remarks": order.remarks === "Other" ? (order.remarks_other_text || "") : (order.remarks || ""),
           "Status": order.status,
         };
@@ -659,12 +727,39 @@ export const flagOrderItem = async (req: Request, res: Response) => {
       return res.status(403).json({ message: "Forbidden" });
     }
 
+    // Capture who raised the flag before we clear it (needed to notify them on an admin reject).
+    const priorItem = await prisma.orderItem.findUnique({ where: { id: itemId } });
+
     const item = await prisma.orderItem.update({
       where: { id: itemId },
       data: is_flagged
         ? { is_flagged: true, flag_reason, flagged_at: new Date(), flagged_by: user.id }
         : { is_flagged: false, flag_reason: null, flagged_at: null, flagged_by: null },
     });
+
+    const itemLabel = `#${item.s_no} — ${item.media} (${Number(item.width_inches)}x${Number(item.height_inches)} in, qty ${Number(item.qty)})`;
+
+    if (is_flagged) {
+      // Raising a flag notifies the admin — this is the employee's append-only correction channel.
+      await sendItemFlagEmail(order.order_no, user.name, itemLabel, flag_reason || "");
+      await notifyRole(
+        "ADMIN",
+        `Line item flagged on ${order.order_no}`,
+        `${user.name} flagged item ${itemLabel}: ${flag_reason || "(no note)"}`,
+        "warning",
+        order.id
+      );
+    } else if (user.role === "ADMIN" && priorItem?.flagged_by && priorItem.flagged_by !== user.id) {
+      // Admin rejected a flag someone else raised — let the employee know it was reviewed and dismissed.
+      await notifyUser(
+        priorItem.flagged_by,
+        `Flag rejected on ${order.order_no}`,
+        `${user.name} reviewed and rejected your flag on item ${itemLabel}.`,
+        "warning",
+        order.id
+      );
+    }
+
     return res.status(200).json(serializeDecimals(item));
   } catch (err) {
     console.error(err);
@@ -680,14 +775,22 @@ export const setItemLossRemark = async (req: Request, res: Response) => {
     const itemId = parseInt(req.params.itemId as string, 10);
     const user = req.user!;
 
-    const item = await prisma.orderItem.update({
-      where: { id: itemId },
-      data: {
-        remarks,
-        remarks_other_text: remarks === "Other" ? remarks_other_text : null,
-        remarks_set_at: remarks ? new Date() : null,
-        remarks_set_by: remarks ? user.id : null,
-      },
+    // An admin setting a remark confirms it as a real loss (excluded from the billable total).
+    // Clearing the remark rejects it — the line becomes chargeable again.
+    const item = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.current_user_id', ${user.id.toString()}, true)`;
+      return tx.orderItem.update({
+        where: { id: itemId },
+        data: {
+          remarks,
+          remarks_other_text: remarks === "Other" ? remarks_other_text : null,
+          remarks_set_at: remarks ? new Date() : null,
+          remarks_set_by: remarks ? user.id : null,
+          remarks_confirmed: remarks ? true : false,
+          remarks_confirmed_at: remarks ? new Date() : null,
+          remarks_confirmed_by: remarks ? user.id : null,
+        },
+      });
     });
     return res.status(200).json(serializeDecimals(item));
   } catch (err) {

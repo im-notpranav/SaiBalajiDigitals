@@ -42,6 +42,9 @@ export interface OrderItem {
   remarks_other_text?: string | null;
   remarks_set_at?: string | null;
   remarks_set_by?: number | null;
+  remarks_confirmed?: boolean;
+  remarks_confirmed_at?: string | null;
+  remarks_confirmed_by?: number | null;
   is_flagged?: boolean;
   flag_reason?: string | null;
   flagged_at?: string | null;
@@ -65,6 +68,7 @@ export interface Order {
   creator_name?: string;
   items: OrderItem[];
   total_amount?: number;
+  loss_amount?: number;
   created_at?: string;
 }
 
@@ -128,6 +132,8 @@ export interface CreateOrderInput {
     height_inches: number;
     qty: number;
     rate: number;
+    remarks?: RemarkType | null;
+    remarks_other_text?: string | null;
   }>;
 }
 
@@ -138,5 +144,6 @@ export interface Notification {
   body: string;
   kind: "info" | "success" | "warning" | string;
   read: boolean;
+  order_id?: number | null;
   created_at: string;
 }

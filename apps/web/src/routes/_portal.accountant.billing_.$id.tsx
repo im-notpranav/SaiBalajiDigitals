@@ -80,9 +80,14 @@ function OrderDetailAccountant() {
         actions={
           order.status === "Active" ? (
             <div className="rounded-xl border bg-card p-6">
-              <h3 className="mb-4 text-lg font-semibold flex items-center gap-2">
+              <h3 className="mb-2 text-lg font-semibold flex items-center gap-2">
                 <Receipt className="h-5 w-5 text-primary" /> Record Invoice
               </h3>
+              {order.loss_amount ? (
+                <p className="mb-4 text-xs text-muted-foreground">
+                  Billable total is ₹{order.total_amount} — excludes ₹{order.loss_amount} in confirmed loss items.
+                </p>
+              ) : null}
               <form onSubmit={handleInvoice} className="flex flex-col sm:flex-row gap-4 items-end">
                 <div className="flex-1 w-full space-y-2">
                   <label className="text-sm font-medium">Invoice Number</label>

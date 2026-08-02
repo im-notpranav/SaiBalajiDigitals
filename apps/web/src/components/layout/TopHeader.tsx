@@ -14,20 +14,35 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth-store";
-import { fetchMyNotifications } from "@/api/notifications";
+import { fetchMyNotifications, markNotificationRead } from "@/api/notifications";
+import { useGoToOrder } from "@/lib/use-order-nav";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
+import type { Notification } from "@sb-oms/shared-types";
 
 export function TopHeader() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [dark, setDark] = useState(false);
+  const goToOrder = useGoToOrder();
   const { data: notifications = [] } = useQuery({
     queryKey: ["notifications"],
     queryFn: fetchMyNotifications,
   });
   const unread = notifications.filter((n) => !n.read).length;
+
+  const openNotification = async (n: Notification) => {
+    if (!n.read) {
+      try {
+        await markNotificationRead(n.id);
+        queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      } catch {
+        /* non-blocking */
+      }
+    }
+    if (n.order_id) goToOrder(n.order_id);
+  };
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
@@ -92,8 +107,15 @@ export function TopHeader() {
               <Badge variant="secondary">{unread} new</Badge>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
+            {notifications.length === 0 && (
+              <div className="px-2 py-6 text-center text-xs text-muted-foreground">You're all caught up!</div>
+            )}
             {notifications.slice(0, 5).map((n) => (
-              <DropdownMenuItem key={n.id} className="flex-col items-start gap-1 py-3">
+              <DropdownMenuItem
+                key={n.id}
+                onSelect={() => openNotification(n)}
+                className={cn("flex-col items-start gap-1 py-3", n.order_id && "cursor-pointer", !n.read && "bg-primary/5")}
+              >
                 <div className="flex w-full items-center gap-2">
                   <span
                     className={cn(
@@ -107,6 +129,7 @@ export function TopHeader() {
                   <span className="ml-auto text-[10px] text-muted-foreground">{formatDistanceToNow(new Date(n.created_at), { addSuffix: true })}</span>
                 </div>
                 <span className="line-clamp-2 text-xs text-muted-foreground">{n.body}</span>
+                {n.order_id ? <span className="text-[11px] font-medium text-primary">View order →</span> : null}
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>

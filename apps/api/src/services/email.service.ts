@@ -69,6 +69,41 @@ export async function sendOrderEditEmail(
   }).catch(console.error);
 }
 
+export async function sendItemFlagEmail(
+  orderNo: string,
+  employeeName: string,
+  itemLabel: string,
+  note: string
+) {
+  const html = `
+    <h3>Line Item Flagged: ${orderNo}</h3>
+    <p>Employee <strong>${employeeName}</strong> flagged a line item that needs your attention
+    (line items are append-only, so this is a correction request — not a direct edit).</p>
+    <table style="border-collapse: collapse; width: 100%; max-width: 600px;">
+      <tr>
+        <td style="padding:8px;border:1px solid #ddd;background:#f5f5f5;width:120px;"><strong>Order</strong></td>
+        <td style="padding:8px;border:1px solid #ddd;">${orderNo}</td>
+      </tr>
+      <tr>
+        <td style="padding:8px;border:1px solid #ddd;background:#f5f5f5;"><strong>Line Item</strong></td>
+        <td style="padding:8px;border:1px solid #ddd;">${itemLabel}</td>
+      </tr>
+      <tr>
+        <td style="padding:8px;border:1px solid #ddd;background:#f5f5f5;"><strong>Note</strong></td>
+        <td style="padding:8px;border:1px solid #ddd;color:#b45309;">${note || "(no note provided)"}</td>
+      </tr>
+    </table>
+    <p>Review it in the Admin portal and apply any correction as a new/adjusted line.</p>
+  `;
+
+  await transporter.sendMail({
+    from: '"OMS System" <noreply@saibalaji.com>',
+    to: adminEmail,
+    subject: `[Flag] ${orderNo} — line item flagged by ${employeeName}`,
+    html,
+  }).catch(console.error);
+}
+
 export async function sendPendingInvoiceEmail(
   orderNo: string,
   clientName: string,

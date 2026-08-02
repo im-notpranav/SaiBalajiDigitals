@@ -3,13 +3,14 @@ import { Combobox } from "../ui/combobox";
 import { useClientAutocomplete, useMediaAutocomplete } from "@/hooks/useAutocomplete";
 import { useDebounce } from "@/hooks/use-debounce";
 
-export function ClientCombobox({ value, onChange, className }: { value: string; onChange: (v: string) => void; className?: string }) {
+export function ClientCombobox({ value, onChange, className, id }: { value: string; onChange: (v: string) => void; className?: string; id?: string }) {
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 300);
   const { data: options = [], isLoading } = useClientAutocomplete(debouncedSearch);
 
   return (
     <Combobox
+      id={id}
       value={value}
       onChange={onChange}
       options={options}
@@ -22,13 +23,14 @@ export function ClientCombobox({ value, onChange, className }: { value: string; 
   );
 }
 
-export function MediaCombobox({ value, onChange, className }: { value: string; onChange: (v: string) => void; className?: string }) {
+export function MediaCombobox({ value, onChange, className, id }: { value: string; onChange: (v: string) => void; className?: string; id?: string }) {
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 300);
   const { data: options = [], isLoading } = useMediaAutocomplete(debouncedSearch);
 
   return (
     <Combobox
+      id={id}
       value={value}
       onChange={onChange}
       options={options}
