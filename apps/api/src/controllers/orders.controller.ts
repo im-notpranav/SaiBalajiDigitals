@@ -1,6 +1,7 @@
 import { serializeDecimals } from "../utils/serialize";
 import { computeTotals } from "../utils/order-totals";
 import { isClosed, OPEN_STATUSES, CLOSED_STATUSES } from "../utils/order-status";
+import { currentStage, lastProducedAt } from "../utils/order-stage";
 import { Request, Response } from "express";
 import { prisma } from "../utils/prisma";
 import { generateOrderId } from "../utils/order-sequence";
@@ -819,14 +820,21 @@ export const exportOrders = async (req: Request, res: Response) => {
 
     const orders = await prisma.order.findMany({
       where,
-      include: { items: true, creator: true },
+      include: { items: { include: { assignments: true } }, creator: true },
       orderBy: { order_no: "asc" },
     });
+
+    const d = (x: Date | null | undefined) => (x ? x.toLocaleDateString("en-IN") : "");
+    const DAY = 86400000;
+    const dayspan = (a: Date | null | undefined, b: Date | null | undefined) =>
+      a && b ? Math.max(0, Math.round((b.getTime() - a.getTime()) / DAY)) : "";
 
     const rows: any[] = [];
     for (const order of orders) {
       // Billable total excludes confirmed losses; used for the Pending Amount column.
       const total = computeTotals(order.items).total_amount;
+      const producedAt = lastProducedAt(order);
+      const stage = currentStage(order);
       for (const item of order.items) {
         const lossStatus = item.remarks == null ? "" : (item.remarks_confirmed ? "Loss (confirmed)" : "Loss (proposed)");
         const row: any = {
@@ -860,6 +868,16 @@ export const exportOrders = async (req: Request, res: Response) => {
         }
         if (user.role === "ADMIN") {
           row["Created By"] = order.creator_name;
+          // TAT (Phase 6): milestone dates + stage-to-stage durations, in days.
+          row["Produced On"] = d(producedAt);
+          row["Installed On"] = d(order.installed_at);
+          row["Days: Create→Produce"] = dayspan(order.created_at, producedAt);
+          row["Days: Produce→Install"] = dayspan(producedAt, order.installed_at);
+          row["Days: Install→Bill"] = dayspan(order.installed_at, order.billing_completed_at);
+          row["Days: Bill→Pay"] = dayspan(order.billing_completed_at, order.payment_received_at);
+          row["Total TAT (days)"] = dayspan(order.created_at, order.payment_received_at);
+          row["Current Stage"] = stage ? stage.stage : "Closed";
+          row["Days in Stage"] = stage ? stage.days_in_stage : "";
         }
         rows.push(row);
       }

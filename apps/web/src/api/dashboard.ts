@@ -27,3 +27,24 @@ export async function fetchLossReport(params?: { from?: string; to?: string }) {
   const q = qs.toString();
   return apiFetch<any>(`/admin/loss-report${q ? `?${q}` : ""}`);
 }
+
+export async function fetchOverdueReport(days = 5) {
+  return apiFetch<{
+    threshold: number;
+    count: number;
+    by_stage: Record<string, number>;
+    orders: Array<{
+      id: number;
+      order_no: string;
+      client_name: string;
+      store_name: string;
+      location: string;
+      status: string;
+      creator_name: string;
+      stage: string;
+      stage_since: string;
+      days_in_stage: number;
+      total_amount: number;
+    }>;
+  }>(`/admin/overdue?days=${days}`);
+}

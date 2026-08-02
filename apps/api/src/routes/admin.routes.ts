@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getAuditLog, getFinancialYearConfig, getLossReport } from "../controllers/admin.controller";
+import { getAuditLog, getFinancialYearConfig, getLossReport, getOverdueReport } from "../controllers/admin.controller";
 import { authenticate, authorize } from "../middlewares/auth.middleware";
 
 import { getOrderSequence, updateOrderSequence } from "../controllers/settings.controller";
@@ -14,5 +14,6 @@ router.get("/financial-year-config", getFinancialYearConfig);
 router.get("/order-sequence", getOrderSequence);
 router.put("/order-sequence", updateOrderSequence);
 router.get("/loss-report", getLossReport);
+router.get("/overdue", getOverdueReport);
 
 export default router;

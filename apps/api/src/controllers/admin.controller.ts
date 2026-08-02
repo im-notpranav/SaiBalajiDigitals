@@ -1,6 +1,9 @@
 import { Request, Response } from "express";
 import { prisma } from "../utils/prisma";
 import { serializeDecimals } from "../utils/serialize";
+import { computeTotals } from "../utils/order-totals";
+import { currentStage } from "../utils/order-stage";
+import { OPEN_STATUSES } from "../utils/order-status";
 
 export const getAuditLog = async (req: Request, res: Response) => {
   try {
@@ -59,6 +62,53 @@ export const getFinancialYearConfig = async (req: Request, res: Response) => {
       last_number: seq.last_number,
     });
   } catch (err) {
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+/**
+ * Overdue report (Phase 6): open orders stuck at their current stage longer than
+ * the threshold (default 5 days). Surfaces where each order is stalled.
+ */
+export const getOverdueReport = async (req: Request, res: Response) => {
+  try {
+    const days = Math.max(0, Math.floor(Number(req.query.days ?? 5)) || 0);
+
+    const orders = await prisma.order.findMany({
+      where: { status: { in: OPEN_STATUSES } },
+      include: { items: { include: { assignments: true } } },
+      orderBy: { created_at: "asc" },
+    });
+
+    const overdue: any[] = [];
+    const byStage: Record<string, number> = {};
+
+    for (const o of orders) {
+      const s = currentStage(o);
+      if (!s || s.days_in_stage <= days) continue;
+      byStage[s.stage] = (byStage[s.stage] || 0) + 1;
+      overdue.push({
+        id: o.id,
+        order_no: o.order_no,
+        client_name: o.client_name,
+        store_name: o.store_name,
+        location: o.location,
+        status: o.status,
+        creator_name: o.creator_name,
+        stage: s.stage,
+        stage_since: s.since,
+        days_in_stage: s.days_in_stage,
+        total_amount: computeTotals(o.items).total_amount,
+      });
+    }
+
+    overdue.sort((a, b) => b.days_in_stage - a.days_in_stage);
+
+    return res.status(200).json(
+      serializeDecimals({ threshold: days, count: overdue.length, by_stage: byStage, orders: overdue })
+    );
+  } catch (err) {
+    console.error("Overdue report error:", err);
     return res.status(500).json({ message: "Internal server error" });
   }
 };
