@@ -11,6 +11,8 @@ import {
   forceCloseOrder,
   flagOrderItem,
   setItemLossRemark,
+  assignOrderItem,
+  completeOrderItem,
 } from "../controllers/orders.controller";
 import { authenticate, authorize } from "../middlewares/auth.middleware";
 
@@ -29,5 +31,7 @@ router.put("/:id/close", authorize("ADMIN"), closeOrder);
 router.put("/:id/force-close", authorize("ADMIN"), forceCloseOrder);
 router.patch("/:orderId/items/:itemId/flag", authorize("EMPLOYEE", "ADMIN"), flagOrderItem);
 router.put("/:orderId/items/:itemId/remark", authorize("ADMIN"), setItemLossRemark);
+router.patch("/:orderId/items/:itemId/assign", authorize("OPERATOR", "ADMIN"), assignOrderItem);
+router.patch("/:orderId/items/:itemId/complete", authorize("PRODUCTION", "OPERATOR", "ADMIN"), completeOrderItem);
 
 export default router;

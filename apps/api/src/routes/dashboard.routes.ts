@@ -7,6 +7,6 @@ const router = Router();
 router.use(authenticate);
 
 router.get("/admin", authorize("ADMIN"), getAdminDashboard);
-router.get("/", authorize("ADMIN", "EMPLOYEE", "ACCOUNTS", "PRODUCTION"), getDashboard);
+router.get("/", authorize("ADMIN", "EMPLOYEE", "ACCOUNTS", "PRODUCTION", "OPERATOR"), getDashboard);
 
 export default router;

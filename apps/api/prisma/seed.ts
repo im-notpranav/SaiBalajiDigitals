@@ -21,8 +21,10 @@ async function main() {
   const users = [
     { name: "Bablu Goud", username: "employee", role: "EMPLOYEE" },
     { name: "Karthik Menon", username: "production", role: "PRODUCTION" },
+    { name: "Ravi Teja", username: "production2", role: "PRODUCTION" },
     { name: "Priya Sharma", username: "accountant", role: "ACCOUNTS" },
     { name: "Mahesh Goud", username: "admin", role: "ADMIN" },
+    { name: "Suresh Kumar", username: "operator", role: "OPERATOR" },
   ];
 
   for (const u of users) {

@@ -6,6 +6,10 @@ export async function fetchUsers() {
   return apiFetch<{ users: AppUser[] }>("/users");
 }
 
+export async function fetchProductionStaff() {
+  return apiFetch<{ users: Array<{ id: number; name: string; username: string }> }>("/users/production-staff");
+}
+
 export async function checkUsername(username: string) {
   return apiFetch<{ available: boolean }>(`/users/check?username=${encodeURIComponent(username)}`);
 }

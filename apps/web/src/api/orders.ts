@@ -94,6 +94,20 @@ export async function setItemLossRemark(orderId: number, itemId: number, remarks
   });
   return res;
 }
+export async function assignOrderItem(orderId: number, itemId: number, assigned_to: number | null) {
+  return apiFetch<any>(`/orders/${orderId}/items/${itemId}/assign`, {
+    method: "PATCH",
+    data: { assigned_to },
+  });
+}
+
+export async function completeOrderItem(orderId: number, itemId: number, production_completed: boolean) {
+  return apiFetch<any>(`/orders/${orderId}/items/${itemId}/complete`, {
+    method: "PATCH",
+    data: { production_completed },
+  });
+}
+
 export async function exportOrders(params: OrdersQuery = {}) {
   const qs = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {

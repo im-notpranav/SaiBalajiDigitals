@@ -26,6 +26,7 @@ function PortalLayout() {
       production: "PRODUCTION",
       accountant: "ACCOUNTS",
       admin: "ADMIN",
+      operator: "OPERATOR",
     };
     const currentPathRole = seg ? pathRoleMap[seg] : undefined;
     

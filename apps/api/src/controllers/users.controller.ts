@@ -19,6 +19,23 @@ export const getUsers = async (req: Request, res: Response) => {
   }
 };
 
+/**
+ * Minimal roster of active production staff, for the operator's assignment picker.
+ * Deliberately narrower than getUsers (no contact details, no admin fields).
+ */
+export const getProductionStaff = async (_req: Request, res: Response) => {
+  try {
+    const users = await prisma.user.findMany({
+      where: { role: "PRODUCTION", is_active: true },
+      select: { id: true, name: true, username: true },
+      orderBy: { name: "asc" },
+    });
+    return res.status(200).json({ users });
+  } catch (err) {
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
 export const checkUsername = async (req: Request, res: Response) => {
   try {
     const { username } = req.query;

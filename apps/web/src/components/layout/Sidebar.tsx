@@ -51,6 +51,11 @@ const NAV: Record<UserRole, NavItem[]> = {
     { to: "/accountant/notifications", label: "Notifications", icon: Bell },
     { to: "/profile", label: "Profile", icon: UserCircle },
   ],
+  OPERATOR: [
+    { to: "/operator/assign", label: "Assign Work", icon: Workflow },
+    { to: "/operator/notifications", label: "Notifications", icon: Bell },
+    { to: "/profile", label: "Profile", icon: UserCircle },
+  ],
   ADMIN: [
     { to: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { to: "/admin/users", label: "Users", icon: Users },
@@ -69,6 +74,7 @@ const roleLabels: Record<UserRole, string> = {
   PRODUCTION: "Production Portal",
   ACCOUNTS: "Accountant Portal",
   ADMIN: "Administrator Portal",
+  OPERATOR: "Operator Portal",
 };
 
 export function Sidebar({ role }: { role: UserRole }) {

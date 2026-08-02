@@ -12,6 +12,7 @@ enum Role {
   EMPLOYEE
   ACCOUNTS
   PRODUCTION
+  OPERATOR
 }
 
 enum OrderStatus {
@@ -51,6 +52,9 @@ model User {
   remarkedItems OrderItem[]      @relation("ItemRemarkSetter")
   confirmedItems OrderItem[]     @relation("ItemRemarkConfirmer")
   flaggedItems  OrderItem[]      @relation("ItemFlagger")
+  assignedItems OrderItem[]      @relation("ItemAssignee")
+  itemsAssignedByMe OrderItem[]  @relation("ItemAssigner")
+  producedItems OrderItem[]      @relation("ItemProductionCompleter")
 }
 
 model OrderSequence {
@@ -114,6 +118,17 @@ model OrderItem {
   flagged_at     DateTime?
   flagged_by     Int?
   flagger        User?     @relation("ItemFlagger", fields: [flagged_by], references: [id], onDelete: SetNull)
+  assigned_to    Int?
+  assignee       User?     @relation("ItemAssignee", fields: [assigned_to], references: [id], onDelete: SetNull)
+  assigned_at    DateTime?
+  assigned_by    Int?
+  assigner       User?     @relation("ItemAssigner", fields: [assigned_by], references: [id], onDelete: SetNull)
+  production_completed    Boolean   @default(false)
+  production_completed_at DateTime?
+  production_completed_by Int?
+  productionCompleter     User?     @relation("ItemProductionCompleter", fields: [production_completed_by], references: [id], onDelete: SetNull)
+
+  @@index([assigned_to])
 }
 
 model OrderChangeLog {
