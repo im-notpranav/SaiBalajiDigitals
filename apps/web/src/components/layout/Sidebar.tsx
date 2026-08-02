@@ -1,6 +1,8 @@
-import { Link, useLocation } from "@tanstack/react-router";
+import { Link, useLocation, useNavigate } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import type { LucideIcon } from "lucide-react";
+import { LogOut } from "lucide-react";
 import {
   LayoutDashboard,
   PlusCircle,
@@ -18,7 +20,7 @@ import {
   Settings,
   Boxes,
 } from "lucide-react";
-import type { UserRole } from "@/lib/auth-store";
+import { type UserRole, useAuth } from "@/lib/auth-store";
 import { cn } from "@/lib/utils";
 import { BrandLockup } from "@/components/brand/Logo";
 
@@ -79,8 +81,17 @@ const roleLabels: Record<UserRole, string> = {
 
 export function Sidebar({ role }: { role: UserRole }) {
   const location = useLocation();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { user, logout } = useAuth();
   const items = NAV[role];
   const home = items[0]!.to;
+
+  const handleLogout = async () => {
+    queryClient.removeQueries({ queryKey: ["auth", "me"] });
+    await logout();
+    navigate({ to: "/login" });
+  };
 
   return (
     <aside className="hidden w-72 shrink-0 flex-col border-r bg-sidebar lg:flex">
@@ -124,11 +135,19 @@ export function Sidebar({ role }: { role: UserRole }) {
           );
         })}
       </nav>
-      <div className="m-3 rounded-2xl border bg-gradient-to-br from-primary/10 via-primary/5 to-transparent p-4">
-        <div className="text-xs font-semibold text-primary-deep">Enterprise ERP</div>
-        <div className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-          Production-grade Order Management, purpose-built for Sai Balaji Digitals.
+      <div className="mt-auto border-t p-3">
+        <div className="px-2 pb-2">
+          <div className="truncate text-sm font-semibold">{user?.name}</div>
+          <div className="truncate text-[11px] text-muted-foreground">@{user?.username}</div>
         </div>
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-destructive transition-all hover:bg-destructive/10"
+        >
+          <LogOut className="h-[18px] w-[18px]" />
+          Sign out
+        </button>
       </div>
     </aside>
   );

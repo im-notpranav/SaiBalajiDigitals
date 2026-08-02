@@ -1,5 +1,6 @@
 import { serializeDecimals } from "../utils/serialize";
 import { computeTotals } from "../utils/order-totals";
+import { isClosed } from "../utils/order-status";
 import { Request, Response } from "express";
 import { prisma } from "../utils/prisma";
 import { generateOrderId } from "../utils/order-sequence";
@@ -20,8 +21,10 @@ export const getOrders = async (req: Request, res: Response) => {
       where.created_by = user.id;
     }
 
-    if (section === "active") where.status = { in: ["Active", "Pending"] };
-    if (section === "completed") where.status = "Completed";
+    // "Active" = still in flight (incl. billed-but-unpaid); "completed" = closed either
+    // by payment received or by an admin closure.
+    if (section === "active") where.status = { in: ["Active", "Pending", "BillingCompleted"] };
+    if (section === "completed") where.status = { in: ["PaymentReceived", "Completed"] };
 
     if (order_no) where.order_no = { contains: String(order_no), mode: "insensitive" };
     if (client) where.client_name = { contains: String(client), mode: "insensitive" };
@@ -39,11 +42,11 @@ export const getOrders = async (req: Request, res: Response) => {
     if (user.role === "PRODUCTION") {
       where.status = "Active";
       // Production users only see orders that have at least one item assigned to them.
-      where.items = { some: { assigned_to: user.id } };
+      where.items = { some: { assignments: { some: { user_id: user.id } } } };
     }
 
     if (user.role === "OPERATOR") {
-      where.status = { in: ["Active", "Pending"] };
+      where.status = { in: ["Active", "Pending", "BillingCompleted"] };
     }
 
     const skip = (Number(page) - 1) * Number(limit);
@@ -55,7 +58,7 @@ export const getOrders = async (req: Request, res: Response) => {
         skip,
         take,
         orderBy: { created_at: "desc" },
-        include: { items: true },
+        include: { items: { include: { assignments: { include: { user: { select: { id: true, name: true } } } } } } },
       }),
       prisma.order.count({ where }),
     ]);
@@ -71,7 +74,7 @@ export const getOrders = async (req: Request, res: Response) => {
         status: o.status,
         date: o.date,
         items: o.items
-          .filter((i: any) => i.assigned_to === user.id)
+          .filter((i: any) => i.assignments.some((a: any) => a.user_id === user.id))
           .map((i: any) => ({
             id: i.id,
             s_no: i.s_no,
@@ -80,8 +83,9 @@ export const getOrders = async (req: Request, res: Response) => {
             height_inches: i.height_inches,
             qty: i.qty,
             total_sft: i.total_sft,
-            assigned_to: i.assigned_to,
-            assigned_at: i.assigned_at,
+            assignments: i.assignments,
+            // This production user's own completion state, for their queue.
+            my_assignment_completed: i.assignments.find((a: any) => a.user_id === user.id)?.completed ?? false,
             production_completed: i.production_completed,
             production_completed_at: i.production_completed_at,
             is_flagged: i.is_flagged,
@@ -108,7 +112,7 @@ export const getOrder = async (req: Request, res: Response) => {
     const id = parseInt(req.params.id as string, 10);
     const order = await prisma.order.findUnique({
       where: { id },
-      include: { items: true },
+      include: { items: { include: { assignments: { include: { user: { select: { id: true, name: true } } } } } } },
     });
 
     if (!order) return res.status(404).json({ message: "Order not found" });
@@ -122,7 +126,7 @@ export const getOrder = async (req: Request, res: Response) => {
         return res.status(403).json({ message: "Forbidden" });
       }
 
-      const myItems = order.items.filter((i: any) => i.assigned_to === req.user!.id);
+      const myItems = order.items.filter((i: any) => i.assignments.some((a: any) => a.user_id === req.user!.id));
       if (myItems.length === 0) {
         return res.status(403).json({ message: "Forbidden" });
       }
@@ -143,8 +147,8 @@ export const getOrder = async (req: Request, res: Response) => {
           height_inches: i.height_inches,
           qty: i.qty,
           total_sft: i.total_sft,
-          assigned_to: i.assigned_to,
-          assigned_at: i.assigned_at,
+          assignments: i.assignments,
+          my_assignment_completed: i.assignments.find((a: any) => a.user_id === req.user!.id)?.completed ?? false,
           production_completed: i.production_completed,
           production_completed_at: i.production_completed_at,
           is_flagged: i.is_flagged,
@@ -161,7 +165,7 @@ export const getOrder = async (req: Request, res: Response) => {
   }
 };
 
-import { createOrderSchema, updateOrderSchema, invoiceSchema, closeOrderSchema, forceCloseOrderSchema } from "../utils/validators";
+import { createOrderSchema, updateOrderSchema, invoiceSchema, closeOrderSchema, forceCloseOrderSchema, paymentSchema } from "../utils/validators";
 
 export const createOrder = async (req: Request, res: Response) => {
   try {
@@ -324,8 +328,8 @@ export const updateOrder = async (req: Request, res: Response) => {
       return res.status(403).json({ message: "Forbidden" });
     }
 
-    if (user.role === "EMPLOYEE" && existingOrder.status === "Completed") {
-      console.log(`403 - Completed order edit attempt`);
+    if (user.role === "EMPLOYEE" && isClosed(existingOrder.status)) {
+      console.log(`403 - Closed order edit attempt`);
       return res.status(403).json({ message: "Completed orders cannot be edited" });
     }
 
@@ -553,19 +557,22 @@ export const reconcileInvoice = async (req: Request, res: Response) => {
     const { invoice_no, bill_amount } = parseResult.data;
     const user = req.user!;
 
-    const order = await prisma.order.findUnique({ where: { id }, include: { items: true } });
+    const order = await prisma.order.findUnique({
+      where: { id },
+      include: { items: { include: { assignments: true } } },
+    });
     if (!order) return res.status(404).json({ message: "Order not found" });
 
-    if (order.status === "Completed") {
-      return res.status(400).json({ message: "Order is already completed" });
+    if (order.status === "Completed" || order.status === "PaymentReceived") {
+      return res.status(400).json({ message: "Order is already closed" });
     }
-    
+
     if (order.invoice_no) {
       return res.status(400).json({ message: "Invoice already submitted for this order; corrections must go through an order edit." });
     }
 
     // Production gate: an order cannot be billed until every assigned item is complete.
-    const pendingProduction = order.items.filter((i: any) => i.assigned_to && !i.production_completed);
+    const pendingProduction = order.items.filter((i: any) => i.assignments.length > 0 && !i.production_completed);
     if (pendingProduction.length > 0) {
       return res.status(400).json({
         message: `Cannot bill yet — ${pendingProduction.length} assigned item(s) are still pending production completion.`,
@@ -581,7 +588,8 @@ export const reconcileInvoice = async (req: Request, res: Response) => {
     }
 
     const isMatch = Number(bill_amount).toFixed(2) === orderTotal.toFixed(2);
-    const newStatus = isMatch ? "Completed" : "Pending";
+    // Billing is now only the first of two accountant checkpoints — payment follows.
+    const newStatus = isMatch ? "BillingCompleted" : "Pending";
 
     const updated = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT set_config('app.current_user_id', ${user.id.toString()}, true)`;
@@ -591,6 +599,7 @@ export const reconcileInvoice = async (req: Request, res: Response) => {
           invoice_no,
           bill_amount,
           status: newStatus,
+          billing_completed_at: new Date(),
         },
       });
     });
@@ -598,13 +607,77 @@ export const reconcileInvoice = async (req: Request, res: Response) => {
     if (!isMatch) {
       await sendPendingInvoiceEmail(order.order_no, order.client_name, orderTotal, bill_amount);
     }
-    
+
     if (order.created_by) {
       await notifyUser(
         order.created_by,
         `Order ${order.order_no} Billed`,
-        isMatch ? `Fully billed at ${bill_amount}` : `Partially billed at ${bill_amount}`,
+        isMatch ? `Fully billed at ${bill_amount} — awaiting payment` : `Partially billed at ${bill_amount}`,
         isMatch ? "success" : "warning",
+        order.id
+      );
+    }
+
+    return res.status(200).json(serializeDecimals(updated));
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+/**
+ * Second accountant checkpoint: record payment against a billed order.
+ * Full payment closes the order as PaymentReceived; a short payment leaves it
+ * Pending so the shortfall stays visible.
+ */
+export const recordPayment = async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id as string, 10);
+    const parseResult = paymentSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return res.status(400).json({ message: "Invalid input", errors: parseResult.error.errors });
+    }
+    const { amount_received, payment_date } = parseResult.data;
+    const user = req.user!;
+
+    const order = await prisma.order.findUnique({ where: { id } });
+    if (!order) return res.status(404).json({ message: "Order not found" });
+
+    if (!order.invoice_no || !order.billing_completed_at) {
+      return res.status(400).json({ message: "Billing must be completed before a payment can be recorded." });
+    }
+    if (order.status === "PaymentReceived" || order.status === "Completed") {
+      return res.status(400).json({ message: "Payment has already been recorded for this order." });
+    }
+
+    const billed = Number(order.bill_amount ?? 0);
+    if (Number(amount_received) > billed) {
+      return res.status(400).json({ message: "Amount received cannot exceed the billed amount." });
+    }
+
+    const isFull = Number(amount_received).toFixed(2) === billed.toFixed(2);
+
+    const updated = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.current_user_id', ${user.id.toString()}, true)`;
+      return tx.order.update({
+        where: { id },
+        data: {
+          amount_received,
+          payment_received_at: payment_date,
+          payment_received_by: user.id,
+          status: isFull ? "PaymentReceived" : "Pending",
+        },
+      });
+    });
+
+    if (order.created_by) {
+      await notifyUser(
+        order.created_by,
+        `Payment ${isFull ? "received" : "partially received"} on ${order.order_no}`,
+        isFull
+          ? `Full payment of ${amount_received} received. Order closed.`
+          : `Part payment of ${amount_received} received against ${billed}.`,
+        isFull ? "success" : "warning",
         order.id
       );
     }
@@ -660,8 +733,10 @@ export const exportOrders = async (req: Request, res: Response) => {
       where.created_by = user.id;
     }
 
-    if (section === "active") where.status = { in: ["Active", "Pending"] };
-    if (section === "completed") where.status = "Completed";
+    // "Active" = still in flight (incl. billed-but-unpaid); "completed" = closed either
+    // by payment received or by an admin closure.
+    if (section === "active") where.status = { in: ["Active", "Pending", "BillingCompleted"] };
+    if (section === "completed") where.status = { in: ["PaymentReceived", "Completed"] };
     if (status) where.status = status;
 
     if (q) {
@@ -707,7 +782,11 @@ export const exportOrders = async (req: Request, res: Response) => {
         if (user.role === "ADMIN" || user.role === "ACCOUNTS") {
           row["Invoice No"] = order.invoice_no || "";
           row["Bill Amount"] = order.bill_amount !== null ? Number(order.bill_amount) : "";
-          row["Pending Amount"] = (order.status === "Pending" && order.bill_amount !== null) ? total - Number(order.bill_amount) : (order.status === "Pending" && order.bill_amount === null ? total : "");
+          row["Amount Received"] = order.amount_received !== null ? Number(order.amount_received) : "";
+          // Outstanding = billable total less whatever has actually been received.
+          row["Pending Amount"] = isClosed(order.status) ? "" : total - Number(order.amount_received ?? 0);
+          row["Billing Completed On"] = order.billing_completed_at ? order.billing_completed_at.toLocaleDateString("en-IN") : "";
+          row["Payment Received On"] = order.payment_received_at ? order.payment_received_at.toLocaleDateString("en-IN") : "";
         }
         if (user.role === "ADMIN") {
           row["Created By"] = order.creator_name;
@@ -765,57 +844,94 @@ export const forceCloseOrder = async (req: Request, res: Response) => {
 
 import { flagItemSchema, itemLossRemarkSchema, assignItemSchema, completeItemSchema } from "../utils/validators";
 
+const itemLabelOf = (i: any) =>
+  `#${i.s_no} — ${i.media} (${Number(i.width_inches)}x${Number(i.height_inches)} in, qty ${Number(i.qty)})`;
+
 /**
- * Operator assigns (or clears) a line item to a specific PRODUCTION user.
- * Reassigning resets any completion so the new assignee must mark it done themselves.
+ * Recompute an item's rollup flag: it is production-complete only when every
+ * assignment on it is complete (and at least one assignment exists).
+ */
+async function syncItemCompletion(tx: any, itemId: number) {
+  const assignments = await tx.orderItemAssignment.findMany({ where: { order_item_id: itemId } });
+  const allDone = assignments.length > 0 && assignments.every((a: any) => a.completed);
+  const latest = assignments
+    .map((a: any) => a.completed_at)
+    .filter(Boolean)
+    .sort((x: Date, y: Date) => y.getTime() - x.getTime())[0] ?? null;
+
+  await tx.orderItem.update({
+    where: { id: itemId },
+    data: {
+      production_completed: allDone,
+      production_completed_at: allDone ? latest ?? new Date() : null,
+    },
+  });
+  return allDone;
+}
+
+/**
+ * Operator sets the full list of production users assigned to a line item.
+ * A line item can be split across several teams; passing [] clears all assignments.
+ * Existing assignees keep their completion state so re-assigning a co-worker
+ * doesn't wipe work already reported.
  */
 export const assignOrderItem = async (req: Request, res: Response) => {
   try {
     const parseResult = assignItemSchema.safeParse(req.body);
     if (!parseResult.success) return res.status(400).json({ message: "Invalid input", errors: parseResult.error.errors });
-    const { assigned_to } = parseResult.data;
+    const assigned_to = Array.from(new Set(parseResult.data.assigned_to));
     const orderId = parseInt(req.params.orderId as string, 10);
     const itemId = parseInt(req.params.itemId as string, 10);
     const user = req.user!;
 
     const order = await prisma.order.findUnique({ where: { id: orderId } });
     if (!order) return res.status(404).json({ message: "Order not found" });
-    if (order.status === "Completed") {
-      return res.status(400).json({ message: "Completed orders cannot be reassigned." });
+    if (order.status === "Completed" || order.status === "PaymentReceived") {
+      return res.status(400).json({ message: "Closed orders cannot be reassigned." });
     }
 
-    const item = await prisma.orderItem.findUnique({ where: { id: itemId } });
+    const item = await prisma.orderItem.findUnique({ where: { id: itemId }, include: { assignments: true } });
     if (!item || item.order_id !== orderId) return res.status(404).json({ message: "Line item not found" });
 
-    if (assigned_to !== null) {
-      const assignee = await prisma.user.findUnique({ where: { id: assigned_to } });
-      if (!assignee || assignee.role !== "PRODUCTION" || !assignee.is_active) {
-        return res.status(400).json({ message: "Items can only be assigned to an active production user." });
+    if (assigned_to.length > 0) {
+      const staff = await prisma.user.findMany({ where: { id: { in: assigned_to }, role: "PRODUCTION", is_active: true } });
+      if (staff.length !== assigned_to.length) {
+        return res.status(400).json({ message: "Items can only be assigned to active production users." });
       }
     }
 
-    const updated = await prisma.$transaction(async (tx) => {
+    const existingIds = item.assignments.map((a) => a.user_id);
+    const toAdd = assigned_to.filter((id) => !existingIds.includes(id));
+    const toRemove = existingIds.filter((id) => !assigned_to.includes(id));
+
+    await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT set_config('app.current_user_id', ${user.id.toString()}, true)`;
-      return tx.orderItem.update({
-        where: { id: itemId },
-        data: assigned_to === null
-          ? { assigned_to: null, assigned_at: null, assigned_by: null, production_completed: false, production_completed_at: null, production_completed_by: null }
-          : { assigned_to, assigned_at: new Date(), assigned_by: user.id, production_completed: false, production_completed_at: null, production_completed_by: null },
-      });
+      if (toRemove.length > 0) {
+        await tx.orderItemAssignment.deleteMany({ where: { order_item_id: itemId, user_id: { in: toRemove } } });
+      }
+      for (const id of toAdd) {
+        await tx.orderItemAssignment.create({
+          data: { order_item_id: itemId, user_id: id, assigned_by: user.id },
+        });
+      }
+      await syncItemCompletion(tx, itemId);
     });
 
-    if (assigned_to !== null) {
-      const itemLabel = `#${updated.s_no} — ${updated.media} (${Number(updated.width_inches)}x${Number(updated.height_inches)} in, qty ${Number(updated.qty)})`;
+    for (const id of toAdd) {
       await notifyUser(
-        assigned_to,
+        id,
         `New item assigned on ${order.order_no}`,
-        `${user.name} assigned you item ${itemLabel}.`,
+        `${user.name} assigned you item ${itemLabelOf(item)}.`,
         "info",
         order.id
       );
     }
 
-    return res.status(200).json(serializeDecimals(updated));
+    const fresh = await prisma.orderItem.findUnique({
+      where: { id: itemId },
+      include: { assignments: { include: { user: { select: { id: true, name: true } } } } },
+    });
+    return res.status(200).json(serializeDecimals(fresh));
   } catch (err) {
     console.error(err);
     return res.status(500).json({ message: "Internal server error" });
@@ -823,7 +939,8 @@ export const assignOrderItem = async (req: Request, res: Response) => {
 };
 
 /**
- * Production user marks their own assigned line item complete (or reopens it).
+ * A production user marks *their own* assignment on a line item complete (or reopens it).
+ * The item only becomes production-complete once every assigned team has done so.
  * A flagged item is blocked until an admin resolves the flag.
  */
 export const completeOrderItem = async (req: Request, res: Response) => {
@@ -838,34 +955,52 @@ export const completeOrderItem = async (req: Request, res: Response) => {
     const order = await prisma.order.findUnique({ where: { id: orderId } });
     if (!order) return res.status(404).json({ message: "Order not found" });
 
-    const item = await prisma.orderItem.findUnique({ where: { id: itemId } });
+    const item = await prisma.orderItem.findUnique({ where: { id: itemId }, include: { assignments: true } });
     if (!item || item.order_id !== orderId) return res.status(404).json({ message: "Line item not found" });
-
-    // Production users may only touch their own assigned items; operators/admins can correct any.
-    if (user.role === "PRODUCTION" && item.assigned_to !== user.id) {
-      return res.status(403).json({ message: "You can only update items assigned to you." });
-    }
-    if (!item.assigned_to) {
+    if (item.assignments.length === 0) {
       return res.status(400).json({ message: "This item has not been assigned yet." });
     }
     if (production_completed && item.is_flagged) {
       return res.status(400).json({ message: "This item is flagged as mistaken — an admin must resolve the flag before it can be completed." });
     }
 
-    const updated = await prisma.$transaction(async (tx) => {
+    // Production users may only report on their own assignment.
+    // Operators/admins acting on the item update every outstanding assignment.
+    const targets = user.role === "PRODUCTION"
+      ? item.assignments.filter((a) => a.user_id === user.id)
+      : item.assignments;
+
+    if (targets.length === 0) {
+      return res.status(403).json({ message: "You can only update items assigned to you." });
+    }
+
+    const wasComplete = item.production_completed;
+    const nowComplete = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT set_config('app.current_user_id', ${user.id.toString()}, true)`;
-      return tx.orderItem.update({
-        where: { id: itemId },
+      await tx.orderItemAssignment.updateMany({
+        where: { id: { in: targets.map((t) => t.id) } },
         data: production_completed
-          ? { production_completed: true, production_completed_at: new Date(), production_completed_by: user.id }
-          : { production_completed: false, production_completed_at: null, production_completed_by: null },
+          ? { completed: true, completed_at: new Date() }
+          : { completed: false, completed_at: null },
       });
+      return syncItemCompletion(tx, itemId);
     });
 
-    // When the last assigned item lands, tell Accounts the order is ready to bill.
-    if (production_completed) {
+    // Tell the employee who raised the order as soon as a line item is fully produced.
+    if (nowComplete && !wasComplete && order.created_by) {
+      await notifyUser(
+        order.created_by,
+        `Item produced on ${order.order_no}`,
+        `Production finished item ${itemLabelOf(item)}.`,
+        "success",
+        order.id
+      );
+    }
+
+    // When every assigned item on the order is done, notify Accounts and the employee.
+    if (nowComplete) {
       const remaining = await prisma.orderItem.count({
-        where: { order_id: orderId, assigned_to: { not: null }, production_completed: false },
+        where: { order_id: orderId, assignments: { some: {} }, production_completed: false },
       });
       if (remaining === 0) {
         await notifyRole(
@@ -875,10 +1010,23 @@ export const completeOrderItem = async (req: Request, res: Response) => {
           "success",
           order.id
         );
+        if (order.created_by) {
+          await notifyUser(
+            order.created_by,
+            `Order ${order.order_no} is production complete`,
+            `All assigned line items have been produced.`,
+            "success",
+            order.id
+          );
+        }
       }
     }
 
-    return res.status(200).json(serializeDecimals(updated));
+    const fresh = await prisma.orderItem.findUnique({
+      where: { id: itemId },
+      include: { assignments: { include: { user: { select: { id: true, name: true } } } } },
+    });
+    return res.status(200).json(serializeDecimals(fresh));
   } catch (err) {
     console.error(err);
     return res.status(500).json({ message: "Internal server error" });

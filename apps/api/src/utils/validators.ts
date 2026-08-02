@@ -92,12 +92,17 @@ export const flagItemSchema = z.object({
 );
 
 export const assignItemSchema = z.object({
-  // null clears the assignment
-  assigned_to: z.number().int().positive().nullable(),
+  // Full replacement of the item's assignee set; [] clears all assignments.
+  assigned_to: z.array(z.number().int().positive()).max(20),
 });
 
 export const completeItemSchema = z.object({
   production_completed: z.boolean(),
+});
+
+export const paymentSchema = z.object({
+  amount_received: z.coerce.number().min(0),
+  payment_date: z.coerce.date().refine((d) => d.getTime() <= Date.now() + 86400000, "Payment date cannot be in the future"),
 });
 
 export const createUserSchema = z.object({

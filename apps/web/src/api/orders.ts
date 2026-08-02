@@ -94,11 +94,19 @@ export async function setItemLossRemark(orderId: number, itemId: number, remarks
   });
   return res;
 }
-export async function assignOrderItem(orderId: number, itemId: number, assigned_to: number | null) {
+export async function assignOrderItem(orderId: number, itemId: number, assigned_to: number[]) {
   return apiFetch<any>(`/orders/${orderId}/items/${itemId}/assign`, {
     method: "PATCH",
     data: { assigned_to },
   });
+}
+
+export async function recordPayment(id: number, amount_received: number, payment_date: string) {
+  const res = await apiFetch<Order>(`/orders/${id}/payment`, {
+    method: "PUT",
+    data: { amount_received, payment_date },
+  });
+  return { order: res };
 }
 
 export async function completeOrderItem(orderId: number, itemId: number, production_completed: boolean) {
