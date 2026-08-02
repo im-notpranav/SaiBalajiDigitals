@@ -22,6 +22,7 @@ import { Route as PortalAccountantReportsRouteImport } from './routes/_portal.ac
 import { Route as PortalAdminAuditRouteImport } from './routes/_portal.admin.audit'
 import { Route as PortalAdminDashboardRouteImport } from './routes/_portal.admin.dashboard'
 import { Route as PortalAdminFinancialYearRouteImport } from './routes/_portal.admin.financial-year'
+import { Route as PortalAdminImportRouteImport } from './routes/_portal.admin.import'
 import { Route as PortalAdminLossReportRouteImport } from './routes/_portal.admin.loss-report'
 import { Route as PortalAdminOrdersRouteImport } from './routes/_portal.admin.orders'
 import { Route as PortalAdminOverdueRouteImport } from './routes/_portal.admin.overdue'
@@ -112,6 +113,11 @@ const PortalAdminFinancialYearRoute =
     path: '/admin/financial-year',
     getParentRoute: () => PortalRoute,
   } as any)
+const PortalAdminImportRoute = PortalAdminImportRouteImport.update({
+  id: '/admin/import',
+  path: '/admin/import',
+  getParentRoute: () => PortalRoute,
+} as any)
 const PortalAdminLossReportRoute = PortalAdminLossReportRouteImport.update({
   id: '/admin/loss-report',
   path: '/admin/loss-report',
@@ -238,6 +244,7 @@ export interface FileRoutesByFullPath {
   '/admin/audit': typeof PortalAdminAuditRoute
   '/admin/dashboard': typeof PortalAdminDashboardRoute
   '/admin/financial-year': typeof PortalAdminFinancialYearRoute
+  '/admin/import': typeof PortalAdminImportRoute
   '/admin/loss-report': typeof PortalAdminLossReportRoute
   '/admin/orders': typeof PortalAdminOrdersRoute
   '/admin/overdue': typeof PortalAdminOverdueRoute
@@ -273,6 +280,7 @@ export interface FileRoutesByTo {
   '/admin/audit': typeof PortalAdminAuditRoute
   '/admin/dashboard': typeof PortalAdminDashboardRoute
   '/admin/financial-year': typeof PortalAdminFinancialYearRoute
+  '/admin/import': typeof PortalAdminImportRoute
   '/admin/loss-report': typeof PortalAdminLossReportRoute
   '/admin/orders': typeof PortalAdminOrdersRoute
   '/admin/overdue': typeof PortalAdminOverdueRoute
@@ -310,6 +318,7 @@ export interface FileRoutesById {
   '/_portal/admin/audit': typeof PortalAdminAuditRoute
   '/_portal/admin/dashboard': typeof PortalAdminDashboardRoute
   '/_portal/admin/financial-year': typeof PortalAdminFinancialYearRoute
+  '/_portal/admin/import': typeof PortalAdminImportRoute
   '/_portal/admin/loss-report': typeof PortalAdminLossReportRoute
   '/_portal/admin/orders': typeof PortalAdminOrdersRoute
   '/_portal/admin/overdue': typeof PortalAdminOverdueRoute
@@ -347,6 +356,7 @@ export interface FileRouteTypes {
     | '/admin/audit'
     | '/admin/dashboard'
     | '/admin/financial-year'
+    | '/admin/import'
     | '/admin/loss-report'
     | '/admin/orders'
     | '/admin/overdue'
@@ -382,6 +392,7 @@ export interface FileRouteTypes {
     | '/admin/audit'
     | '/admin/dashboard'
     | '/admin/financial-year'
+    | '/admin/import'
     | '/admin/loss-report'
     | '/admin/orders'
     | '/admin/overdue'
@@ -418,6 +429,7 @@ export interface FileRouteTypes {
     | '/_portal/admin/audit'
     | '/_portal/admin/dashboard'
     | '/_portal/admin/financial-year'
+    | '/_portal/admin/import'
     | '/_portal/admin/loss-report'
     | '/_portal/admin/orders'
     | '/_portal/admin/overdue'
@@ -538,6 +550,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/financial-year'
       fullPath: '/admin/financial-year'
       preLoaderRoute: typeof PortalAdminFinancialYearRouteImport
+      parentRoute: typeof PortalRoute
+    }
+    '/_portal/admin/import': {
+      id: '/_portal/admin/import'
+      path: '/admin/import'
+      fullPath: '/admin/import'
+      preLoaderRoute: typeof PortalAdminImportRouteImport
       parentRoute: typeof PortalRoute
     }
     '/_portal/admin/loss-report': {
@@ -701,6 +720,7 @@ interface PortalRouteChildren {
   PortalAdminAuditRoute: typeof PortalAdminAuditRoute
   PortalAdminDashboardRoute: typeof PortalAdminDashboardRoute
   PortalAdminFinancialYearRoute: typeof PortalAdminFinancialYearRoute
+  PortalAdminImportRoute: typeof PortalAdminImportRoute
   PortalAdminLossReportRoute: typeof PortalAdminLossReportRoute
   PortalAdminOrdersRoute: typeof PortalAdminOrdersRoute
   PortalAdminOverdueRoute: typeof PortalAdminOverdueRoute
@@ -735,6 +755,7 @@ const PortalRouteChildren: PortalRouteChildren = {
   PortalAdminAuditRoute: PortalAdminAuditRoute,
   PortalAdminDashboardRoute: PortalAdminDashboardRoute,
   PortalAdminFinancialYearRoute: PortalAdminFinancialYearRoute,
+  PortalAdminImportRoute: PortalAdminImportRoute,
   PortalAdminLossReportRoute: PortalAdminLossReportRoute,
   PortalAdminOrdersRoute: PortalAdminOrdersRoute,
   PortalAdminOverdueRoute: PortalAdminOverdueRoute,
