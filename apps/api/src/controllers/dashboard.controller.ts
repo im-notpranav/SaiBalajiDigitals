@@ -90,7 +90,8 @@ export const getAdminDashboard = async (req: Request, res: Response) => {
     // 1. Pending Amount (₹)
     const pendingAmountAgg = await prisma.orderItem.aggregate({
       _sum: { amount: true },
-      where: { order: { status: "Pending" } },
+      // Exclude confirmed-loss items — they aren't billable, so they aren't "pending".
+      where: { order: { status: "Pending" }, OR: [{ remarks: null }, { remarks_confirmed: false }] },
     });
     const pendingAmount = Number(pendingAmountAgg._sum.amount) || 0;
 

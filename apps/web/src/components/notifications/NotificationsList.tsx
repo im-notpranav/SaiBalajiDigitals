@@ -4,7 +4,8 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
-import { fetchMyNotifications, markAllNotificationsRead } from "@/api/notifications";
+import { fetchMyNotifications, markAllNotificationsRead, markNotificationRead } from "@/api/notifications";
+import { useGoToOrder } from "@/lib/use-order-nav";
 
 function iconFor(kind: string) {
   if (kind === "success") return <CheckCircle2 className="h-4 w-4 text-success" />;
@@ -19,11 +20,24 @@ interface NotificationsListProps {
 
 export function NotificationsList({ title = "Notifications", crumbs = [{ label: "Notifications" }] }: NotificationsListProps) {
   const queryClient = useQueryClient();
+  const goToOrder = useGoToOrder();
 
   const { data: notifications = [], isLoading } = useQuery({
     queryKey: ["notifications"],
     queryFn: fetchMyNotifications,
   });
+
+  const handleOpen = async (n: (typeof notifications)[number]) => {
+    if (!n.read) {
+      try {
+        await markNotificationRead(n.id);
+        queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      } catch {
+        /* non-blocking — still navigate */
+      }
+    }
+    if (n.order_id) goToOrder(n.order_id);
+  };
 
   const markReadMutation = useMutation({
     mutationFn: markAllNotificationsRead,
@@ -70,7 +84,15 @@ export function NotificationsList({ title = "Notifications", crumbs = [{ label: 
           notifications.map((n) => (
             <div
               key={n.id}
-              className={cn("flex items-start gap-3 p-4 transition hover:bg-muted/40", !n.read && "bg-primary/5")}
+              role={n.order_id ? "button" : undefined}
+              tabIndex={n.order_id ? 0 : undefined}
+              onClick={() => handleOpen(n)}
+              onKeyDown={(e) => { if (n.order_id && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); handleOpen(n); } }}
+              className={cn(
+                "flex items-start gap-3 p-4 transition hover:bg-muted/40",
+                !n.read && "bg-primary/5",
+                n.order_id && "cursor-pointer",
+              )}
             >
               <div className="mt-0.5 rounded-lg border bg-card p-2">{iconFor(n.kind)}</div>
               <div className="min-w-0 flex-1">
@@ -86,6 +108,9 @@ export function NotificationsList({ title = "Notifications", crumbs = [{ label: 
                   </span>
                 </div>
                 <p className="mt-0.5 text-sm text-muted-foreground">{n.body}</p>
+                {n.order_id ? (
+                  <p className="mt-1 text-xs font-medium text-primary">View order →</p>
+                ) : null}
               </div>
             </div>
           ))

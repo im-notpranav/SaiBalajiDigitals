@@ -7,6 +7,7 @@ import { fetchOrder, updateOrder } from "@/api/orders";
 import { OrderForm } from "@/components/orders/OrderForm";
 import type { CreateOrderInput } from "@sb-oms/shared-types";
 import { Loader2 } from "lucide-react";
+import { useAuth } from "@/lib/auth-store";
 
 export const Route = createFileRoute("/_portal/admin/edit-order/$id")({
   head: () => ({ meta: [{ title: "Edit Order — SB OMS" }] }),
@@ -17,6 +18,7 @@ function EditOrderAdmin() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const [saving, setSaving] = useState(false);
 
   const { data: orderData, isLoading, error } = useQuery({
@@ -62,7 +64,7 @@ function EditOrderAdmin() {
         crumbs={[{ label: "Admin" }, { label: "Orders" }, { label: "Edit" }]}
       />
 
-      <OrderForm defaultValues={order} onSubmit={submit} isSubmitting={saving} />
+      <OrderForm defaultValues={order} onSubmit={submit} isSubmitting={saving} userRole={user?.role} />
     </>
   );
 }

@@ -49,6 +49,7 @@ model User {
   changeLogs    OrderChangeLog[]
   notifications Notification[]
   remarkedItems OrderItem[]      @relation("ItemRemarkSetter")
+  confirmedItems OrderItem[]     @relation("ItemRemarkConfirmer")
   flaggedItems  OrderItem[]      @relation("ItemFlagger")
 }
 
@@ -77,6 +78,7 @@ model Order {
   remarks_other_text     String?
   items                  OrderItem[]
   changeLogs             OrderChangeLog[]
+  notifications          Notification[]        @relation("OrderNotifications")
   created_at             DateTime              @default(now())
   updated_at             DateTime              @updatedAt
 
@@ -103,6 +105,10 @@ model OrderItem {
   remarks_set_at DateTime?
   remarks_set_by Int?
   remarksSetter  User?     @relation("ItemRemarkSetter", fields: [remarks_set_by], references: [id], onDelete: SetNull)
+  remarks_confirmed Boolean @default(false)
+  remarks_confirmed_at DateTime?
+  remarks_confirmed_by Int?
+  remarksConfirmer User?   @relation("ItemRemarkConfirmer", fields: [remarks_confirmed_by], references: [id], onDelete: SetNull)
   is_flagged     Boolean   @default(false)
   flag_reason    String?
   flagged_at     DateTime?
@@ -143,6 +149,8 @@ model Notification {
   body       String
   kind       String   @default("info")
   read       Boolean  @default(false)
+  order_id   Int?
+  order      Order?   @relation("OrderNotifications", fields: [order_id], references: [id], onDelete: SetNull)
   created_at DateTime @default(now())
 
   @@index([user_id])

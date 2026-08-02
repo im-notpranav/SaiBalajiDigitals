@@ -16,6 +16,23 @@ export const getMyNotifications = async (req: Request, res: Response) => {
   }
 };
 
+export const markOneAsRead = async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.id;
+    const id = parseInt(req.params.id as string, 10);
+    if (Number.isNaN(id)) return res.status(400).json({ message: "Invalid notification id" });
+    // Scope to the caller's own notifications so one user can't touch another's.
+    await prisma.notification.updateMany({
+      where: { id, user_id: userId },
+      data: { read: true },
+    });
+    return res.status(200).json({ success: true });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
 export const markAllAsRead = async (req: Request, res: Response) => {
   try {
     const userId = req.user!.id;

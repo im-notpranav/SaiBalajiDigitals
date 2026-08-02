@@ -11,17 +11,27 @@ export const remarkEnum = z.enum([
   "Other",
 ]);
 
-export const orderItemSchema = z.object({
+const itemLossEnum = z.enum(["Reprint", "Sample", "UnderWarranty", "FreeOfCost", "Other"]);
+
+const baseOrderItemSchema = z.object({
   media: z.string().min(1).max(200),
   width_inches: z.coerce.number().positive(),
   height_inches: z.coerce.number().positive(),
   qty: z.coerce.number().positive(),
   rate: z.coerce.number().positive(),
+  remarks: itemLossEnum.optional().nullable(),
+  remarks_other_text: z.string().max(500).optional().nullable(),
 });
 
-export const updateOrderItemSchema = orderItemSchema.extend({
+const itemRemarkRefine = (data: { remarks?: string | null; remarks_other_text?: string | null }) =>
+  data.remarks !== "Other" || (data.remarks_other_text && data.remarks_other_text.trim().length > 0);
+const itemRemarkRefineConfig = { message: "Text is required when Other is selected.", path: ["remarks_other_text"] };
+
+export const orderItemSchema = baseOrderItemSchema.refine(itemRemarkRefine, itemRemarkRefineConfig);
+
+export const updateOrderItemSchema = baseOrderItemSchema.extend({
   id: z.number().int().positive().optional(),
-});
+}).refine(itemRemarkRefine, itemRemarkRefineConfig);
 
 const REMARKS_REQUIRING_TEXT = new Set(["Other", "Revised", "ExtraAmount", "LessAmount"]);
 const remarksTextRefine = (data: { remarks?: string | null; remarks_other_text?: string | null }) =>

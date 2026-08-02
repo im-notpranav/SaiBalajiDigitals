@@ -9,3 +9,7 @@ export const fetchMyNotifications = async (): Promise<Notification[]> => {
 export const markAllNotificationsRead = async (): Promise<void> => {
   await apiClient.put("/notifications/read-all");
 };
+
+export const markNotificationRead = async (id: number | string): Promise<void> => {
+  await apiClient.put(`/notifications/${id}/read`);
+};
