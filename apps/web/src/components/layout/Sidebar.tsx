@@ -20,6 +20,7 @@ import {
   ShieldCheck,
   Settings,
   Boxes,
+  Upload,
 } from "lucide-react";
 import { type UserRole, useAuth } from "@/lib/auth-store";
 import { cn } from "@/lib/utils";
@@ -68,6 +69,7 @@ const NAV: Record<UserRole, NavItem[]> = {
     { to: "/admin/audit", label: "Audit Logs", icon: ShieldCheck },
     { to: "/admin/reports", label: "Reports", icon: FileBarChart2 },
     { to: "/admin/financial-year", label: "Financial Year", icon: CalendarClock },
+    { to: "/admin/import", label: "Bulk Import", icon: Upload },
     { to: "/admin/settings", label: "Settings", icon: Settings },
     { to: "/profile", label: "Profile", icon: UserCircle },
   ],
@@ -86,7 +88,8 @@ export function Sidebar({ role }: { role: UserRole }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user, logout } = useAuth();
-  const items = NAV[role];
+  // Bulk import is super-admin only — hide the nav item for regular admins.
+  const items = NAV[role].filter((i) => i.to !== "/admin/import" || user?.is_super_admin);
   const home = items[0]!.to;
 
   const handleLogout = async () => {

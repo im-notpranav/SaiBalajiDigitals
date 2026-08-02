@@ -1,5 +1,24 @@
-import { apiFetch, apiDownload } from "./client";
+import { apiFetch, apiDownload, apiClient } from "./client";
 import type { CreateOrderInput, Order, ProductionOrder } from "@sb-oms/shared-types";
+
+export interface ImportResult {
+  message: string;
+  orders_imported?: number;
+  line_items_imported?: number;
+  errors?: { row: number; message: string }[];
+  orders_in_file?: number;
+}
+
+export async function downloadImportTemplate() {
+  return apiDownload("/orders/import/template");
+}
+
+export async function bulkImportOrders(file: File): Promise<ImportResult> {
+  const res = await apiClient.post<ImportResult>("/orders/import", file, {
+    headers: { "Content-Type": "application/octet-stream" },
+  });
+  return res.data;
+}
 
 export interface OrdersQuery {
   order_no?: string;
