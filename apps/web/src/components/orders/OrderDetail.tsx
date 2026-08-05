@@ -203,7 +203,7 @@ export function OrderDetail({ order, actions, userRole }: OrderDetailProps) {
                 {userRole && (
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end space-x-2">
-                      {(userRole === "EMPLOYEE" || userRole === "ADMIN") && order.status === "Active" && (
+                      {(userRole === "CSM" || userRole === "ADMIN") && (order.status === "Active" || order.status === "Installed") && (
                         <FlagDialog 
                           item={item} 
                           onSave={(flagged, reason) => handleFlagItem(item.id!, flagged, reason)} 

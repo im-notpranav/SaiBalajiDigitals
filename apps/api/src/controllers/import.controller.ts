@@ -73,7 +73,7 @@ export const bulkImportOrders = async (req: Request, res: Response) => {
     }
     if (rows.length === 0) return res.status(400).json({ message: "The sheet has no data rows." });
 
-    const employees = await prisma.user.findMany({ where: { role: "EMPLOYEE", is_active: true } });
+    const employees = await prisma.user.findMany({ where: { role: "CSM", is_active: true } });
     const empByUsername = new Map(employees.map((u) => [u.username.toLowerCase(), u]));
 
     const errors: { row: number; message: string }[] = [];

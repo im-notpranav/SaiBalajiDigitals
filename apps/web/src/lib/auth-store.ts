@@ -3,7 +3,10 @@ import { authApi } from "../api/auth";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
 
-export type UserRole = "EMPLOYEE" | "PRODUCTION" | "ACCOUNTS" | "ADMIN" | "OPERATOR";
+export type UserRole = "CSM" | "PRODUCTION" | "ACCOUNTS" | "ADMIN" | "OPERATION_MANAGER" | "PRODUCTION_MANAGER";
+
+/** Operation Manager sees everything an admin sees but may not change anything. */
+export const isReadOnlyRole = (role?: UserRole | string) => role === "OPERATION_MANAGER";
 
 export interface AuthUser {
   id: number;
@@ -38,11 +41,13 @@ export const useAuthStore = create<AuthState>((set) => ({
 }));
 
 export const roleHome: Record<UserRole, string> = {
-  EMPLOYEE: "/employee/dashboard",
+  CSM: "/employee/dashboard",
   PRODUCTION: "/production/dashboard",
   ACCOUNTS: "/accountant/dashboard",
   ADMIN: "/admin/dashboard",
-  OPERATOR: "/operator/assign",
+  // Operation Manager shares the admin portal, read-only.
+  OPERATION_MANAGER: "/admin/dashboard",
+  PRODUCTION_MANAGER: "/prod-manager/dashboard",
 };
 
 export const useAuth = () => {

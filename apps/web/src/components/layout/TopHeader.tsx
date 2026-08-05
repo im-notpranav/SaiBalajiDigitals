@@ -57,11 +57,11 @@ export function TopHeader() {
   const handleSearch = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       const q = e.currentTarget.value;
-      if (user?.role === "ADMIN") {
+      if (user?.role === "ADMIN" || user?.role === "OPERATION_MANAGER") {
         navigate({ to: "/admin/orders", search: { q } as any });
       } else if (user?.role === "ACCOUNTS") {
         navigate({ to: "/accountant/orders", search: { q } as any });
-      } else if (user?.role === "EMPLOYEE") {
+      } else if (user?.role === "CSM") {
         navigate({ to: "/employee/orders", search: { q } as any });
       }
     }

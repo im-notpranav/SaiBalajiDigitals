@@ -17,7 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { useAuth } from "@/lib/auth-store";
+import { useAuth, isReadOnlyRole } from "@/lib/auth-store";
 
 export const Route = createFileRoute("/_portal/admin/orders_/$id")({
   head: () => ({ meta: [{ title: "Order Details — SB OMS" }] }),
@@ -69,7 +69,7 @@ function OrderDetailAdmin() {
     return <div className="p-8 text-destructive">Failed to load order.</div>;
   }
 
-  const actions = data.order.status !== "Completed" && (
+  const actions = !isReadOnlyRole(user?.role) && data.order.status !== "Completed" && (
     <div className="space-y-6 mt-6">
       <div className="surface-panel p-6 border-warning/20 bg-warning/5">
         <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">

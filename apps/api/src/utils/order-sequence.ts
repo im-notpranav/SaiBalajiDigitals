@@ -16,9 +16,9 @@ export const generateOrderId = async (): Promise<string> => {
     
     if (year_code !== currentYY) {
       year_code = currentYY;
-      last_number = 0;
+      last_number = 12; // first 12 numbers are reserved
     }
-    
+
     last_number += 1;
     
     await tx.orderSequence.update({
@@ -33,15 +33,14 @@ export const generateOrderId = async (): Promise<string> => {
 function deriveYY(): string {
   const now = new Date();
   const year = now.getFullYear();
-  const month = now.getMonth(); // 0-indexed (0 = Jan, 4 = May)
-  
-  // Using May 1 - April 30 as FY per original spec
-  // If month is < 4 (Jan-Apr), we are in the FY that started the previous year
+  const month = now.getMonth(); // 0-indexed (0 = Jan, 5 = Jun)
+
+  // FY runs June 1 through May 31 (FY ends May 31).
+  // Months 0-4 (Jan-May) belong to the FY that started the previous June.
   let fyStartYear = year;
-  if (month < 4) {
+  if (month < 5) {
     fyStartYear = year - 1;
   }
-  
-  // Take last 2 digits of the FY start year. (E.g., FY starting May 2025 -> "25")
+
   return String(fyStartYear).slice(-2);
 }

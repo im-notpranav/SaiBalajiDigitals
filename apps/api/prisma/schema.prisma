@@ -9,10 +9,11 @@ datasource db {
 
 enum Role {
   ADMIN
-  EMPLOYEE
+  OPERATION_MANAGER
+  CSM
   ACCOUNTS
   PRODUCTION
-  OPERATOR
+  PRODUCTION_MANAGER
 }
 
 enum OrderStatus {
@@ -59,6 +60,7 @@ model User {
   assignmentsMade OrderItemAssignment[] @relation("AssignmentAssigner")
   paymentsReceived Order[]         @relation("OrderPaymentReceiver")
   installedOrders Order[]         @relation("OrderInstaller")
+  followUps       PaymentFollowUp[] @relation("FollowUpAuthor")
 }
 
 model OrderSequence {
@@ -79,6 +81,7 @@ model Order {
   status                 OrderStatus           @default(Active)
   invoice_no             String?
   bill_amount            Decimal?              @db.Decimal(10, 2)
+  billing_date           DateTime?
   installed_at           DateTime?
   installed_by           Int?
   installer              User?                 @relation("OrderInstaller", fields: [installed_by], references: [id], onDelete: SetNull)
@@ -95,6 +98,7 @@ model Order {
   items                  OrderItem[]
   changeLogs             OrderChangeLog[]
   notifications          Notification[]        @relation("OrderNotifications")
+  followUps              PaymentFollowUp[]
   created_at             DateTime              @default(now())
   updated_at             DateTime              @updatedAt
 
@@ -191,6 +195,28 @@ model Notification {
   created_at DateTime @default(now())
 
   @@index([user_id])
+}
+
+model PaymentFollowUp {
+  id         Int      @id @default(autoincrement())
+  order_id   Int
+  order      Order    @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  note       String
+  created_by Int?
+  author     User?    @relation("FollowUpAuthor", fields: [created_by], references: [id], onDelete: SetNull)
+  created_at DateTime @default(now())
+
+  @@index([order_id])
+}
+
+model EmailRecipient {
+  id         Int      @id @default(autoincrement())
+  email      String
+  used_by    Int
+  used_at    DateTime @default(now())
+
+  @@unique([email, used_by])
+  @@index([used_by])
 }
 
 model Client {

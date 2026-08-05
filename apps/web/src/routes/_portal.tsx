@@ -19,18 +19,19 @@ function PortalLayout() {
       navigate({ to: "/login", replace: true });
       return;
     }
-    // enforce role prefix
+    // enforce role prefix — a path section may be shared by more than one role
+    // (the admin portal is also the Operation Manager's, read-only).
     const seg = location.pathname.split("/")[1];
-    const pathRoleMap: Record<string, UserRole> = {
-      employee: "EMPLOYEE",
-      production: "PRODUCTION",
-      accountant: "ACCOUNTS",
-      admin: "ADMIN",
-      operator: "OPERATOR",
+    const pathRoleMap: Record<string, UserRole[]> = {
+      employee: ["CSM"],
+      production: ["PRODUCTION"],
+      accountant: ["ACCOUNTS"],
+      admin: ["ADMIN", "OPERATION_MANAGER"],
+      "prod-manager": ["PRODUCTION_MANAGER"],
     };
-    const currentPathRole = seg ? pathRoleMap[seg] : undefined;
-    
-    if (currentPathRole && currentPathRole !== user.role) {
+    const allowedRoles = seg ? pathRoleMap[seg] : undefined;
+
+    if (allowedRoles && !allowedRoles.includes(user.role)) {
       navigate({ to: roleHome[user.role], replace: true });
     }
   }, [user, location.pathname, navigate]);

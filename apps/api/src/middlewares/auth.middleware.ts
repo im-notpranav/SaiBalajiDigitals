@@ -46,6 +46,22 @@ export function authorize(...roles: string[]) {
   };
 }
 
+/**
+ * Roles that may read everything but change nothing. Applied after `authenticate`,
+ * this blocks every state-changing verb so read-only access is enforced at the API,
+ * not merely hidden in the UI.
+ */
+const READ_ONLY_ROLES = ["OPERATION_MANAGER"];
+
+export function denyReadOnlyMutations(req: Request, res: Response, next: NextFunction) {
+  if (req.user && READ_ONLY_ROLES.includes(req.user.role) && req.method !== "GET") {
+    return res.status(403).json({
+      message: "Operation Manager access is view-only. You cannot create, edit, approve or close records.",
+    });
+  }
+  next();
+}
+
 export async function requireSuperAdmin(req: Request, res: Response, next: NextFunction) {
   if (!req.user) {
     return res.status(401).json({ message: "Not authenticated" });

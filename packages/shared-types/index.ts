@@ -1,4 +1,4 @@
-export type UserRole = "employee" | "production" | "accountant" | "admin";
+export type UserRole = "ADMIN" | "OPERATION_MANAGER" | "CSM" | "ACCOUNTS" | "PRODUCTION" | "PRODUCTION_MANAGER";
 
 export type OrderStatus = "Active" | "Installed" | "Pending" | "BillingCompleted" | "PaymentReceived" | "Completed";
 
@@ -80,6 +80,7 @@ export interface Order {
   remarks_other_text?: string | null;
   invoice_no?: string | null;
   bill_amount?: number | null;
+  billing_date?: string | null;
   installed_at?: string | null;
   installed_by?: number | null;
   billing_completed_at?: string | null;
