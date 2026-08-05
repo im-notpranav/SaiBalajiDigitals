@@ -1,12 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { OrderDetail } from "@/components/orders/OrderDetail";
-import { fetchOrder, markOrderInstalled } from "@/api/orders";
+import { fetchOrder, markOrderInstalled, getFollowUps, createFollowUp } from "@/api/orders";
 import { Button } from "@/components/ui/button";
-import { Loader2, PackageCheck, CheckCircle2 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { Loader2, PackageCheck, CheckCircle2, MessageSquarePlus, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-store";
+import { formatDistanceToNow } from "date-fns";
 import type { OrderItem } from "@sb-oms/shared-types";
 
 export const Route = createFileRoute("/_portal/employee/orders_/$id")({
@@ -18,6 +21,7 @@ function OrderDetailEmployee() {
   const { id } = Route.useParams();
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const [followUpNote, setFollowUpNote] = useState("");
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["order", id],
@@ -43,6 +47,24 @@ function OrderDetailEmployee() {
   }
 
   const order = data.order;
+
+  const { data: followUps = [] } = useQuery({
+    queryKey: ["follow-ups", id],
+    queryFn: () => getFollowUps(Number(id)),
+    enabled: !!order.billing_completed_at,
+  });
+
+  const followUpMutation = useMutation({
+    mutationFn: (note: string) => createFollowUp(Number(id), note),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["follow-ups", id] });
+      setFollowUpNote("");
+      toast.success("Follow-up note added");
+    },
+    onError: (err: any) =>
+      toast.error("Failed to add note", { description: err?.response?.data?.message || err.message }),
+  });
+
   const items = order.items ?? [];
   const assignedItems = items.filter((i: OrderItem) => (i.assignments?.length ?? 0) > 0);
   const hasProduction = assignedItems.length > 0;
@@ -80,6 +102,61 @@ function OrderDetailEmployee() {
       </div>
     ) : null;
 
+  const followUpSection = order.billing_completed_at ? (
+    <div className="rounded-xl border bg-card p-6">
+      <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold">
+        <MessageSquarePlus className="h-4 w-4 text-primary" /> Payment Follow-Up Notes
+      </h3>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!followUpNote.trim()) return;
+          followUpMutation.mutate(followUpNote.trim());
+        }}
+        className="mb-4 flex gap-3"
+      >
+        <Textarea
+          placeholder="Add a follow-up note..."
+          rows={2}
+          value={followUpNote}
+          onChange={(e) => setFollowUpNote(e.target.value)}
+          className="flex-1 resize-none"
+        />
+        <Button
+          type="submit"
+          size="sm"
+          disabled={!followUpNote.trim() || followUpMutation.isPending}
+          className="self-end"
+        >
+          {followUpMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Add"}
+        </Button>
+      </form>
+      {followUps.length === 0 ? (
+        <p className="text-xs text-muted-foreground">No follow-up notes yet.</p>
+      ) : (
+        <div className="space-y-3">
+          {followUps.map((fu: any) => (
+            <div key={fu.id} className="flex gap-3 border-l-2 border-primary/20 pl-4">
+              <div className="flex-1">
+                <p className="text-sm text-foreground">{fu.note}</p>
+                <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
+                  <Clock className="h-3 w-3" />
+                  {formatDistanceToNow(new Date(fu.created_at), { addSuffix: true })}
+                  {fu.author && (
+                    <>
+                      <span>·</span>
+                      <span className="font-medium">{fu.author.name}</span>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  ) : null;
+
   return (
     <>
       <PageHeader
@@ -87,7 +164,7 @@ function OrderDetailEmployee() {
         description="Full order details and line items."
         crumbs={[{ label: "Employee" }, { label: "Orders", to: "/employee/orders" }, { label: "Details" }]}
       />
-      <OrderDetail order={order} userRole={user?.role} actions={actions} />
+      <OrderDetail order={order} userRole={user?.role} actions={<>{actions}{followUpSection}</>} />
     </>
   );
 }

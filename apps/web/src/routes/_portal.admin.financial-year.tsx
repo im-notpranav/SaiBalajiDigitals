@@ -50,7 +50,7 @@ export const Route = createFileRoute("/_portal/admin/financial-year")({
                 </div>
                 
                 <div className="rounded-lg bg-blue-500/10 p-4 text-sm text-blue-600 dark:bg-blue-500/20 dark:text-blue-400">
-                  <p><strong>Note:</strong> The financial year sequence is managed automatically. On May 1st, the year suffix rolls over to the next year (e.g. 26 to 27) and the sequence starts from 0001.</p>
+                  <p><strong>Note:</strong> The financial year runs June 1 through May 31. On June 1st, the year suffix rolls over (e.g. 25 to 26) and the sequence restarts from 0013 (first 12 numbers are reserved).</p>
                 </div>
               </div>
             )}

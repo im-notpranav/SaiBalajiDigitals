@@ -63,6 +63,22 @@ export const updateOrderSchema = z.object({
 export const invoiceSchema = z.object({
   invoice_no: z.string().min(1).max(50),
   bill_amount: z.coerce.number().min(0),
+  billing_date: z.coerce.date().refine((d) => d.getTime() <= Date.now() + 86400000, "Billing date cannot be in the future"),
+});
+
+export const editBillingSchema = z.object({
+  invoice_no: z.string().min(1).max(50).optional(),
+  bill_amount: z.coerce.number().min(0).optional(),
+  billing_date: z.coerce.date().refine((d) => d.getTime() <= Date.now() + 86400000, "Billing date cannot be in the future").optional(),
+});
+
+export const editPaymentSchema = z.object({
+  amount_received: z.coerce.number().min(0).optional(),
+  payment_date: z.coerce.date().refine((d) => d.getTime() <= Date.now() + 86400000, "Payment date cannot be in the future").optional(),
+});
+
+export const followUpSchema = z.object({
+  note: z.string().min(1).max(1000),
 });
 
 export const closeOrderSchema = z.object({
@@ -109,6 +125,16 @@ export const paymentSchema = z.object({
   payment_date: z.coerce.date().refine((d) => d.getTime() <= Date.now() + 86400000, "Payment date cannot be in the future"),
 });
 
+/** Single source of truth for assignable roles — keep in sync with the Prisma Role enum. */
+export const roleEnum = z.enum([
+  "ADMIN",
+  "OPERATION_MANAGER",
+  "CSM",
+  "ACCOUNTS",
+  "PRODUCTION",
+  "PRODUCTION_MANAGER",
+]);
+
 export const createUserSchema = z.object({
   name: z.string().min(1).max(100),
   username: z
@@ -117,7 +143,22 @@ export const createUserSchema = z.object({
     .max(50)
     .regex(/^[a-z0-9_]+$/, "Username must be lowercase letters, numbers, or underscores"),
   password: z.string().min(8),
-  role: z.enum(["ADMIN", "EMPLOYEE", "ACCOUNTS", "PRODUCTION", "OPERATOR"]),
+  role: roleEnum,
+});
+
+export const updateUserSchema = z.object({
+  name: z.string().min(1).max(100),
+  username: z
+    .string()
+    .min(3)
+    .max(50)
+    .regex(/^[a-z0-9_]+$/, "Username must be lowercase letters, numbers, or underscores"),
+  role: roleEnum,
+});
+
+/** Admin-initiated password reset for another account. */
+export const resetPasswordSchema = z.object({
+  new_password: z.string().min(8),
 });
 
 export const updateMeSchema = z.object({

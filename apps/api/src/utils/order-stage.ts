@@ -7,8 +7,26 @@
  */
 
 const DAY = 86400000;
+
+/** Count business days between two dates, excluding Sundays. */
+export function businessDaysBetween(from: Date, to: Date): number {
+  const start = new Date(from);
+  const end = new Date(to);
+  start.setHours(0, 0, 0, 0);
+  end.setHours(0, 0, 0, 0);
+  if (end <= start) return 0;
+
+  let count = 0;
+  const cursor = new Date(start);
+  while (cursor < end) {
+    cursor.setDate(cursor.getDate() + 1);
+    if (cursor.getDay() !== 0) count++; // 0 = Sunday
+  }
+  return count;
+}
+
 export const daysSince = (from: Date | string | null | undefined, to: Date = new Date()): number | null =>
-  from == null ? null : Math.max(0, Math.floor((to.getTime() - new Date(from).getTime()) / DAY));
+  from == null ? null : businessDaysBetween(new Date(from), to);
 
 /** Latest moment any line item finished production (order fully produced). */
 export function lastProducedAt(order: any): Date | null {

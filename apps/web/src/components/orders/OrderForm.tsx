@@ -1,6 +1,7 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
-import { Trash2, Plus, Save, Send, CheckCircle2 } from "lucide-react";
+import { Trash2, Plus, Save, Send, CheckCircle2, Upload, FileSpreadsheet } from "lucide-react";
+import * as xlsx from "xlsx";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -72,11 +73,91 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
   // that keep billing until confirmed.
   const billable = isAdmin ? total - lossTotal : total;
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const update = (id: string, patch: Partial<Line>) =>
     setLines((ls) => ls.map((l) => (l.id === id ? { ...l, ...patch } : l)));
   const addLine = () =>
     setLines((ls) => [...ls, { id: crypto.randomUUID(), media: "", width_inches: 0, height_inches: 0, qty: 1, rate: 0, remarks: null, remarks_other_text: null }]);
   const removeLine = (id: string) => setLines((ls) => (ls.length > 1 ? ls.filter((l) => l.id !== id) : ls));
+
+  /** Parse an uploaded Excel file and merge line items into the form. */
+  const handleExcelImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // Reset the input so the same file can be re-imported if needed
+    e.target.value = "";
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = new Uint8Array(ev.target?.result as ArrayBuffer);
+        const wb = xlsx.read(data, { type: "array" });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        const rows: any[] = xlsx.utils.sheet_to_json(sheet, { defval: "" });
+
+        if (rows.length === 0) {
+          alert("The spreadsheet has no data rows.");
+          return;
+        }
+
+        // Tolerant column header matching
+        const H: Record<string, string[]> = {
+          media: ["Media", "media", "MEDIA"],
+          width: ["Size (W) in", "Width", "Width (in)", "W", "width_inches", "width"],
+          height: ["Size (H) in", "Height", "Height (in)", "H", "height_inches", "height"],
+          qty: ["Qty", "Quantity", "qty", "QTY"],
+          rate: ["Rate", "Rate (per Sq.Ft.)", "rate", "RATE"],
+        };
+        const cell = (row: any, keys: string[]) => {
+          for (const k of keys) if (row[k] !== undefined && String(row[k]).trim() !== "") return row[k];
+          return "";
+        };
+
+        const parsed: Line[] = [];
+        const errors: string[] = [];
+        rows.forEach((row, idx) => {
+          const media = String(cell(row, H.media)).trim();
+          const w = Number(String(cell(row, H.width)).replace(/,/g, ""));
+          const h = Number(String(cell(row, H.height)).replace(/,/g, ""));
+          const q = Number(String(cell(row, H.qty)).replace(/,/g, ""));
+          const r = Number(String(cell(row, H.rate)).replace(/,/g, ""));
+
+          if (!media) { errors.push(`Row ${idx + 2}: Missing Media`); return; }
+          if (!Number.isFinite(w) || w <= 0) { errors.push(`Row ${idx + 2}: Invalid Width`); return; }
+          if (!Number.isFinite(h) || h <= 0) { errors.push(`Row ${idx + 2}: Invalid Height`); return; }
+          if (!Number.isFinite(q) || q <= 0) { errors.push(`Row ${idx + 2}: Invalid Qty`); return; }
+          if (!Number.isFinite(r) || r <= 0) { errors.push(`Row ${idx + 2}: Invalid Rate`); return; }
+
+          parsed.push({
+            id: crypto.randomUUID(),
+            media,
+            width_inches: w,
+            height_inches: h,
+            qty: q,
+            rate: r,
+            remarks: null,
+            remarks_other_text: null,
+          });
+        });
+
+        if (errors.length > 0) {
+          alert(`Import found ${errors.length} problem(s):\n\n${errors.slice(0, 10).join("\n")}${errors.length > 10 ? `\n...and ${errors.length - 10} more` : ""}`);
+        }
+
+        if (parsed.length > 0) {
+          // Replace empty default line or append to existing
+          setLines((prev) => {
+            const nonEmpty = prev.filter((l) => l.media.trim() !== "" || l.width_inches > 0 || l.height_inches > 0);
+            return nonEmpty.length > 0 ? [...nonEmpty, ...parsed] : parsed;
+          });
+        }
+      } catch {
+        alert("Could not read the file. Make sure it is a valid .xlsx or .xls file.");
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -145,16 +226,48 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
           transition={{ delay: 0.05 }}
           className="surface-panel p-6"
         >
-          <div className="mb-4 flex items-center justify-between">
+          <div className="mb-4 flex items-center justify-between gap-2">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Line Items</h2>
-            <Button type="button" size="sm" variant="outline" onClick={addLine} className="rounded-lg">
-              <Plus className="mr-1 h-3.5 w-3.5" /> Add item
-            </Button>
+            <div className="flex items-center gap-2">
+              {!defaultValues && (
+                <>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".xlsx,.xls,.csv"
+                    onChange={handleExcelImport}
+                    className="hidden"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => window.open("/api/orders/line-item-template", "_blank")}
+                    className="rounded-lg text-xs"
+                    title="Download line item template"
+                  >
+                    <FileSpreadsheet className="mr-1 h-3.5 w-3.5" /> Template
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="rounded-lg"
+                  >
+                    <Upload className="mr-1 h-3.5 w-3.5" /> Import Excel
+                  </Button>
+                </>
+              )}
+              <Button type="button" size="sm" variant="outline" onClick={addLine} className="rounded-lg">
+                <Plus className="mr-1 h-3.5 w-3.5" /> Add item
+              </Button>
+            </div>
           </div>
 
           <div className="space-y-3">
             {lines.map((line, idx) => {
-              const isReadOnlyItem = userRole === "EMPLOYEE" && !!line.originalId;
+              const isReadOnlyItem = userRole === "CSM" && !!line.originalId;
 
               return (
               <div key={line.id} className="relative rounded-xl border bg-background/60 p-3 pr-10">

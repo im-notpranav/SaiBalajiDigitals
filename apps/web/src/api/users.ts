@@ -54,6 +54,14 @@ export async function toggleUserStatus(id: number, is_active: boolean) {
   return { user: res };
 }
 
+/** Admin-initiated password reset for another account (super-admin only). */
+export async function resetUserPassword(id: number, new_password: string) {
+  return apiFetch<{ message: string }>(`/users/${id}/password`, {
+    method: "PUT",
+    data: { new_password },
+  });
+}
+
 export async function updateUser(id: number, data: { name: string; username: string; role: string }) {
   const res = await apiFetch<AuthUser>(`/users/${id}`, {
     method: "PUT",

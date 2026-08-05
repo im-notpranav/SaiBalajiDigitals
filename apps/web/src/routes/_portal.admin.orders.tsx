@@ -30,6 +30,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { REMARK_TYPES } from "@/lib/constants";
 import { toast } from "sonner";
 import type { Order, RemarkType } from "@sb-oms/shared-types";
+import { useAuth, isReadOnlyRole } from "@/lib/auth-store";
+import { EmailExportDialog } from "@/components/orders/EmailExportDialog";
 
 export const Route = createFileRoute("/_portal/admin/orders")({
   head: () => ({ meta: [{ title: "Order Oversight — SB OMS" }] }),
@@ -40,6 +42,8 @@ export const Route = createFileRoute("/_portal/admin/orders")({
 });
 
 function AdminOrders() {
+  const { user } = useAuth();
+  const readOnly = isReadOnlyRole(user?.role);
   const queryClient = useQueryClient();
   const search = Route.useSearch();
   const [section, setSection] = useState<"active" | "completed">("active");
@@ -95,14 +99,17 @@ function AdminOrders() {
             <Button variant="secondary" className="rounded-xl shadow-soft" onClick={() => exportOrders({})}>
               <Download className="mr-2 h-4 w-4" /> Export All
             </Button>
+            <EmailExportDialog section={section} q={debouncedQ || undefined} />
           </div>
         }
       />
-      <div className="mb-4 rounded-xl border border-warning/40 bg-warning/10 p-3 text-sm text-warning-foreground">
-        <ShieldAlert className="mr-2 inline h-4 w-4" />
-        <span className="font-semibold">Admin Override:</span> edits and force-closures here bypass role-restricted flows and are recorded in
-        the audit log with a distinct action type.
-      </div>
+      {!readOnly && (
+        <div className="mb-4 rounded-xl border border-warning/40 bg-warning/10 p-3 text-sm text-warning-foreground">
+          <ShieldAlert className="mr-2 inline h-4 w-4" />
+          <span className="font-semibold">Admin Override:</span> edits and force-closures here bypass role-restricted flows and are recorded in
+          the audit log with a distinct action type.
+        </div>
+      )}
       
       <div className="surface-panel mb-4 flex flex-wrap items-center gap-3 p-3">
         <Tabs value={section} onValueChange={(v) => setSection(v as "active" | "completed")} className="w-[300px]">
@@ -148,10 +155,10 @@ function AdminOrders() {
           showCreator 
           action={(o) => (
             <div className="flex justify-end gap-2">
-              <Link to="/admin/orders/$id" params={{ id: String(o.id) }} className={buttonVariants({ size: "sm", variant: "ghost" })} onClick={() => console.log("VIEW CLICKED", o.id)}>
+              <Link to="/admin/orders/$id" params={{ id: String(o.id) }} className={buttonVariants({ size: "sm", variant: "ghost" })}>
                 View
               </Link>
-              {o.status !== "Completed" && (
+              {!readOnly && o.status !== "Completed" && (
                 <>
                   <Link to="/admin/edit-order/$id" params={{ id: String(o.id) }} className={buttonVariants({ size: "sm", variant: "outline" })}>
                     <Edit className="mr-1 h-3.5 w-3.5" /> Edit

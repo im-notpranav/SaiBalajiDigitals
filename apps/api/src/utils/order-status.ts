@@ -21,3 +21,11 @@ export const OPEN_STATUSES: OrderStatus[] = ["Active", "Pending", "Installed", "
 export const REVENUE_STATUSES: OrderStatus[] = ["PaymentReceived", "Completed"];
 
 export const isClosed = (status: string) => (CLOSED_STATUSES as string[]).includes(status);
+
+/** Statuses where billing has started — CSMs can no longer add line items. */
+export const BILLING_STARTED_STATUSES: OrderStatus[] = ["BillingCompleted", "Pending", "PaymentReceived", "Completed"];
+export const isBillingStarted = (status: string) => (BILLING_STARTED_STATUSES as string[]).includes(status);
+
+/** CSM-editable statuses: line items may be added until billing touches the order. */
+export const CSM_EDITABLE_STATUSES: OrderStatus[] = ["Active", "Installed"];
+export const isCsmEditable = (status: string) => (CSM_EDITABLE_STATUSES as string[]).includes(status);

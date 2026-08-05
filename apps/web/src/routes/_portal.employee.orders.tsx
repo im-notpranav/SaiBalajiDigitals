@@ -107,10 +107,10 @@ function MyOrders() {
           orders={orders} 
           action={(o) => (
             <div className="flex justify-end gap-2">
-              <Link to="/employee/orders/$id" params={{ id: String(o.id) }} className={buttonVariants({ size: "sm", variant: "ghost" })} onClick={() => console.log("VIEW CLICKED", o.id)}>
+              <Link to="/employee/orders/$id" params={{ id: String(o.id) }} className={buttonVariants({ size: "sm", variant: "ghost" })}>
                 View
               </Link>
-              {o.status === "Active" && (
+              {(o.status === "Active" || o.status === "Installed") && (
                 <Link to="/employee/edit-order/$id" params={{ id: String(o.id) }} className={buttonVariants({ size: "sm", variant: "outline" })}>
                   <Edit className="mr-1 h-3.5 w-3.5" /> Edit
                 </Link>

@@ -33,7 +33,7 @@ interface NavItem {
 }
 
 const NAV: Record<UserRole, NavItem[]> = {
-  EMPLOYEE: [
+  CSM: [
     { to: "/employee/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { to: "/employee/new-order", label: "New Order", icon: PlusCircle },
     { to: "/employee/orders", label: "My Orders", icon: ClipboardList },
@@ -55,9 +55,22 @@ const NAV: Record<UserRole, NavItem[]> = {
     { to: "/accountant/notifications", label: "Notifications", icon: Bell },
     { to: "/profile", label: "Profile", icon: UserCircle },
   ],
-  OPERATOR: [
-    { to: "/operator/assign", label: "Assign Work", icon: Workflow },
-    { to: "/operator/notifications", label: "Notifications", icon: Bell },
+  PRODUCTION_MANAGER: [
+    { to: "/prod-manager/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { to: "/prod-manager/assign", label: "Assign Work", icon: Workflow },
+    { to: "/prod-manager/notifications", label: "Notifications", icon: Bell },
+    { to: "/profile", label: "Profile", icon: UserCircle },
+  ],
+  // Operation Manager shares the admin portal read-only (no Users / Settings /
+  // Bulk Import — those are mutation surfaces).
+  OPERATION_MANAGER: [
+    { to: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { to: "/admin/orders", label: "Orders", icon: Boxes },
+    { to: "/admin/loss-report", label: "Loss Report", icon: FileBarChart2 },
+    { to: "/admin/overdue", label: "Overdue Orders", icon: AlarmClock },
+    { to: "/admin/audit", label: "Audit Logs", icon: ShieldCheck },
+    { to: "/admin/reports", label: "Reports", icon: FileBarChart2 },
+    { to: "/admin/financial-year", label: "Financial Year", icon: CalendarClock },
     { to: "/profile", label: "Profile", icon: UserCircle },
   ],
   ADMIN: [
@@ -76,11 +89,12 @@ const NAV: Record<UserRole, NavItem[]> = {
 };
 
 const roleLabels: Record<UserRole, string> = {
-  EMPLOYEE: "Employee Portal",
-  PRODUCTION: "Production Portal",
+  CSM: "Client Service Manager",
+  PRODUCTION: "Production Team",
   ACCOUNTS: "Accountant Portal",
   ADMIN: "Administrator Portal",
-  OPERATOR: "Operator Portal",
+  OPERATION_MANAGER: "Operation Manager (view only)",
+  PRODUCTION_MANAGER: "Production Manager",
 };
 
 export function Sidebar({ role }: { role: UserRole }) {

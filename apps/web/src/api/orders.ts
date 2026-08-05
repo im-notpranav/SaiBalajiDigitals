@@ -74,12 +74,39 @@ export async function deleteOrder(id: number) {
   return apiFetch<{ ok: boolean }>(`/orders/${id}`, { method: "DELETE" });
 }
 
-export async function submitInvoice(id: number, invoice_no: string, bill_amount: number) {
+export async function submitInvoice(id: number, invoice_no: string, bill_amount: number, billing_date: string) {
   const res = await apiFetch<Order>(`/orders/${id}/invoice`, {
     method: "PUT",
-    data: { invoice_no, bill_amount },
+    data: { invoice_no, bill_amount, billing_date },
   });
   return { order: res };
+}
+
+export async function editBilling(id: number, data: { invoice_no?: string; bill_amount?: number; billing_date?: string }) {
+  const res = await apiFetch<Order>(`/orders/${id}/billing`, {
+    method: "PATCH",
+    data,
+  });
+  return { order: res };
+}
+
+export async function editPaymentDetails(id: number, data: { amount_received?: number; payment_date?: string }) {
+  const res = await apiFetch<Order>(`/orders/${id}/payment-edit`, {
+    method: "PATCH",
+    data,
+  });
+  return { order: res };
+}
+
+export async function getFollowUps(id: number) {
+  return apiFetch<any[]>(`/orders/${id}/follow-ups`);
+}
+
+export async function createFollowUp(id: number, note: string) {
+  return apiFetch<any>(`/orders/${id}/follow-ups`, {
+    method: "POST",
+    data: { note },
+  });
 }
 
 export async function closeOrder(id: number, payload: { remarks?: string | null, remarks_other_text?: string | null }) {
@@ -147,4 +174,29 @@ export async function exportOrders(params: OrdersQuery = {}) {
   }
   const q = qs.toString();
   return apiDownload(`/orders/export${q ? `?${q}` : ""}`);
+}
+
+export interface EmailExportPayload {
+  to: string;
+  subject?: string;
+  message?: string;
+  section?: string;
+  status?: string;
+  q?: string;
+}
+
+export async function emailExport(payload: EmailExportPayload) {
+  return apiFetch<{ message: string; orders_count: number; items_count: number }>(
+    "/orders/export/email",
+    { method: "POST", data: payload }
+  );
+}
+
+export async function getRecentRecipients(q?: string) {
+  const qs = q ? `?q=${encodeURIComponent(q)}` : "";
+  return apiFetch<string[]>(`/orders/export/recipients${qs}`);
+}
+
+export async function downloadLineItemTemplate() {
+  return apiDownload("/orders/line-item-template");
 }

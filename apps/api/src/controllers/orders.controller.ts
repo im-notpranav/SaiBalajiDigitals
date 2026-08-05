@@ -1,14 +1,26 @@
 import { serializeDecimals } from "../utils/serialize";
 import { computeTotals } from "../utils/order-totals";
-import { isClosed, OPEN_STATUSES, CLOSED_STATUSES } from "../utils/order-status";
-import { currentStage, lastProducedAt } from "../utils/order-stage";
+import { isClosed, isCsmEditable, OPEN_STATUSES, CLOSED_STATUSES } from "../utils/order-status";
+import { currentStage, lastProducedAt, businessDaysBetween } from "../utils/order-stage";
 import { Request, Response } from "express";
 import { prisma } from "../utils/prisma";
 import { generateOrderId } from "../utils/order-sequence";
 
 import { notifyRole, notifyUser } from "../services/notifications.service";
 
-import { sendOrderEditEmail, sendPendingInvoiceEmail, sendItemFlagEmail } from "../services/email.service";
+import {
+  sendOrderCreatedEmail,
+  sendOrderEditEmail,
+  sendPendingInvoiceEmail,
+  sendItemFlagEmail,
+  sendBillingEditEmail,
+  sendStatusTransitionEmail,
+  sendExcelEmail,
+  adminEmail,
+  type OrderSummary,
+  type OrderItemSummary,
+  type FieldChange,
+} from "../services/email.service";
 import * as xlsx from "xlsx";
 
 
@@ -18,7 +30,7 @@ export const getOrders = async (req: Request, res: Response) => {
     const user = req.user!;
 
     const where: any = {};
-    if (user.role === "EMPLOYEE") {
+    if (user.role === "CSM") {
       where.created_by = user.id;
     }
 
@@ -46,7 +58,7 @@ export const getOrders = async (req: Request, res: Response) => {
       where.items = { some: { assignments: { some: { user_id: user.id } } } };
     }
 
-    if (user.role === "OPERATOR") {
+    if (user.role === "PRODUCTION_MANAGER") {
       where.status = { in: OPEN_STATUSES };
     }
 
@@ -118,7 +130,7 @@ export const getOrder = async (req: Request, res: Response) => {
 
     if (!order) return res.status(404).json({ message: "Order not found" });
 
-    if (req.user!.role === "EMPLOYEE" && order.created_by !== req.user!.id) {
+    if (req.user!.role === "CSM" && order.created_by !== req.user!.id) {
       return res.status(403).json({ message: "Forbidden" });
     }
 
@@ -178,7 +190,7 @@ export const createOrder = async (req: Request, res: Response) => {
     const user = req.user!;
     const isAdmin = user.role === "ADMIN";
 
-    if (user.role === "EMPLOYEE" && remarks) {
+    if (user.role === "CSM" && remarks) {
       return res.status(403).json({ message: "Only an administrator can set order remarks." });
     }
 
@@ -277,8 +289,35 @@ export const createOrder = async (req: Request, res: Response) => {
     }
 
     const { total_amount, loss_amount } = computeTotals(order.items);
+
+    // Email the employee who created the order (if they have an email on file)
+    const creator = await prisma.user.findUnique({ where: { id: user.id }, select: { email: true } });
+    if (creator?.email) {
+      const summary: OrderSummary = {
+        order_no: order.order_no,
+        client_name: order.client_name,
+        store_name: order.store_name,
+        location: order.location,
+        po_number: order.po_number,
+        date: order.date.toLocaleDateString("en-IN"),
+        total_amount: total_amount.toFixed(2),
+        status: order.status,
+      };
+      const emailItems: OrderItemSummary[] = order.items.map((i: any) => ({
+        s_no: i.s_no,
+        media: i.media,
+        width: Number(i.width_inches).toString(),
+        height: Number(i.height_inches).toString(),
+        qty: Number(i.qty).toString(),
+        sft: Number(i.total_sft).toFixed(2),
+        rate: Number(i.rate).toFixed(2),
+        amount: Number(i.amount).toFixed(2),
+      }));
+      sendOrderCreatedEmail(creator.email, user.name, summary, emailItems);
+    }
+
     return res.status(201).json(serializeDecimals({ ...order, total_amount, loss_amount }));
-  
+
   } catch (err: any) {
     console.error(err);
     if (err.message.includes("Item dimensions")) {
@@ -324,17 +363,15 @@ export const updateOrder = async (req: Request, res: Response) => {
 
     if (!existingOrder) return res.status(404).json({ message: "Order not found" });
 
-    if (user.role === "EMPLOYEE" && existingOrder.created_by !== user.id) {
-      console.log(`403 - Employee did not create order. Employee ID: ${user.id}, Order Created By: ${existingOrder.created_by}`);
+    if (user.role === "CSM" && existingOrder.created_by !== user.id) {
       return res.status(403).json({ message: "Forbidden" });
     }
 
-    if (user.role === "EMPLOYEE" && isClosed(existingOrder.status)) {
-      console.log(`403 - Closed order edit attempt`);
-      return res.status(403).json({ message: "Completed orders cannot be edited" });
+    if (user.role === "CSM" && !isCsmEditable(existingOrder.status)) {
+      return res.status(403).json({ message: "Line items can only be added before billing starts." });
     }
 
-    if (user.role === "EMPLOYEE" && remarks !== undefined && remarks !== (existingOrder.remarks ?? null)) {
+    if (user.role === "CSM" && remarks !== undefined && remarks !== (existingOrder.remarks ?? null)) {
       return res.status(403).json({ message: "Only an administrator can set order remarks." });
     }
 
@@ -342,10 +379,9 @@ export const updateOrder = async (req: Request, res: Response) => {
       const oldItemsById = new Map(existingOrder.items.map((i: any) => [i.id, i]));
       const incomingIds = new Set(items.filter((i: any) => i.id).map((i: any) => i.id));
 
-      if (user.role === "EMPLOYEE") {
+      if (user.role === "CSM") {
         for (const oldItem of existingOrder.items) {
           if (!incomingIds.has(oldItem.id)) {
-            console.log(`403 - Line item removed: ${oldItem.id}`);
             return res.status(403).json({ message: "Line items cannot be removed once saved." });
           }
         }
@@ -362,7 +398,6 @@ export const updateOrder = async (req: Request, res: Response) => {
             (newItem.remarks ?? null) !== (oldItem.remarks ?? null) ||
             (newItem.remarks_other_text ?? null) !== (oldItem.remarks_other_text ?? null);
           if (changed) {
-            console.log(`403 - Existing line item edited: ${oldItem.id}. Values: ${JSON.stringify({ newItem, oldItem })}`);
             return res.status(403).json({ message: "Existing line items cannot be edited — flag it and add a corrected line instead." });
           }
         }
@@ -498,7 +533,7 @@ export const updateOrder = async (req: Request, res: Response) => {
         }
       }
 
-      if (changes.length > 0 && user.role === "EMPLOYEE") {
+      if (changes.length > 0 && user.role === "CSM") {
         await tx.orderChangeLog.createMany({
           data: changes.map((c) => ({
             order_id: id,
@@ -513,7 +548,7 @@ export const updateOrder = async (req: Request, res: Response) => {
       return tx.order.findUnique({ where: { id }, include: { items: true } });
     });
 
-    if (changes.length > 0 && user.role === "EMPLOYEE") {
+    if (changes.length > 0 && user.role === "CSM") {
       await sendOrderEditEmail(existingOrder.order_no, user.name, changes);
     }
 
@@ -555,7 +590,7 @@ export const reconcileInvoice = async (req: Request, res: Response) => {
     if (!parseResult.success) {
       return res.status(400).json({ message: "Invalid input", errors: parseResult.error.errors });
     }
-    const { invoice_no, bill_amount } = parseResult.data;
+    const { invoice_no, bill_amount, billing_date } = parseResult.data;
     const user = req.user!;
 
     const order = await prisma.order.findUnique({
@@ -609,6 +644,7 @@ export const reconcileInvoice = async (req: Request, res: Response) => {
         data: {
           invoice_no,
           bill_amount,
+          billing_date,
           status: newStatus,
           billing_completed_at: new Date(),
         },
@@ -627,6 +663,18 @@ export const reconcileInvoice = async (req: Request, res: Response) => {
         isMatch ? "success" : "warning",
         order.id
       );
+
+      const creatorUser = await prisma.user.findUnique({ where: { id: order.created_by }, select: { email: true } });
+      if (creatorUser?.email) {
+        sendStatusTransitionEmail(
+          creatorUser.email,
+          order.order_no,
+          order.client_name,
+          "Billing Completed",
+          `Invoice ${invoice_no} submitted. Bill amount: ₹${bill_amount}. ${isMatch ? "Matches order total." : "Mismatch — order is pending review."}`,
+          user.name
+        );
+      }
     }
 
     return res.status(200).json(serializeDecimals(updated));
@@ -653,7 +701,7 @@ export const markOrderInstalled = async (req: Request, res: Response) => {
     if (!order) return res.status(404).json({ message: "Order not found" });
 
     // Only the creating employee (or an admin) may confirm installation.
-    if (user.role === "EMPLOYEE" && order.created_by !== user.id) {
+    if (user.role === "CSM" && order.created_by !== user.id) {
       return res.status(403).json({ message: "Only the order's creator can confirm installation." });
     }
 
@@ -687,6 +735,15 @@ export const markOrderInstalled = async (req: Request, res: Response) => {
       `${user.name} confirmed installation. Produced and installed; ready for invoicing.`,
       "success",
       order.id
+    );
+
+    sendStatusTransitionEmail(
+      adminEmail,
+      order.order_no,
+      order.client_name,
+      "Installation Confirmed",
+      `${user.name} confirmed installation. Order is now ready for billing.`,
+      user.name
     );
 
     return res.status(200).json(serializeDecimals(updated));
@@ -751,6 +808,20 @@ export const recordPayment = async (req: Request, res: Response) => {
         isFull ? "success" : "warning",
         order.id
       );
+
+      const creatorUser = await prisma.user.findUnique({ where: { id: order.created_by }, select: { email: true } });
+      if (creatorUser?.email) {
+        sendStatusTransitionEmail(
+          creatorUser.email,
+          order.order_no,
+          order.client_name,
+          "Payment Received",
+          isFull
+            ? `Full payment of ₹${amount_received} received. Order workflow complete.`
+            : `Partial payment of ₹${amount_received} received against ₹${billed}.`,
+          user.name
+        );
+      }
     }
 
     return res.status(200).json(serializeDecimals(updated));
@@ -800,7 +871,7 @@ export const exportOrders = async (req: Request, res: Response) => {
     const user = req.user!;
     const where: any = {};
     
-    if (user.role === "EMPLOYEE") {
+    if (user.role === "CSM") {
       where.created_by = user.id;
     }
 
@@ -825,9 +896,8 @@ export const exportOrders = async (req: Request, res: Response) => {
     });
 
     const d = (x: Date | null | undefined) => (x ? x.toLocaleDateString("en-IN") : "");
-    const DAY = 86400000;
     const dayspan = (a: Date | null | undefined, b: Date | null | undefined) =>
-      a && b ? Math.max(0, Math.round((b.getTime() - a.getTime()) / DAY)) : "";
+      a && b ? businessDaysBetween(a, b) : "";
 
     const rows: any[] = [];
     for (const order of orders) {
@@ -863,6 +933,7 @@ export const exportOrders = async (req: Request, res: Response) => {
           row["Amount Received"] = order.amount_received !== null ? Number(order.amount_received) : "";
           // Outstanding = billable total less whatever has actually been received.
           row["Pending Amount"] = isClosed(order.status) ? "" : total - Number(order.amount_received ?? 0);
+          row["Billing Date"] = order.billing_date ? order.billing_date.toLocaleDateString("en-IN") : "";
           row["Billing Completed On"] = order.billing_completed_at ? order.billing_completed_at.toLocaleDateString("en-IN") : "";
           row["Payment Received On"] = order.payment_received_at ? order.payment_received_at.toLocaleDateString("en-IN") : "";
         }
@@ -930,7 +1001,182 @@ export const forceCloseOrder = async (req: Request, res: Response) => {
   }
 };
 
-import { flagItemSchema, itemLossRemarkSchema, assignItemSchema, completeItemSchema } from "../utils/validators";
+import { flagItemSchema, itemLossRemarkSchema, assignItemSchema, completeItemSchema, editBillingSchema, editPaymentSchema, followUpSchema } from "../utils/validators";
+
+export const editBilling = async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id as string, 10);
+    const parseResult = editBillingSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return res.status(400).json({ message: "Invalid input", errors: parseResult.error.errors });
+    }
+    const { invoice_no, bill_amount, billing_date } = parseResult.data;
+    const user = req.user!;
+
+    const order = await prisma.order.findUnique({ where: { id } });
+    if (!order) return res.status(404).json({ message: "Order not found" });
+
+    if (!order.invoice_no) {
+      return res.status(400).json({ message: "No billing record to edit — submit an invoice first." });
+    }
+
+    const changes: FieldChange[] = [];
+    if (invoice_no !== undefined && invoice_no !== order.invoice_no) {
+      changes.push({ field: "Invoice No", oldValue: order.invoice_no || "—", newValue: invoice_no });
+    }
+    if (bill_amount !== undefined && Number(bill_amount).toFixed(2) !== Number(order.bill_amount ?? 0).toFixed(2)) {
+      changes.push({ field: "Bill Amount", oldValue: `₹${Number(order.bill_amount ?? 0).toFixed(2)}`, newValue: `₹${Number(bill_amount).toFixed(2)}` });
+    }
+    if (billing_date !== undefined) {
+      const oldDate = order.billing_date ? order.billing_date.toLocaleDateString("en-IN") : "—";
+      const newDate = billing_date.toLocaleDateString("en-IN");
+      if (oldDate !== newDate) {
+        changes.push({ field: "Billing Date", oldValue: oldDate, newValue: newDate });
+      }
+    }
+
+    if (changes.length === 0) {
+      return res.status(400).json({ message: "No changes detected." });
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.current_user_id', ${user.id.toString()}, true)`;
+
+      await tx.orderChangeLog.createMany({
+        data: changes.map((c) => ({
+          order_id: id,
+          changed_by: user.id,
+          field_changed: c.field,
+          old_value: c.oldValue,
+          new_value: c.newValue,
+        })),
+      });
+
+      return tx.order.update({
+        where: { id },
+        data: {
+          ...(invoice_no !== undefined ? { invoice_no } : {}),
+          ...(bill_amount !== undefined ? { bill_amount } : {}),
+          ...(billing_date !== undefined ? { billing_date } : {}),
+        },
+      });
+    });
+
+    sendBillingEditEmail(order.order_no, user.name, user.role, changes);
+
+    return res.status(200).json(serializeDecimals(updated));
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+export const editPayment = async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id as string, 10);
+    const parseResult = editPaymentSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return res.status(400).json({ message: "Invalid input", errors: parseResult.error.errors });
+    }
+    const { amount_received, payment_date } = parseResult.data;
+    const user = req.user!;
+
+    const order = await prisma.order.findUnique({ where: { id } });
+    if (!order) return res.status(404).json({ message: "Order not found" });
+
+    if (!order.payment_received_at) {
+      return res.status(400).json({ message: "No payment record to edit — record a payment first." });
+    }
+
+    const changes: FieldChange[] = [];
+    if (amount_received !== undefined && Number(amount_received).toFixed(2) !== Number(order.amount_received ?? 0).toFixed(2)) {
+      changes.push({ field: "Amount Received", oldValue: `₹${Number(order.amount_received ?? 0).toFixed(2)}`, newValue: `₹${Number(amount_received).toFixed(2)}` });
+    }
+    if (payment_date !== undefined) {
+      const oldDate = order.payment_received_at ? order.payment_received_at.toLocaleDateString("en-IN") : "—";
+      const newDate = payment_date.toLocaleDateString("en-IN");
+      if (oldDate !== newDate) {
+        changes.push({ field: "Payment Date", oldValue: oldDate, newValue: newDate });
+      }
+    }
+
+    if (changes.length === 0) {
+      return res.status(400).json({ message: "No changes detected." });
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.current_user_id', ${user.id.toString()}, true)`;
+
+      await tx.orderChangeLog.createMany({
+        data: changes.map((c) => ({
+          order_id: id,
+          changed_by: user.id,
+          field_changed: c.field,
+          old_value: c.oldValue,
+          new_value: c.newValue,
+        })),
+      });
+
+      return tx.order.update({
+        where: { id },
+        data: {
+          ...(amount_received !== undefined ? { amount_received } : {}),
+          ...(payment_date !== undefined ? { payment_received_at: payment_date } : {}),
+        },
+      });
+    });
+
+    sendBillingEditEmail(order.order_no, user.name, user.role, changes);
+
+    return res.status(200).json(serializeDecimals(updated));
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+export const getFollowUps = async (req: Request, res: Response) => {
+  try {
+    const orderId = parseInt(req.params.id as string, 10);
+    const followUps = await prisma.paymentFollowUp.findMany({
+      where: { order_id: orderId },
+      include: { author: { select: { id: true, name: true, role: true } } },
+      orderBy: { created_at: "desc" },
+    });
+    return res.status(200).json(followUps);
+  } catch (err) {
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+export const createFollowUp = async (req: Request, res: Response) => {
+  try {
+    const orderId = parseInt(req.params.id as string, 10);
+    const parseResult = followUpSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return res.status(400).json({ message: "Invalid input", errors: parseResult.error.errors });
+    }
+    const { note } = parseResult.data;
+    const user = req.user!;
+
+    const order = await prisma.order.findUnique({ where: { id: orderId } });
+    if (!order) return res.status(404).json({ message: "Order not found" });
+
+    if (!order.billing_completed_at) {
+      return res.status(400).json({ message: "Follow-ups can only be added after billing is completed." });
+    }
+
+    const followUp = await prisma.paymentFollowUp.create({
+      data: { order_id: orderId, note, created_by: user.id },
+      include: { author: { select: { id: true, name: true, role: true } } },
+    });
+
+    return res.status(201).json(followUp);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
 
 const itemLabelOf = (i: any) =>
   `#${i.s_no} — ${i.media} (${Number(i.width_inches)}x${Number(i.height_inches)} in, qty ${Number(i.qty)})`;
@@ -1099,6 +1345,18 @@ export const completeOrderItem = async (req: Request, res: Response) => {
           "success",
           order.id
         );
+
+        const creatorUser = await prisma.user.findUnique({ where: { id: order.created_by }, select: { email: true } });
+        if (creatorUser?.email) {
+          sendStatusTransitionEmail(
+            creatorUser.email,
+            order.order_no,
+            order.client_name,
+            "Production Complete",
+            "All assigned items have been produced. Please confirm installation to proceed with billing.",
+            user.name
+          );
+        }
       }
     }
 
@@ -1124,7 +1382,7 @@ export const flagOrderItem = async (req: Request, res: Response) => {
 
     const order = await prisma.order.findUnique({ where: { id: orderId } });
     if (!order) return res.status(404).json({ message: "Order not found" });
-    if (user.role === "EMPLOYEE" && order.created_by !== user.id) {
+    if (user.role === "CSM" && order.created_by !== user.id) {
       return res.status(403).json({ message: "Forbidden" });
     }
 
@@ -1194,6 +1452,160 @@ export const setItemLossRemark = async (req: Request, res: Response) => {
       });
     });
     return res.status(200).json(serializeDecimals(item));
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+/* ─── Email Export ──────────────────────────────────────────────── */
+
+/**
+ * Generate the same XLSX as exportOrders but email it as an attachment instead of
+ * downloading. Saves the recipient address for autocomplete.
+ */
+export const emailExport = async (req: Request, res: Response) => {
+  try {
+    const { to, subject, message, section, status, q } = req.body as {
+      to: string; subject?: string; message?: string;
+      section?: string; status?: string; q?: string;
+    };
+    const user = req.user!;
+
+    if (!to || !to.includes("@")) {
+      return res.status(400).json({ message: "A valid recipient email is required." });
+    }
+
+    // Build the XLSX exactly like exportOrders
+    const where: any = {};
+    if (user.role === "CSM") where.created_by = user.id;
+    if (section === "active") where.status = { in: OPEN_STATUSES };
+    if (section === "completed") where.status = { in: CLOSED_STATUSES };
+    if (status) where.status = status;
+    if (q) {
+      where.OR = [
+        { order_no: { contains: String(q), mode: "insensitive" } },
+        { client_name: { contains: String(q), mode: "insensitive" } },
+        { store_name: { contains: String(q), mode: "insensitive" } },
+      ];
+    }
+
+    const orders = await prisma.order.findMany({
+      where,
+      include: { items: { include: { assignments: true } }, creator: true },
+      orderBy: { order_no: "asc" },
+    });
+
+    const d = (x: Date | null | undefined) => (x ? x.toLocaleDateString("en-IN") : "");
+    const dayspan = (a: Date | null | undefined, b: Date | null | undefined) =>
+      a && b ? businessDaysBetween(a, b) : "";
+
+    const rows: any[] = [];
+    for (const order of orders) {
+      const total = computeTotals(order.items).total_amount;
+      const producedAt = lastProducedAt(order);
+      const stage = currentStage(order);
+      for (const item of order.items) {
+        const lossStatus = item.remarks == null ? "" : (item.remarks_confirmed ? "Loss (confirmed)" : "Loss (proposed)");
+        const row: any = {
+          "S.No": item.s_no,
+          "Date": order.date.toLocaleDateString("en-IN"),
+          "Client Name": order.client_name,
+          "Store Name": order.store_name,
+          "Location": order.location,
+          "Order No": order.order_no,
+          "Media": item.media,
+          "Size (W) in": Number(item.width_inches),
+          "Size (H) in": Number(item.height_inches),
+          "Qty": Number(item.qty),
+          "Total SFT": Number(item.total_sft),
+          "Rate": Number(item.rate),
+          "Amount": Number(item.amount),
+          "PO Number": order.po_number || "",
+          "Remarks": item.remarks === "Other" ? (item.remarks_other_text || "") : (item.remarks || ""),
+          "Loss": lossStatus,
+          "Closure Remarks": order.remarks === "Other" ? (order.remarks_other_text || "") : (order.remarks || ""),
+          "Status": order.status,
+        };
+        if (user.role === "ADMIN" || user.role === "ACCOUNTS") {
+          row["Invoice No"] = order.invoice_no || "";
+          row["Bill Amount"] = order.bill_amount !== null ? Number(order.bill_amount) : "";
+          row["Amount Received"] = order.amount_received !== null ? Number(order.amount_received) : "";
+          row["Pending Amount"] = isClosed(order.status) ? "" : total - Number(order.amount_received ?? 0);
+          row["Billing Date"] = order.billing_date ? order.billing_date.toLocaleDateString("en-IN") : "";
+        }
+        if (user.role === "ADMIN") {
+          row["Created By"] = order.creator_name;
+          row["Current Stage"] = stage ? stage.stage : "Closed";
+          row["Days in Stage"] = stage ? stage.days_in_stage : "";
+        }
+        rows.push(row);
+      }
+    }
+
+    const ws = xlsx.utils.json_to_sheet(rows);
+    const wb = xlsx.utils.book_new();
+    xlsx.utils.book_append_sheet(wb, ws, "Orders");
+    const buffer = xlsx.write(wb, { type: "buffer", bookType: "xlsx" });
+
+    const filename = `orders_${new Date().toISOString().split("T")[0]}.xlsx`;
+    const emailSubject = subject || `Orders Export — ${new Date().toLocaleDateString("en-IN")}`;
+    const emailMessage = message || `Please find the attached orders export with ${orders.length} order(s) and ${rows.length} line item(s).`;
+
+    await sendExcelEmail(to, emailSubject, emailMessage, buffer, filename, user.name);
+
+    // Save recipient for autocomplete (upsert to update last-used timestamp)
+    await prisma.emailRecipient.upsert({
+      where: { email_used_by: { email: to.toLowerCase(), used_by: user.id } },
+      create: { email: to.toLowerCase(), used_by: user.id },
+      update: { used_at: new Date() },
+    });
+
+    return res.status(200).json({
+      message: `Export emailed to ${to} successfully.`,
+      orders_count: orders.length,
+      items_count: rows.length,
+    });
+  } catch (err) {
+    console.error("Email export error:", err);
+    return res.status(500).json({ message: "Failed to send email. Please try again." });
+  }
+};
+
+/** Autocomplete recently-used email recipients for the current user. */
+export const getRecentRecipients = async (req: Request, res: Response) => {
+  try {
+    const user = req.user!;
+    const q = String(req.query.q || "").toLowerCase();
+    const recipients = await prisma.emailRecipient.findMany({
+      where: {
+        used_by: user.id,
+        ...(q ? { email: { contains: q, mode: "insensitive" as const } } : {}),
+      },
+      orderBy: { used_at: "desc" },
+      take: 10,
+    });
+    return res.status(200).json(recipients.map((r) => r.email));
+  } catch (err) {
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+/** Download a line-item-only Excel template for CSM import into the order form. */
+export const lineItemTemplate = async (_req: Request, res: Response) => {
+  try {
+    const header = ["Media", "Size (W) in", "Size (H) in", "Qty", "Rate"];
+    const example = [
+      { "Media": "Vinyl", "Size (W) in": 48, "Size (H) in": 36, "Qty": 2, "Rate": 40 },
+      { "Media": "Flex", "Size (W) in": 96, "Size (H) in": 48, "Qty": 1, "Rate": 25 },
+    ];
+    const ws = xlsx.utils.json_to_sheet(example, { header });
+    const wb = xlsx.utils.book_new();
+    xlsx.utils.book_append_sheet(wb, ws, "Line Items");
+    const buffer = xlsx.write(wb, { type: "buffer", bookType: "xlsx" });
+    res.setHeader("Content-Disposition", "attachment; filename=line_item_template.xlsx");
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    return res.send(buffer);
   } catch (err) {
     console.error(err);
     return res.status(500).json({ message: "Internal server error" });

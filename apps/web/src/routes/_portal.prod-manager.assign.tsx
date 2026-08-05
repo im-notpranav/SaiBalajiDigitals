@@ -12,16 +12,16 @@ import { toast } from "sonner";
 import { StatusBadge } from "@/components/orders/StatusBadge";
 import type { Order, OrderItem } from "@sb-oms/shared-types";
 
-export const Route = createFileRoute("/_portal/operator/assign")({
+export const Route = createFileRoute("/_portal/prod-manager/assign")({
   head: () => ({ meta: [{ title: "Assign Work — SB OMS" }] }),
-  component: OperatorAssignPage,
+  component: ProdManagerAssignPage,
 });
 
-function OperatorAssignPage() {
+function ProdManagerAssignPage() {
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery({
-    queryKey: ["orders", "operator"],
+    queryKey: ["orders", "prod-manager"],
     queryFn: () => fetchOrders({ limit: 100 }),
   });
 
@@ -43,7 +43,6 @@ function OperatorAssignPage() {
       toast.error("Failed to assign", { description: err?.response?.data?.message || err.message }),
   });
 
-  /** Toggle one team on/off an item, sending the resulting full assignee list. */
   const toggleAssignee = (order: Order, item: OrderItem, userId: number) => {
     const current = (item.assignments ?? []).map((a) => a.user_id);
     const next = current.includes(userId) ? current.filter((id) => id !== userId) : [...current, userId];
@@ -57,7 +56,7 @@ function OperatorAssignPage() {
       <PageHeader
         title="Assign Work"
         description="Assign each line item to a production employee. An order can only be billed once every assigned item is complete."
-        crumbs={[{ label: "Operator" }, { label: "Assign Work" }]}
+        crumbs={[{ label: "Production Manager" }, { label: "Assign Work" }]}
       />
 
       {isLoading ? (
