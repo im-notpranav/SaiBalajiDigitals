@@ -22,6 +22,7 @@ import {
   type FieldChange,
 } from "../services/email.service";
 import * as xlsx from "xlsx";
+import { sanitizeZodErrors } from "../utils/sanitize-errors";
 
 
 export const getOrders = async (req: Request, res: Response) => {
@@ -184,7 +185,7 @@ export const createOrder = async (req: Request, res: Response) => {
   try {
     const parseResult = createOrderSchema.safeParse(req.body);
     if (!parseResult.success) {
-      return res.status(400).json({ message: "Invalid input", errors: parseResult.error.errors });
+      return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parseResult.error) });
     }
     const { client_name, store_name, location, po_number, items, remarks, remarks_other_text } = parseResult.data;
     const user = req.user!;
@@ -332,7 +333,7 @@ export const updateOrder = async (req: Request, res: Response) => {
     const id = parseInt(req.params.id as string, 10);
     const parseResult = updateOrderSchema.safeParse(req.body);
     if (!parseResult.success) {
-      return res.status(400).json({ message: "Invalid input", errors: parseResult.error.errors });
+      return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parseResult.error) });
     }
     const { client_name, store_name, location, po_number, items, remarks, remarks_other_text } = parseResult.data;
     const user = req.user!;
@@ -588,7 +589,7 @@ export const reconcileInvoice = async (req: Request, res: Response) => {
     const id = parseInt(req.params.id as string, 10);
     const parseResult = invoiceSchema.safeParse(req.body);
     if (!parseResult.success) {
-      return res.status(400).json({ message: "Invalid input", errors: parseResult.error.errors });
+      return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parseResult.error) });
     }
     const { invoice_no, bill_amount, billing_date } = parseResult.data;
     const user = req.user!;
@@ -763,7 +764,7 @@ export const recordPayment = async (req: Request, res: Response) => {
     const id = parseInt(req.params.id as string, 10);
     const parseResult = paymentSchema.safeParse(req.body);
     if (!parseResult.success) {
-      return res.status(400).json({ message: "Invalid input", errors: parseResult.error.errors });
+      return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parseResult.error) });
     }
     const { amount_received, payment_date } = parseResult.data;
     const user = req.user!;
@@ -836,7 +837,7 @@ export const closeOrder = async (req: Request, res: Response) => {
     const id = parseInt(req.params.id as string, 10);
     const parseResult = closeOrderSchema.safeParse(req.body);
     if (!parseResult.success) {
-      return res.status(400).json({ message: "Invalid input", errors: parseResult.error.errors });
+      return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parseResult.error) });
     }
     const { remarks, remarks_other_text } = parseResult.data;
 
@@ -893,6 +894,7 @@ export const exportOrders = async (req: Request, res: Response) => {
       where,
       include: { items: { include: { assignments: true } }, creator: true },
       orderBy: { order_no: "asc" },
+      take: 10000, // Cap to prevent memory exhaustion on large exports
     });
 
     const d = (x: Date | null | undefined) => (x ? x.toLocaleDateString("en-IN") : "");
@@ -973,7 +975,7 @@ export const forceCloseOrder = async (req: Request, res: Response) => {
     const parseResult = forceCloseOrderSchema.safeParse(req.body);
     
     if (!parseResult.success) {
-      return res.status(400).json({ message: "Invalid input", errors: parseResult.error.errors });
+      return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parseResult.error) });
     }
     
     const { remarks, remarks_other_text } = parseResult.data;
@@ -1008,7 +1010,7 @@ export const editBilling = async (req: Request, res: Response) => {
     const id = parseInt(req.params.id as string, 10);
     const parseResult = editBillingSchema.safeParse(req.body);
     if (!parseResult.success) {
-      return res.status(400).json({ message: "Invalid input", errors: parseResult.error.errors });
+      return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parseResult.error) });
     }
     const { invoice_no, bill_amount, billing_date } = parseResult.data;
     const user = req.user!;
@@ -1076,7 +1078,7 @@ export const editPayment = async (req: Request, res: Response) => {
     const id = parseInt(req.params.id as string, 10);
     const parseResult = editPaymentSchema.safeParse(req.body);
     if (!parseResult.success) {
-      return res.status(400).json({ message: "Invalid input", errors: parseResult.error.errors });
+      return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parseResult.error) });
     }
     const { amount_received, payment_date } = parseResult.data;
     const user = req.user!;
@@ -1154,7 +1156,7 @@ export const createFollowUp = async (req: Request, res: Response) => {
     const orderId = parseInt(req.params.id as string, 10);
     const parseResult = followUpSchema.safeParse(req.body);
     if (!parseResult.success) {
-      return res.status(400).json({ message: "Invalid input", errors: parseResult.error.errors });
+      return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parseResult.error) });
     }
     const { note } = parseResult.data;
     const user = req.user!;
@@ -1212,7 +1214,7 @@ async function syncItemCompletion(tx: any, itemId: number) {
 export const assignOrderItem = async (req: Request, res: Response) => {
   try {
     const parseResult = assignItemSchema.safeParse(req.body);
-    if (!parseResult.success) return res.status(400).json({ message: "Invalid input", errors: parseResult.error.errors });
+    if (!parseResult.success) return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parseResult.error) });
     const assigned_to = Array.from(new Set(parseResult.data.assigned_to));
     const orderId = parseInt(req.params.orderId as string, 10);
     const itemId = parseInt(req.params.itemId as string, 10);
@@ -1280,7 +1282,7 @@ export const assignOrderItem = async (req: Request, res: Response) => {
 export const completeOrderItem = async (req: Request, res: Response) => {
   try {
     const parseResult = completeItemSchema.safeParse(req.body);
-    if (!parseResult.success) return res.status(400).json({ message: "Invalid input", errors: parseResult.error.errors });
+    if (!parseResult.success) return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parseResult.error) });
     const { production_completed } = parseResult.data;
     const orderId = parseInt(req.params.orderId as string, 10);
     const itemId = parseInt(req.params.itemId as string, 10);
@@ -1374,7 +1376,7 @@ export const completeOrderItem = async (req: Request, res: Response) => {
 export const flagOrderItem = async (req: Request, res: Response) => {
   try {
     const parseResult = flagItemSchema.safeParse(req.body);
-    if (!parseResult.success) return res.status(400).json({ message: "Invalid input", errors: parseResult.error.errors });
+    if (!parseResult.success) return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parseResult.error) });
     const { is_flagged, flag_reason } = parseResult.data;
     const orderId = parseInt(req.params.orderId as string, 10);
     const itemId = parseInt(req.params.itemId as string, 10);
@@ -1429,7 +1431,7 @@ export const flagOrderItem = async (req: Request, res: Response) => {
 export const setItemLossRemark = async (req: Request, res: Response) => {
   try {
     const parseResult = itemLossRemarkSchema.safeParse(req.body);
-    if (!parseResult.success) return res.status(400).json({ message: "Invalid input", errors: parseResult.error.errors });
+    if (!parseResult.success) return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parseResult.error) });
     const { remarks, remarks_other_text } = parseResult.data;
     const itemId = parseInt(req.params.itemId as string, 10);
     const user = req.user!;
@@ -1494,6 +1496,7 @@ export const emailExport = async (req: Request, res: Response) => {
       where,
       include: { items: { include: { assignments: true } }, creator: true },
       orderBy: { order_no: "asc" },
+      take: 10000, // Cap to prevent memory exhaustion on large exports
     });
 
     const d = (x: Date | null | undefined) => (x ? x.toLocaleDateString("en-IN") : "");

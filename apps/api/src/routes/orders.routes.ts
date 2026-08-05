@@ -1,4 +1,5 @@
 import { Router, raw } from "express";
+import rateLimit from "express-rate-limit";
 import {
   getOrders,
   getOrder,
@@ -28,11 +29,18 @@ import { authenticate, authorize, requireSuperAdmin , denyReadOnlyMutations } fr
 
 const router = Router();
 
+// Tighter limit on email export: 15 emails per 15 minutes per IP
+const emailExportLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 15,
+  message: { message: "Email export limit reached. Please try again later." },
+});
+
 router.use(authenticate);
 router.use(denyReadOnlyMutations);
 
 router.get("/export", authorize("CSM", "ADMIN", "OPERATION_MANAGER", "ACCOUNTS"), exportOrders);
-router.post("/export/email", authorize("CSM", "ADMIN", "OPERATION_MANAGER", "ACCOUNTS"), emailExport);
+router.post("/export/email", authorize("CSM", "ADMIN", "OPERATION_MANAGER", "ACCOUNTS"), emailExportLimiter, emailExport);
 router.get("/export/recipients", authorize("CSM", "ADMIN", "OPERATION_MANAGER", "ACCOUNTS"), getRecentRecipients);
 router.get("/line-item-template", authorize("CSM", "ADMIN"), lineItemTemplate);
 // Bulk import (super-admin only). `raw` accepts the uploaded .xlsx as the request body.

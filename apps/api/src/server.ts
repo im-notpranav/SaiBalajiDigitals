@@ -1,26 +1,35 @@
+// Config import must come first — it loads dotenv and validates required env vars.
+import { PORT, CLIENT_URL } from "./utils/config";
+
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import cookieParser from "cookie-parser";
-import dotenv from "dotenv";
-
-dotenv.config();
+import rateLimit from "express-rate-limit";
 
 const app = express();
-const PORT = process.env.PORT || 3001;
 
 app.use(helmet());
 app.use(
   cors({
-    origin: [
-      process.env.CLIENT_URL || "http://localhost:5173",
-    ],
+    origin: [CLIENT_URL],
     credentials: true,
     exposedHeaders: ["Content-Disposition"],
   })
 );
-app.use(express.json());
+app.use(express.json({ limit: "1mb" }));
 app.use(cookieParser());
+
+// Global rate limit: 200 requests per minute per IP (generous for 50-60 employees)
+app.use(
+  rateLimit({
+    windowMs: 60 * 1000,
+    max: 200,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { message: "Too many requests. Please slow down." },
+  })
+);
 
 import authRoutes from "./routes/auth.routes";
 import ordersRoutes from "./routes/orders.routes";

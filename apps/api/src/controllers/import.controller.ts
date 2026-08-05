@@ -72,6 +72,7 @@ export const bulkImportOrders = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Could not read the file. Make sure it is a valid .xlsx." });
     }
     if (rows.length === 0) return res.status(400).json({ message: "The sheet has no data rows." });
+    if (rows.length > 500) return res.status(400).json({ message: `Too many rows (${rows.length}). Maximum 500 rows per import.` });
 
     const employees = await prisma.user.findMany({ where: { role: "CSM", is_active: true } });
     const empByUsername = new Map(employees.map((u) => [u.username.toLowerCase(), u]));

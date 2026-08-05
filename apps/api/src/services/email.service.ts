@@ -1,15 +1,16 @@
 import nodemailer from "nodemailer";
+import { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, ADMIN_EMAIL } from "../utils/config";
 
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: parseInt(process.env.SMTP_PORT || "587"),
+  host: SMTP_HOST,
+  port: parseInt(SMTP_PORT),
   auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
+    user: SMTP_USER,
+    pass: SMTP_PASS,
   },
 });
 
-const adminEmail = process.env.ADMIN_EMAIL || "admin@saibalaji.com";
+const adminEmail = ADMIN_EMAIL;
 const FROM = '"Sai Balaji OMS" <noreply@saibalaji.com>';
 
 export async function initEmailService() {
