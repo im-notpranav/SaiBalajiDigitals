@@ -1,8 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import { prisma } from "../utils/prisma";
-
-const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret";
+import { JWT_SECRET } from "../utils/config";
 
 export interface AuthUser {
   id: number;
@@ -19,7 +18,7 @@ declare global {
   }
 }
 
-export function authenticate(req: Request, res: Response, next: NextFunction) {
+export async function authenticate(req: Request, res: Response, next: NextFunction) {
   const token = req.cookies?.token;
   if (!token) {
     return res.status(401).json({ message: "Session expired. Please log in again." });
@@ -27,7 +26,20 @@ export function authenticate(req: Request, res: Response, next: NextFunction) {
 
   try {
     const payload = jwt.verify(token, JWT_SECRET) as AuthUser;
-    req.user = payload;
+
+    // Re-validate against the database: ensure user is still active and role hasn't changed
+    const dbUser = await prisma.user.findUnique({
+      where: { id: payload.id },
+      select: { id: true, username: true, name: true, role: true, is_active: true },
+    });
+
+    if (!dbUser || !dbUser.is_active) {
+      res.clearCookie("token");
+      return res.status(401).json({ message: "Account is inactive or no longer exists. Please contact the administrator." });
+    }
+
+    // Use live DB role, not the (possibly stale) JWT role
+    req.user = { id: dbUser.id, username: dbUser.username, name: dbUser.name, role: dbUser.role };
     next();
   } catch (err) {
     return res.status(401).json({ message: "Session expired. Please log in again." });

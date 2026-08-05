@@ -2,11 +2,10 @@ import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { prisma } from "../utils/prisma";
-
-const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret";
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "7d";
+import { JWT_SECRET, JWT_EXPIRES_IN } from "../utils/config";
 
 import { createUserSchema, updateMeSchema, updateUserSchema, resetPasswordSchema } from "../utils/validators";
+import { sanitizeZodErrors } from "../utils/sanitize-errors";
 
 export const getUsers = async (req: Request, res: Response) => {
   try {
@@ -53,7 +52,7 @@ export const createUser = async (req: Request, res: Response) => {
   try {
     const parseResult = createUserSchema.safeParse(req.body);
     if (!parseResult.success) {
-      return res.status(400).json({ message: "Invalid input", errors: parseResult.error.errors });
+      return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parseResult.error) });
     }
     const { name, username, password, role } = parseResult.data;
 
@@ -108,7 +107,7 @@ export const updateMe = async (req: Request, res: Response) => {
   try {
     const parseResult = updateMeSchema.safeParse(req.body);
     if (!parseResult.success) {
-      return res.status(400).json({ message: "Invalid input", errors: parseResult.error.errors });
+      return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parseResult.error) });
     }
     const { name, email, phone, photo_url, current_password, new_password } = parseResult.data;
     const userId = req.user!.id;
@@ -202,7 +201,7 @@ export const resetUserPassword = async (req: Request, res: Response) => {
     const id = parseInt(req.params.id as string, 10);
     const parseResult = resetPasswordSchema.safeParse(req.body);
     if (!parseResult.success) {
-      return res.status(400).json({ message: "Invalid input", errors: parseResult.error.errors });
+      return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parseResult.error) });
     }
 
     const target = await prisma.user.findUnique({ where: { id }, select: { id: true, username: true } });
@@ -223,7 +222,7 @@ export const updateUser = async (req: Request, res: Response) => {
     const id = parseInt(req.params.id as string, 10);
     const parsed = updateUserSchema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({ message: "Invalid input", errors: parsed.error.errors });
+      return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parsed.error) });
     }
     const { name, username, role } = parsed.data;
 
