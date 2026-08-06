@@ -1,5 +1,6 @@
 {
-  "name": "saibalajidigtals",
+  "name": "saibalajidigitals",
+  "compatibility_date": "2026-08-06",
   "assets": {
     "directory": "apps/web/dist"
   }
