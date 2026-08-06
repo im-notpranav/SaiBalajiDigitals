@@ -2,6 +2,10 @@
   "name": "saibalajidigitals",
   "compatibility_date": "2026-08-06",
   "assets": {
-    "directory": "apps/web/dist"
+    "directory": "apps/web/dist",
+    "not_found_handling": "single-page-application"
+  },
+  "vars": {
+    "API_ORIGIN": "https://saibalajidigitals.onrender.com"
   }
 }
