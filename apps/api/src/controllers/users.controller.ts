@@ -226,18 +226,29 @@ export const updateUser = async (req: Request, res: Response) => {
     }
     const { name, username, role } = parsed.data;
 
-    const existingUser = await prisma.user.findFirst({
-      where: { username: { equals: username, mode: "insensitive" } },
-    });
-    if (existingUser && existingUser.id !== id) {
-      return res.status(400).json({ message: "Username already exists" });
+    // Only super admin can change usernames
+    const targetUser = await prisma.user.findUnique({ where: { id }, select: { username: true } });
+    if (!targetUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    if (username && username !== targetUser.username && !req.user!.is_super_admin) {
+      return res.status(403).json({ message: "Only the super administrator can change usernames." });
+    }
+
+    if (username) {
+      const existingUser = await prisma.user.findFirst({
+        where: { username: { equals: username, mode: "insensitive" } },
+      });
+      if (existingUser && existingUser.id !== id) {
+        return res.status(400).json({ message: "Username already exists" });
+      }
     }
 
     const updatedUser = await prisma.user.update({
       where: { id },
       data: {
         name,
-        username,
+        ...(username ? { username } : {}),
         role: role as any,
       },
       select: { id: true, name: true, username: true, role: true, is_active: true },

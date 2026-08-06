@@ -36,19 +36,20 @@ async function main() {
     { name: "Karthik Menon", username: "production", role: "PRODUCTION" },
     { name: "Ravi Teja", username: "production2", role: "PRODUCTION" },
     { name: "Priya Sharma", username: "accountant", role: "ACCOUNTS" },
-    { name: "Mahesh Goud", username: "admin", role: "ADMIN" },
+    { name: "Mahesh Goud", username: "maheshgoud", role: "ADMIN", is_super_admin: true },
     { name: "Suresh Kumar", username: "operator", role: "PRODUCTION_MANAGER" },
   ];
 
   for (const u of users) {
     await prisma.user.upsert({
       where: { username: u.username },
-      update: {},
+      update: { is_super_admin: u.is_super_admin ?? false },
       create: {
         name: u.name,
         username: u.username,
         password,
         role: u.role as any,
+        is_super_admin: u.is_super_admin ?? false,
       },
     });
   }
