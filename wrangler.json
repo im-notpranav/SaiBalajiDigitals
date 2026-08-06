@@ -1,6 +1,6 @@
 {
   "name": "saibalajidigitals",
-  "main": "worker.ts",
+  "main": "worker/index.js",
   "compatibility_date": "2026-08-06",
   "assets": {
     "directory": "apps/web/dist",
