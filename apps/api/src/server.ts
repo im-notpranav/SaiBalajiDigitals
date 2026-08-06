@@ -6,13 +6,21 @@ import cors from "cors";
 import helmet from "helmet";
 import cookieParser from "cookie-parser";
 import rateLimit from "express-rate-limit";
+import { clientIpKey } from "./utils/rate-limit";
 
 const app = express();
 
+// Behind Cloudflare -> Render. Required for correct req.ip and rate limiting.
+app.set("trust proxy", 1);
+
 app.use(helmet());
+
+// Support comma-separated origins so preview deployments don't need an API redeploy.
+const allowedOrigins = CLIENT_URL.split(",").map((o) => o.trim()).filter(Boolean);
+
 app.use(
   cors({
-    origin: [CLIENT_URL],
+    origin: allowedOrigins,
     credentials: true,
     exposedHeaders: ["Content-Disposition"],
   })
@@ -27,6 +35,7 @@ app.use(
     max: 200,
     standardHeaders: true,
     legacyHeaders: false,
+    keyGenerator: clientIpKey,
     message: { message: "Too many requests. Please slow down." },
   })
 );
