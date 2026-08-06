@@ -8,6 +8,7 @@ export interface AuthUser {
   username: string;
   name: string;
   role: string;
+  is_super_admin: boolean;
 }
 
 declare global {
@@ -30,7 +31,7 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
     // Re-validate against the database: ensure user is still active and role hasn't changed
     const dbUser = await prisma.user.findUnique({
       where: { id: payload.id },
-      select: { id: true, username: true, name: true, role: true, is_active: true },
+      select: { id: true, username: true, name: true, role: true, is_active: true, is_super_admin: true },
     });
 
     if (!dbUser || !dbUser.is_active) {
@@ -39,7 +40,7 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
     }
 
     // Use live DB role, not the (possibly stale) JWT role
-    req.user = { id: dbUser.id, username: dbUser.username, name: dbUser.name, role: dbUser.role };
+    req.user = { id: dbUser.id, username: dbUser.username, name: dbUser.name, role: dbUser.role, is_super_admin: dbUser.is_super_admin };
     next();
   } catch (err) {
     return res.status(401).json({ message: "Session expired. Please log in again." });
