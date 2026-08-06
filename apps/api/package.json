@@ -1,7 +1,6 @@
 {
   "name": "@sb-oms/api",
   "private": true,
-  "type": "module",
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
@@ -28,7 +27,7 @@
     "@sb-oms/shared-types": "*"
   },
   "prisma": {
-    "seed": "ts-node prisma/seed.ts"
+    "seed": "tsx prisma/seed.ts"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

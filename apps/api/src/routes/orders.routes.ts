@@ -1,5 +1,6 @@
 import { Router, raw } from "express";
 import rateLimit from "express-rate-limit";
+import { clientIpKey } from "../utils/rate-limit";
 import {
   getOrders,
   getOrder,
@@ -33,6 +34,7 @@ const router = Router();
 const emailExportLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 15,
+  keyGenerator: clientIpKey,
   message: { message: "Email export limit reached. Please try again later." },
 });
 

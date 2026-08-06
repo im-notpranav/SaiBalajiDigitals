@@ -14,6 +14,10 @@ const adminEmail = ADMIN_EMAIL;
 const FROM = '"Sai Balaji OMS" <noreply@saibalaji.com>';
 
 export async function initEmailService() {
+  if (!SMTP_HOST) {
+    console.warn("⚠️  SMTP is not configured — email notifications are disabled.");
+    return;
+  }
   try {
     await transporter.verify();
     console.log("✅ Email service initialized successfully");
