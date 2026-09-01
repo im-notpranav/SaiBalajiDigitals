@@ -13,7 +13,7 @@ import {
   Wallet,
   CalendarDays,
 } from "lucide-react";
-import { format, startOfMonth, endOfMonth } from "date-fns";
+import { format, subDays } from "date-fns";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { KpiCard } from "@/components/kpi/KpiCard";
 import { Badge } from "@/components/ui/badge";
@@ -114,9 +114,12 @@ const SECTIONS: SectionConfig[] = [
 
 function AccountantDashboard() {
   const today = new Date();
+  // A rolling window, not the calendar month: an order dated last month can
+  // still be in flight today, and on the 1st a month-to-date window is empty
+  // by construction.
   const [dateRange, setDateRange] = useState<{ from: Date; to: Date }>({
-    from: startOfMonth(today),
-    to: endOfMonth(today),
+    from: subDays(today, 90),
+    to: today,
   });
   const [expanded, setExpanded] = useState<string | null>(null);
 
