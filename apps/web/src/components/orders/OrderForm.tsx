@@ -13,6 +13,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { toast } from "sonner";
+import { downloadLineItemTemplate } from "@/api/orders";
 import { inr } from "@/lib/format";
 import { LOSS_REMARK_TYPES } from "@/lib/constants";
 import type { CreateOrderInput, Order, UserRole } from "@sb-oms/shared-types";
@@ -22,12 +24,45 @@ interface Line {
   id: string;
   originalId?: number;
   media: string;
-  width_inches: number;
-  height_inches: number;
+  /** Raw text as typed, so a partial decimal ("48.") survives re-render. */
+  width_inches: string;
+  /** Raw text as typed, so a partial decimal ("36.") survives re-render. */
+  height_inches: string;
+  /** Whole units only - the field is step="1" and the importer rejects fractions. */
   qty: number;
-  rate: number;
+  /** Raw text as typed (e.g. "12.5"), so a partial decimal survives re-render. */
+  rate: string;
   remarks?: string | null;
   remarks_other_text?: string | null;
+}
+
+/**
+ * Keep only digits and a single decimal point, capped at two decimal places
+ * (these columns are DECIMAL(10,2), so anything finer would be lost on save).
+ */
+function sanitizeDecimal(raw: string): string {
+  let v = raw.replace(/[^\d.]/g, "");
+  const dot = v.indexOf(".");
+  if (dot !== -1) {
+    const intPart = v.slice(0, dot);
+    const decPart = v.slice(dot + 1).replace(/\./g, "").slice(0, 2);
+    v = `${intPart}.${decPart}`;
+  }
+  return v;
+}
+
+/** Tidy the field on blur: "12." -> "12", ".5" -> "0.5". Typed precision is kept. */
+function normalizeDecimal(v: string): string {
+  if (v === "" || v === ".") return "";
+  let out = v.endsWith(".") ? v.slice(0, -1) : v;
+  if (out.startsWith(".")) out = `0${out}`;
+  return out;
+}
+
+/** Numeric value of a decimal text field; blank or partial input counts as 0. */
+function numOf(v: string): number {
+  const n = parseFloat(v);
+  return Number.isFinite(n) ? n : 0;
 }
 
 export interface OrderFormProps {
@@ -50,19 +85,19 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
           id: crypto.randomUUID(),
           originalId: item.id,
           media: item.media,
-          width_inches: item.width_inches,
-          height_inches: item.height_inches,
-          qty: item.qty,
-          rate: Number(item.rate),
+          width_inches: item.width_inches == null ? "" : String(item.width_inches),
+          height_inches: item.height_inches == null ? "" : String(item.height_inches),
+          qty: Number(item.qty),
+          rate: item.rate == null ? "" : String(item.rate),
           remarks: item.remarks ?? null,
           remarks_other_text: item.remarks_other_text ?? null,
         }))
-      : [{ id: crypto.randomUUID(), media: "", width_inches: 0, height_inches: 0, qty: 1, rate: 0, remarks: null, remarks_other_text: null }]
+      : [{ id: crypto.randomUUID(), media: "", width_inches: "", height_inches: "", qty: 1, rate: "", remarks: null, remarks_other_text: null }]
   );
 
   const isAdmin = userRole === "ADMIN";
-  const getSft = (l: Line) => (l.width_inches * l.height_inches) / 144;
-  const getLineTotal = (l: Line) => getSft(l) * l.qty * l.rate;
+  const getSft = (l: Line) => (numOf(l.width_inches) * numOf(l.height_inches)) / 144;
+  const getLineTotal = (l: Line) => getSft(l) * l.qty * numOf(l.rate);
   const isLossLine = (l: Line) => l.remarks != null;
 
   const total = useMemo(() => lines.reduce((s, l) => s + getLineTotal(l), 0), [lines]);
@@ -78,8 +113,22 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
   const update = (id: string, patch: Partial<Line>) =>
     setLines((ls) => ls.map((l) => (l.id === id ? { ...l, ...patch } : l)));
   const addLine = () =>
-    setLines((ls) => [...ls, { id: crypto.randomUUID(), media: "", width_inches: 0, height_inches: 0, qty: 1, rate: 0, remarks: null, remarks_other_text: null }]);
+    setLines((ls) => [...ls, { id: crypto.randomUUID(), media: "", width_inches: "", height_inches: "", qty: 1, rate: "", remarks: null, remarks_other_text: null }]);
   const removeLine = (id: string) => setLines((ls) => (ls.length > 1 ? ls.filter((l) => l.id !== id) : ls));
+
+  /**
+   * Fetch the template through the API client so it carries the configured
+   * baseURL and the auth cookie. A bare window.open() navigates instead of
+   * fetching: if /api is not proxied on the current origin the SPA fallback
+   * answers, and the user lands on the router's 404 page.
+   */
+  const handleTemplateDownload = async () => {
+    try {
+      await downloadLineItemTemplate();
+    } catch (err: any) {
+      toast.error("Could not download template", { description: err?.message });
+    }
+  };
 
   /** Parse an uploaded Excel file and merge line items into the form. */
   const handleExcelImport = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -127,15 +176,16 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
           if (!Number.isFinite(w) || w <= 0) { errors.push(`Row ${idx + 2}: Invalid Width`); return; }
           if (!Number.isFinite(h) || h <= 0) { errors.push(`Row ${idx + 2}: Invalid Height`); return; }
           if (!Number.isFinite(q) || q <= 0) { errors.push(`Row ${idx + 2}: Invalid Qty`); return; }
+          if (!Number.isInteger(q)) { errors.push(`Row ${idx + 2}: Qty must be a whole number`); return; }
           if (!Number.isFinite(r) || r <= 0) { errors.push(`Row ${idx + 2}: Invalid Rate`); return; }
 
           parsed.push({
             id: crypto.randomUUID(),
             media,
-            width_inches: w,
-            height_inches: h,
+            width_inches: String(w),
+            height_inches: String(h),
             qty: q,
-            rate: r,
+            rate: String(r),
             remarks: null,
             remarks_other_text: null,
           });
@@ -148,7 +198,7 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
         if (parsed.length > 0) {
           // Replace empty default line or append to existing
           setLines((prev) => {
-            const nonEmpty = prev.filter((l) => l.media.trim() !== "" || l.width_inches > 0 || l.height_inches > 0);
+            const nonEmpty = prev.filter((l) => l.media.trim() !== "" || numOf(l.width_inches) > 0 || numOf(l.height_inches) > 0);
             return nonEmpty.length > 0 ? [...nonEmpty, ...parsed] : parsed;
           });
         }
@@ -164,7 +214,7 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
     if (!clientName.trim() || !storeName.trim() || !location.trim()) {
       throw new Error("Client Name, Store Name, and Location are required");
     }
-    if (lines.some((l) => !l.media.trim() || l.width_inches <= 0 || l.height_inches <= 0 || l.qty <= 0 || l.rate <= 0)) {
+    if (lines.some((l) => !l.media.trim() || numOf(l.width_inches) <= 0 || numOf(l.height_inches) <= 0 || l.qty <= 0 || numOf(l.rate) <= 0)) {
       throw new Error("Every line item needs valid media, dimensions, quantity, and rate.");
     }
     
@@ -177,10 +227,10 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
       items: lines.map((l) => ({
         id: l.originalId,
         media: l.media,
-        width_inches: l.width_inches,
-        height_inches: l.height_inches,
+        width_inches: numOf(l.width_inches),
+        height_inches: numOf(l.height_inches),
         qty: l.qty,
-        rate: l.rate,
+        rate: numOf(l.rate),
         remarks: (l.remarks ?? null) as CreateOrderInput["items"][number]["remarks"],
         remarks_other_text: l.remarks === "Other" ? l.remarks_other_text : null,
       })),
@@ -242,7 +292,7 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
                     type="button"
                     size="sm"
                     variant="ghost"
-                    onClick={() => window.open("/api/orders/line-item-template", "_blank")}
+                    onClick={handleTemplateDownload}
                     className="rounded-lg text-xs"
                     title="Download line item template"
                   >
@@ -283,10 +333,13 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
                   <div className="sm:col-span-2">
                     <Label className="text-[10px] uppercase text-muted-foreground">W (in)</Label>
                     <Input
-                      type="number"
-                      min={0}
-                      value={line.width_inches || ""}
-                      onChange={(e) => update(line.id, { width_inches: Number(e.target.value) })}
+                      type="text"
+                      inputMode="decimal"
+                      autoComplete="off"
+                      placeholder="0.00"
+                      value={line.width_inches}
+                      onChange={(e) => update(line.id, { width_inches: sanitizeDecimal(e.target.value) })}
+                      onBlur={() => update(line.id, { width_inches: normalizeDecimal(line.width_inches) })}
                       className="mt-1"
                       disabled={isReadOnlyItem}
                     />
@@ -294,10 +347,13 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
                   <div className="sm:col-span-2">
                     <Label className="text-[10px] uppercase text-muted-foreground">H (in)</Label>
                     <Input
-                      type="number"
-                      min={0}
-                      value={line.height_inches || ""}
-                      onChange={(e) => update(line.id, { height_inches: Number(e.target.value) })}
+                      type="text"
+                      inputMode="decimal"
+                      autoComplete="off"
+                      placeholder="0.00"
+                      value={line.height_inches}
+                      onChange={(e) => update(line.id, { height_inches: sanitizeDecimal(e.target.value) })}
+                      onBlur={() => update(line.id, { height_inches: normalizeDecimal(line.height_inches) })}
                       className="mt-1"
                       disabled={isReadOnlyItem}
                     />
@@ -307,6 +363,7 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
                     <Input
                       type="number"
                       min={1}
+                      step={1}
                       value={line.qty || ""}
                       onChange={(e) => update(line.id, { qty: Number(e.target.value) })}
                       className="mt-1"
@@ -316,10 +373,13 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
                   <div className="sm:col-span-2">
                     <Label className="text-[10px] uppercase text-muted-foreground">Rate (₹)</Label>
                     <Input
-                      type="number"
-                      min={0}
-                      value={line.rate || ""}
-                      onChange={(e) => update(line.id, { rate: Number(e.target.value) })}
+                      type="text"
+                      inputMode="decimal"
+                      autoComplete="off"
+                      placeholder="0.00"
+                      value={line.rate}
+                      onChange={(e) => update(line.id, { rate: sanitizeDecimal(e.target.value) })}
+                      onBlur={() => update(line.id, { rate: normalizeDecimal(line.rate) })}
                       className="mt-1"
                       disabled={isReadOnlyItem}
                     />

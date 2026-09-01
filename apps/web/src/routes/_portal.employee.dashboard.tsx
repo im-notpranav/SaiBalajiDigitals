@@ -27,7 +27,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery } from "@tanstack/react-query";
 import { fetchCsmDashboard } from "@/api/dashboard";
 import type { CsmStageOrder, CsmCompletedOrder } from "@/api/dashboard";
-import { format, startOfMonth, endOfMonth } from "date-fns";
+import { format, subDays } from "date-fns";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_portal/employee/dashboard")({
@@ -42,6 +42,9 @@ const STAGE_CONFIG = [
   { key: "payment", label: "Payment", icon: CreditCard, accent: "text-orange-500", bg: "bg-orange-500/10", border: "border-orange-500/20" },
   { key: "completed", label: "Completed", icon: CheckCircle2, accent: "text-emerald-500", bg: "bg-emerald-500/10", border: "border-emerald-500/20" },
 ] as const;
+
+/** How far back the dashboard looks before the user narrows it. */
+const DEFAULT_WINDOW_DAYS = 90;
 
 function agingLevel(days: number): "normal" | "warning" | "severe" {
   if (days > 7) return "severe";
@@ -74,8 +77,11 @@ function formatCurrency(n: number) {
 
 function EmployeeDashboard() {
   const now = new Date();
-  const [from, setFrom] = useState<Date>(startOfMonth(now));
-  const [to, setTo] = useState<Date>(endOfMonth(now));
+  // A rolling window, not the calendar month: an order dated last month can
+  // still be in production today, and on the 1st a month-to-date window is
+  // empty by construction.
+  const [from, setFrom] = useState<Date>(subDays(now, DEFAULT_WINDOW_DAYS));
+  const [to, setTo] = useState<Date>(now);
   const [viewMode, setViewMode] = useState<"amount" | "qty">("amount");
   const [expandedStage, setExpandedStage] = useState<string | null>(null);
   const [fromOpen, setFromOpen] = useState(false);
@@ -84,12 +90,18 @@ function EmployeeDashboard() {
   const fromStr = format(from, "yyyy-MM-dd");
   const toStr = format(to, "yyyy-MM-dd");
 
-  const { data: dash, isLoading } = useQuery({
+  const { data: dash, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["csm-dashboard", fromStr, toStr],
     queryFn: () => fetchCsmDashboard(fromStr, toStr),
   });
 
   const stageOrders = dash?.stage_orders;
+  const isEmpty = !!dash && dash.summary.total_orders === 0;
+
+  const widenRange = () => {
+    setFrom(subDays(new Date(), 365));
+    setTo(new Date());
+  };
 
   return (
     <>
@@ -160,8 +172,31 @@ function EmployeeDashboard() {
 
       {isLoading ? (
         <div className="p-12 text-center text-muted-foreground">Loading dashboard data...</div>
+      ) : isError ? (
+        <div className="mt-6 rounded-xl border border-destructive/30 bg-destructive/5 p-8 text-center">
+          <AlertTriangle className="mx-auto h-6 w-6 text-destructive" />
+          <p className="mt-3 font-medium">Could not load your dashboard</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {(error as any)?.response?.data?.message || (error as Error)?.message || "The request failed."}
+          </p>
+          <Button variant="outline" size="sm" className="mt-4" onClick={() => refetch()}>
+            Try again
+          </Button>
+        </div>
       ) : !dash ? (
         <div className="p-12 text-center text-muted-foreground">No data available.</div>
+      ) : isEmpty ? (
+        <div className="mt-6 rounded-xl border bg-muted/20 p-8 text-center">
+          <CalendarIcon className="mx-auto h-6 w-6 text-muted-foreground" />
+          <p className="mt-3 font-medium">No orders dated in this range</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Showing {format(from, "dd MMM yyyy")} to {format(to, "dd MMM yyyy")}. Orders are filtered by
+            their order date, and you only see orders you created.
+          </p>
+          <Button variant="outline" size="sm" className="mt-4" onClick={widenRange}>
+            Widen to the last 12 months
+          </Button>
+        </div>
       ) : (
         <>
           {/* Summary KPIs */}
