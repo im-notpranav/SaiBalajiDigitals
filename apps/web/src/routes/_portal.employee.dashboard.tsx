@@ -43,6 +43,15 @@ const STAGE_CONFIG = [
   { key: "completed", label: "Completed", icon: CheckCircle2, accent: "text-emerald-500", bg: "bg-emerald-500/10", border: "border-emerald-500/20" },
 ] as const;
 
+/** Prefer the API's own message for a failed request, then the JS one. */
+function errorMessage(err: unknown): string {
+  const res = (err as { response?: { data?: { message?: unknown } } })?.response;
+  const msg = res?.data?.message;
+  if (typeof msg === "string" && msg.trim()) return msg;
+  if (err instanceof Error && err.message) return err.message;
+  return "The request failed.";
+}
+
 /** How far back the dashboard looks before the user narrows it. */
 const DEFAULT_WINDOW_DAYS = 90;
 
@@ -177,7 +186,7 @@ function EmployeeDashboard() {
           <AlertTriangle className="mx-auto h-6 w-6 text-destructive" />
           <p className="mt-3 font-medium">Could not load your dashboard</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            {(error as any)?.response?.data?.message || (error as Error)?.message || "The request failed."}
+            {errorMessage(error)}
           </p>
           <Button variant="outline" size="sm" className="mt-4" onClick={() => refetch()}>
             Try again
