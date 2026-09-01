@@ -39,7 +39,7 @@ import { useQuery } from "@tanstack/react-query";
 import { fetchCsmDashboard, fetchAdminDashboard } from "@/api/dashboard";
 import { fetchUsers } from "@/api/users";
 import type { CsmStageOrder, CsmCompletedOrder } from "@/api/dashboard";
-import { format, startOfMonth, endOfMonth } from "date-fns";
+import { format, subDays } from "date-fns";
 import { cn } from "@/lib/utils";
 import { inr } from "@/lib/format";
 
@@ -87,8 +87,11 @@ function formatCurrency(n: number) {
 
 function AdminDashboard() {
   const now = new Date();
-  const [from, setFrom] = useState<Date>(startOfMonth(now));
-  const [to, setTo] = useState<Date>(endOfMonth(now));
+  // A rolling window, not the calendar month: an order dated last month can
+  // still be in flight today, and on the 1st a month-to-date window is empty
+  // by construction.
+  const [from, setFrom] = useState<Date>(subDays(now, 90));
+  const [to, setTo] = useState<Date>(now);
   const [viewMode, setViewMode] = useState<"amount" | "qty">("amount");
   const [expandedStage, setExpandedStage] = useState<string | null>(null);
   const [fromOpen, setFromOpen] = useState(false);
