@@ -209,7 +209,7 @@ function EmployeeDashboard() {
       ) : (
         <>
           {/* Summary KPIs */}
-          <div className="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-3">
+          <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <KpiCard label="Total Orders" value={dash.summary.total_orders} icon={Factory} accent="primary" delay={0} />
             <KpiCard
               label={viewMode === "amount" ? "Total Amount" : "Total Quantity"}

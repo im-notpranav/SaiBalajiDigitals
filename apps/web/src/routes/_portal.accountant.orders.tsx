@@ -54,16 +54,16 @@ function AccountantOrders() {
       </div>
       
       <div className="surface-panel mb-4 flex flex-wrap items-center gap-3 p-3">
-        <Tabs value={section} onValueChange={(v) => setSection(v as "active" | "completed")} className="w-[300px]">
+        <Tabs value={section} onValueChange={(v) => setSection(v as "active" | "completed")} className="w-full sm:w-[300px]">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="active">Active</TabsTrigger>
             <TabsTrigger value="completed">Completed</TabsTrigger>
           </TabsList>
         </Tabs>
 
-        <div className="flex flex-1 items-center gap-2">
+        <div className="flex w-full min-w-0 flex-1 items-center gap-2 sm:w-auto">
           <Select value={searchField} onValueChange={(v: any) => setSearchField(v)}>
-            <SelectTrigger className="w-[140px]">
+            <SelectTrigger className="w-[120px] shrink-0 sm:w-[140px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -73,7 +73,7 @@ function AccountantOrders() {
             </SelectContent>
           </Select>
           
-          <div className="relative flex-1 min-w-[200px]">
+          <div className="relative min-w-0 flex-1 sm:min-w-[200px]">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={q}
@@ -84,7 +84,7 @@ function AccountantOrders() {
           </div>
         </div>
 
-        <div className="ml-auto text-xs text-muted-foreground">
+        <div className="w-full text-xs text-muted-foreground sm:ml-auto sm:w-auto">
           {data?.pagination?.total || data?.orders?.length || 0} orders found
         </div>
       </div>

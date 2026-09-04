@@ -18,7 +18,7 @@ function AdminReports() {
   return (
     <>
       <PageHeader title="System Reports" description="Cross-portal reporting for administrators." crumbs={[{ label: "Administrator" }, { label: "Reports" }]} />
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard label="Orders" value={dash?.total_orders || 0} accent="primary" />
         <KpiCard label="Revenue" value={inr(revenue)} accent="success" />
         <KpiCard label="Closure rate" value="87%" accent="info" />

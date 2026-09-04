@@ -1,4 +1,4 @@
-import { useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Bell, LogOut, Search, User, Sun, Moon, ChevronDown, CalendarRange } from "lucide-react";
@@ -19,6 +19,8 @@ import { useGoToOrder } from "@/lib/use-order-nav";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
 import type { Notification } from "@sb-oms/shared-types";
+import { MobileNav } from "@/components/layout/Sidebar";
+import { BrandLockup, Logo } from "@/components/brand/Logo";
 
 export function TopHeader() {
   const { user, logout } = useAuth();
@@ -68,7 +70,15 @@ export function TopHeader() {
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b bg-card/80 px-4 backdrop-blur-xl sm:px-6">
+    <header className="sticky top-0 z-30 flex h-16 items-center gap-2 border-b bg-card/80 px-3 backdrop-blur-xl sm:gap-3 sm:px-6">
+      {/* Below `lg` the sidebar rail is hidden, so this is the only way to navigate. */}
+      {user && <MobileNav role={user.role} />}
+      {/* The mark alone on a phone — the wordmark costs ~140px the action buttons need. */}
+      <Link to="/" className="shrink-0 md:hidden" aria-label="Home">
+        <Logo size={30} className="sm:hidden" />
+        <BrandLockup compact logoSize={30} className="hidden sm:flex" />
+      </Link>
+
       {user?.role !== "PRODUCTION" && (
         <div className="relative hidden max-w-md flex-1 md:block">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -81,7 +91,7 @@ export function TopHeader() {
         </div>
       )}
       <div className="flex-1 md:hidden" />
-      <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
+      <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-2">
         <Badge variant="outline" className="hidden gap-1.5 rounded-full border-primary/30 bg-primary/5 px-3 py-1 text-primary sm:inline-flex">
           <CalendarRange className="h-3.5 w-3.5" /> FY 2026-27
         </Badge>
@@ -137,7 +147,7 @@ export function TopHeader() {
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="ml-1 flex items-center gap-2 rounded-full border bg-background py-1 pl-1 pr-3 transition hover:bg-accent">
+            <button className="flex shrink-0 items-center gap-2 rounded-full border bg-background py-1 pl-1 pr-2 transition hover:bg-accent sm:ml-1 sm:pr-3">
               <Avatar className="h-8 w-8">
                 <AvatarFallback className="bg-gradient-to-br from-primary to-primary-deep text-xs font-bold text-primary-foreground">
                   {user?.name?.slice(0, 2).toUpperCase()}
