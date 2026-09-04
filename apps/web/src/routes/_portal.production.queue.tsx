@@ -7,6 +7,7 @@ import { fetchOrders, completeOrderItem } from "@/api/orders";
 import { CheckCircle2, Flag, Loader2, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import type { Order, OrderItem } from "@sb-oms/shared-types";
+import { storeLabel, storeSubLabel } from "@/lib/stores";
 
 export const Route = createFileRoute("/_portal/production/queue")({
   head: () => ({ meta: [{ title: "Production Queue — SB OMS" }] }),
@@ -65,7 +66,7 @@ function ProductionQueue() {
                   <div>
                     <h3 className="font-semibold">{order.order_no}</h3>
                     <p className="mt-0.5 text-sm text-muted-foreground">
-                      {order.client_name} · {order.store_name} ({order.location})
+                      {order.client_name} · {storeLabel(order as any)}{storeSubLabel(order as any) ? ` (${storeSubLabel(order as any)})` : ""}
                     </p>
                   </div>
                   <div className="text-right text-xs">

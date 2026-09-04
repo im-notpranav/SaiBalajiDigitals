@@ -39,6 +39,7 @@ export interface CsmStageOrder {
   order_no: string;
   client_name: string;
   store_name: string;
+  store_count?: number;
   status: string;
   total_amount: number;
   total_qty: number;
@@ -51,6 +52,7 @@ export interface CsmCompletedOrder {
   order_no: string;
   client_name: string;
   store_name: string;
+  store_count?: number;
   total_amount: number;
   total_qty: number;
   production_days: number | null;
@@ -124,6 +126,7 @@ export interface AcctBillingItem {
   order_no: string;
   client_name: string;
   store_name: string;
+  store_count?: number;
   status: string;
   total_amount: number;
   days_waiting: number;
@@ -135,6 +138,7 @@ export interface AcctPaymentItem {
   order_no: string;
   client_name: string;
   store_name: string;
+  store_count?: number;
   invoice_no: string | null;
   bill_amount: number;
   total_amount: number;
@@ -149,6 +153,7 @@ export interface AcctCompletedItem {
   order_no: string;
   client_name: string;
   store_name: string;
+  store_count?: number;
   invoice_no: string | null;
   bill_amount: number;
   amount_received: number;

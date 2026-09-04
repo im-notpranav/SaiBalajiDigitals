@@ -31,6 +31,8 @@ export const orderItemSchema = baseOrderItemSchema.refine(itemRemarkRefine, item
 
 export const updateOrderItemSchema = baseOrderItemSchema.extend({
   id: z.number().int().positive().optional(),
+  /** Which store to append this item to. Defaults to the order's first store. */
+  store_id: z.number().int().positive().optional(),
 }).refine(itemRemarkRefine, itemRemarkRefineConfig);
 
 const REMARKS_REQUIRING_TEXT = new Set(["Other", "Revised", "ExtraAmount", "LessAmount"]);
@@ -38,38 +40,92 @@ const remarksTextRefine = (data: { remarks?: string | null; remarks_other_text?:
   !data.remarks || !REMARKS_REQUIRING_TEXT.has(data.remarks) ||
   !!(data.remarks_other_text && data.remarks_other_text.trim().length > 0);
 
-export const createOrderSchema = z.object({
-  client_name: z.string().min(1).max(100),
+/** One store within an order: its own address, its own PO, its own line items. */
+export const createOrderStoreSchema = z.object({
   store_name: z.string().min(1).max(100),
   location: z.string().min(1).max(100),
+  po_number: z.string().max(50).optional().nullable(),
+  items: z.array(orderItemSchema).min(1),
+});
+
+/** A client cannot hand over the same store twice under one order number. */
+const uniqueStoreNames = (data: { stores: { store_name: string }[] }) => {
+  const seen = new Set<string>();
+  for (const s of data.stores) {
+    const key = s.store_name.trim().toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+  }
+  return true;
+};
+const uniqueStoreNamesConfig = { message: "The same store appears more than once in this order.", path: ["stores"] };
+
+export const createOrderSchema = z.object({
+  client_name: z.string().min(1).max(100),
   date: z.coerce.date().refine((d) => d.getTime() <= Date.now() + 86400000, "Date cannot be in the future"),
+  /** Job-level PO covering the whole order. Per-store POs live on each store. */
   po_number: z.string().max(50).optional().nullable(),
   remarks: remarkEnum.optional().nullable(),
   remarks_other_text: z.string().max(500).optional().nullable(),
-  items: z.array(orderItemSchema).min(1),
-}).refine(remarksTextRefine, { message: "A reason is required for this remark type.", path: ["remarks_other_text"] });
+  stores: z.array(createOrderStoreSchema).min(1).max(50),
+})
+  .refine(remarksTextRefine, { message: "A reason is required for this remark type.", path: ["remarks_other_text"] })
+  .refine(uniqueStoreNames, uniqueStoreNamesConfig);
 
+/**
+ * Line items only. Header fields (client, store, location, PO) have their own endpoints;
+ * they are still parsed here so that sending one can be rejected with a message naming
+ * the right endpoint, rather than silently ignored.
+ */
 export const updateOrderSchema = z.object({
-  client_name: z.string().min(1).max(100),
-  store_name: z.string().min(1).max(100),
-  location: z.string().min(1).max(100),
-  date: z.coerce.date().refine((d) => d.getTime() <= Date.now() + 86400000, "Date cannot be in the future"),
+  client_name: z.string().min(1).max(100).optional(),
+  store_name: z.string().min(1).max(100).optional(),
+  location: z.string().min(1).max(100).optional(),
+  date: z.coerce.date().refine((d) => d.getTime() <= Date.now() + 86400000, "Date cannot be in the future").optional(),
   po_number: z.string().max(50).optional().nullable(),
   remarks: remarkEnum.optional().nullable(),
   remarks_other_text: z.string().max(500).optional().nullable(),
   items: z.array(updateOrderItemSchema).min(1),
 }).refine(remarksTextRefine, { message: "A reason is required for this remark type.", path: ["remarks_other_text"] });
 
+/**
+ * Order header fields. Every field is optional; `undefined` leaves it alone and an
+ * explicit `null` on po_number clears it — which is how a wrongly-entered PO is removed.
+ */
+export const updateOrderDetailsSchema = z.object({
+  client_name: z.string().min(1).max(100).optional(),
+  po_number: z.string().max(50).optional().nullable(),
+  remarks: remarkEnum.optional().nullable(),
+  remarks_other_text: z.string().max(500).optional().nullable(),
+}).refine(remarksTextRefine, { message: "A reason is required for this remark type.", path: ["remarks_other_text"] });
+
+/** Store header fields. Same null-clears-it convention on po_number. */
+export const updateStoreSchema = z.object({
+  store_name: z.string().min(1).max(100).optional(),
+  location: z.string().min(1).max(100).optional(),
+  po_number: z.string().max(50).optional().nullable(),
+});
+
+export const addStoreSchema = z.object({
+  store_name: z.string().min(1).max(100),
+  location: z.string().min(1).max(100),
+  po_number: z.string().max(50).optional().nullable(),
+});
+
 export const invoiceSchema = z.object({
   invoice_no: z.string().min(1).max(50),
   bill_amount: z.coerce.number().min(0),
   billing_date: z.coerce.date().refine((d) => d.getTime() <= Date.now() + 86400000, "Billing date cannot be in the future"),
+  /** The stores this invoice covers. Its expected value is their combined billable total. */
+  store_ids: z.array(z.number().int().positive()).min(1),
 });
 
 export const editBillingSchema = z.object({
   invoice_no: z.string().min(1).max(50).optional(),
   bill_amount: z.coerce.number().min(0).optional(),
   billing_date: z.coerce.date().refine((d) => d.getTime() <= Date.now() + 86400000, "Billing date cannot be in the future").optional(),
+  /** Re-scoping which stores an invoice covers. Only while it is unpaid. */
+  store_ids: z.array(z.number().int().positive()).min(1).optional(),
 });
 
 export const editPaymentSchema = z.object({

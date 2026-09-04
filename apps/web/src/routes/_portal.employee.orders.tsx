@@ -110,7 +110,9 @@ function MyOrders() {
               <Link to="/employee/orders/$id" params={{ id: String(o.id) }} className={buttonVariants({ size: "sm", variant: "ghost" })}>
                 View
               </Link>
-              {(o.status === "Active" || o.status === "Installed") && (
+              {/* Header fields (store, location, PO) stay editable past billing, so the
+                  link follows the header rule, not the line-item one. */}
+              {["Active", "Installed", "BillingCompleted", "Pending"].includes(o.status) && (
                 <Link to="/employee/edit-order/$id" params={{ id: String(o.id) }} className={buttonVariants({ size: "sm", variant: "outline" })}>
                   <Edit className="mr-1 h-3.5 w-3.5" /> Edit
                 </Link>

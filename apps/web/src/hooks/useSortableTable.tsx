@@ -4,13 +4,15 @@ export type SortDir = "asc" | "desc" | null;
 
 export function useSortableTable<T>(
   items: T[],
-  defaultKey: keyof T & string,
-  getValue: (item: T, key: keyof T & string) => string | number | Date,
+  // A plain string, not `keyof T`: some columns sort on a derived value (the store
+  // label, say) rather than on a field of the row.
+  defaultKey: string,
+  getValue: (item: T, key: string) => string | number | Date,
 ) {
-  const [sortKey, setSortKey] = useState<keyof T & string | null>(null);
+  const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>(null);
 
-  const toggleSort = (key: keyof T & string) => {
+  const toggleSort = (key: string) => {
     if (sortKey !== key) {
       setSortKey(key);
       setSortDir("asc");

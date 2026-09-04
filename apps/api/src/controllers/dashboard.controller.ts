@@ -2,6 +2,16 @@ import { Request, Response } from "express";
 import { prisma } from "../utils/prisma";
 import { CLOSED_STATUSES, REVENUE_STATUSES, OPEN_STATUSES } from "../utils/order-status";
 import { businessDaysBetween, lastProducedAt } from "../utils/order-stage";
+import { rollupOrder, storeLabelOf } from "../utils/order-derive";
+
+/**
+ * How an order's stores read on a dashboard row: the store itself when there is one, a
+ * count when the order covers several. Derived from the stores, not from the order's own
+ * legacy store_name column.
+ */
+/** What an order has been billed, across every invoice raised against it. */
+const billedTotal = (order: { invoices?: { bill_amount: any }[] }): number =>
+  (order.invoices ?? []).reduce((s, i) => s + (Number(i.bill_amount) || 0), 0);
 
 export const getDashboard = async (req: Request, res: Response) => {
   try {
@@ -25,31 +35,30 @@ export const getDashboard = async (req: Request, res: Response) => {
       });
     }
 
-    const total_revenue_agg = await prisma.order.aggregate({
-      _sum: { bill_amount: true },
-      where: { ...baseWhere, status: { in: CLOSED_STATUSES } },
+    // Revenue is the sum of the invoices raised against closed orders. It cannot be a
+    // column aggregate any more: an order carries many invoices.
+    const closedInvoices = await prisma.invoice.findMany({
+      where: { order: { ...baseWhere, status: { in: CLOSED_STATUSES } } },
+      select: { bill_amount: true, order: { select: { client_name: true } } },
     });
-    const total_revenue = Number(total_revenue_agg._sum.bill_amount) || 0;
+    const total_revenue = closedInvoices.reduce((sum, i) => sum + (Number(i.bill_amount) || 0), 0);
 
-    const clients = await prisma.order.groupBy({
-      by: ["client_name"],
-      _sum: { bill_amount: true },
-      where: { ...baseWhere, status: { in: CLOSED_STATUSES } },
-      orderBy: { _sum: { bill_amount: "desc" } },
-      take: 5,
-    });
-
-    const revenue_by_client = clients.map((c: any) => ({
-      name: c.client_name,
-      revenue: Number(c._sum.bill_amount) || 0,
-    }));
+    const byClient = new Map<string, number>();
+    for (const i of closedInvoices) {
+      const key = i.order.client_name;
+      byClient.set(key, (byClient.get(key) ?? 0) + (Number(i.bill_amount) || 0));
+    }
+    const revenue_by_client = [...byClient.entries()]
+      .map(([name, revenue]) => ({ name, revenue }))
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 5);
 
     const sixMonthsAgo = new Date();
     sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
     
     const recentOrders = await prisma.order.findMany({
       where: { ...baseWhere, status: { in: REVENUE_STATUSES }, date: { gte: sixMonthsAgo } },
-      select: { date: true, bill_amount: true, id: true },
+      select: { date: true, id: true, invoices: { select: { bill_amount: true } } },
     });
     
     const trendMap = new Map<string, { revenue: number; orders: number }>();
@@ -65,7 +74,7 @@ export const getDashboard = async (req: Request, res: Response) => {
       if (trendMap.has(monthStr)) {
         const current = trendMap.get(monthStr)!;
         trendMap.set(monthStr, {
-          revenue: current.revenue + (Number(o.bill_amount) || 0),
+          revenue: current.revenue + billedTotal(o),
           orders: current.orders + 1,
         });
       }
@@ -102,7 +111,7 @@ export const getAdminDashboard = async (req: Request, res: Response) => {
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     const recentOrders = await prisma.order.findMany({
       where: { status: { in: REVENUE_STATUSES }, date: { gte: sevenDaysAgo } },
-      select: { date: true, bill_amount: true },
+      select: { date: true, invoices: { select: { bill_amount: true } } },
     });
     
     const trendMap = new Map<string, number>();
@@ -115,7 +124,7 @@ export const getAdminDashboard = async (req: Request, res: Response) => {
     recentOrders.forEach(o => {
       const d = o.date.toISOString().split('T')[0];
       if (trendMap.has(d)) {
-        trendMap.set(d, trendMap.get(d)! + (Number(o.bill_amount) || 0));
+        trendMap.set(d, trendMap.get(d)! + billedTotal(o));
       }
     });
     
@@ -131,21 +140,23 @@ export const getAdminDashboard = async (req: Request, res: Response) => {
       { name: "Completed", count: completed_orders },
     ];
 
-    // 4. Performance Leaderboard
-    const leaderboardRaw = await prisma.order.groupBy({
-      by: ["creator_name"],
-      _count: { id: true },
-      _sum: { bill_amount: true },
+    // 4. Performance Leaderboard. Grouped in memory: the revenue lives on each order's
+    // invoices, and Prisma cannot group by a column on one model while summing another's.
+    const closedForBoard = await prisma.order.findMany({
       where: { status: { in: CLOSED_STATUSES } },
-      orderBy: { _count: { id: "desc" } },
-      take: 5,
+      select: { creator_name: true, invoices: { select: { bill_amount: true } } },
     });
-    
-    const performanceLeaderboard = leaderboardRaw.map(l => ({
-      name: l.creator_name,
-      ordersCompleted: l._count.id,
-      revenueGenerated: Number(l._sum.bill_amount) || 0,
-    }));
+    const board = new Map<string, { ordersCompleted: number; revenueGenerated: number }>();
+    for (const o of closedForBoard) {
+      const cur = board.get(o.creator_name) ?? { ordersCompleted: 0, revenueGenerated: 0 };
+      cur.ordersCompleted += 1;
+      cur.revenueGenerated += billedTotal(o);
+      board.set(o.creator_name, cur);
+    }
+    const performanceLeaderboard = [...board.entries()]
+      .map(([name, v]) => ({ name, ...v }))
+      .sort((a, b) => b.ordersCompleted - a.ordersCompleted)
+      .slice(0, 5);
 
     // 5. Time-to-Close (average hours)
     const completedOrdersList = await prisma.order.findMany({
@@ -196,6 +207,11 @@ export const getCsmDashboard = async (req: Request, res: Response) => {
       items: {
         include: { assignments: true },
       },
+      stores: {
+        select: { id: true, s_no: true, store_name: true, location: true, installed_at: true, installed_by: true },
+        orderBy: { s_no: "asc" as const },
+      },
+      invoices: true,
     };
 
     const openOrders = await prisma.order.findMany({
@@ -230,10 +246,10 @@ export const getCsmDashboard = async (req: Request, res: Response) => {
 
       if (order.status === "BillingCompleted" || order.status === "Pending") {
         stageKey = "payment";
-        stageSince = new Date(order.billing_completed_at ?? order.updated_at);
+        stageSince = new Date(rollupOrder(order).billing_completed_at ?? order.updated_at);
       } else if (order.status === "Installed") {
         stageKey = "billing";
-        stageSince = new Date(order.installed_at ?? order.updated_at);
+        stageSince = new Date(rollupOrder(order).installed_at ?? order.updated_at);
       } else {
         // Active
         if (hasProduction && assignedItems.every((i: any) => i.production_completed)) {
@@ -261,7 +277,8 @@ export const getCsmDashboard = async (req: Request, res: Response) => {
         id: order.id,
         order_no: order.order_no,
         client_name: order.client_name,
-        store_name: order.store_name,
+        store_name: storeLabelOf(order),
+        store_count: order.stores?.length ?? 1,
         status: order.status,
         total_amount: totalAmount,
         total_qty: totalQty,
@@ -276,22 +293,21 @@ export const getCsmDashboard = async (req: Request, res: Response) => {
       const totalQty = items.reduce((s: number, i: any) => s + Number(i.qty), 0);
       const lp = lastProducedAt(order);
 
-      const endDate = order.payment_received_at ?? order.updated_at;
+      const roll = rollupOrder(order);
+      const endDate = roll.payment_received_at ?? order.updated_at;
 
       const productionDays = lp
         ? businessDaysBetween(order.created_at, lp)
         : null;
       const installationDays =
-        lp && order.installed_at
-          ? businessDaysBetween(lp, new Date(order.installed_at))
-          : null;
+        lp && roll.installed_at ? businessDaysBetween(lp, roll.installed_at) : null;
       const billingDays =
-        order.installed_at && order.billing_completed_at
-          ? businessDaysBetween(new Date(order.installed_at), new Date(order.billing_completed_at))
+        roll.installed_at && roll.billing_completed_at
+          ? businessDaysBetween(roll.installed_at, roll.billing_completed_at)
           : null;
       const paymentDays =
-        order.billing_completed_at && endDate
-          ? businessDaysBetween(new Date(order.billing_completed_at), new Date(endDate))
+        roll.billing_completed_at && endDate
+          ? businessDaysBetween(roll.billing_completed_at, new Date(endDate))
           : null;
       const totalDays = businessDaysBetween(order.created_at, new Date(endDate));
 
@@ -299,7 +315,8 @@ export const getCsmDashboard = async (req: Request, res: Response) => {
         id: order.id,
         order_no: order.order_no,
         client_name: order.client_name,
-        store_name: order.store_name,
+        store_name: storeLabelOf(order),
+        store_count: order.stores?.length ?? 1,
         total_amount: totalAmount,
         total_qty: totalQty,
         production_days: productionDays,
@@ -497,24 +514,24 @@ export const getAccountantDashboard = async (req: Request, res: Response) => {
       // Orders ready to be billed (Installed status)
       prisma.order.findMany({
         where: { ...baseWhere, status: "Installed" },
-        include: { items: true },
+        include: { items: true, stores: { select: { store_name: true, installed_at: true, installed_by: true } , orderBy: { s_no: "asc" as const } }, invoices: true },
       }),
       // Orders billed, awaiting payment (BillingCompleted or Pending)
       prisma.order.findMany({
         where: { ...baseWhere, status: { in: ["BillingCompleted", "Pending"] } },
-        include: { items: true },
+        include: { items: true, stores: { select: { store_name: true, installed_at: true, installed_by: true } , orderBy: { s_no: "asc" as const } }, invoices: true },
       }),
       // Recently completed (paid)
       prisma.order.findMany({
         where: { ...baseWhere, status: { in: CLOSED_STATUSES } },
-        include: { items: true },
+        include: { items: true, stores: { select: { store_name: true, installed_at: true, installed_by: true } , orderBy: { s_no: "asc" as const } }, invoices: true },
       }),
     ]);
 
     // Also get Active orders that have no production assignments (billable without production)
     const activeNoProd = await prisma.order.findMany({
       where: { ...baseWhere, status: "Active" },
-      include: { items: { include: { assignments: true } } },
+      include: { items: { include: { assignments: true } }, stores: { select: { store_name: true, installed_at: true, installed_by: true }, orderBy: { s_no: "asc" as const } }, invoices: true },
     });
     const activeReady = activeNoProd.filter(
       (o) => !(o.items ?? []).some((i: any) => (i.assignments?.length ?? 0) > 0)
@@ -530,7 +547,7 @@ export const getAccountantDashboard = async (req: Request, res: Response) => {
     // Overdue: billed >30 days ago without payment
     const OVERDUE_DAYS = 30;
     const overdueOrders = awaitingPayment.filter((o) => {
-      const billedAt = o.billing_completed_at ?? o.updated_at;
+      const billedAt = rollupOrder(o).billing_completed_at ?? o.updated_at;
       const daysSinceBilled = businessDaysBetween(new Date(billedAt), now);
       return daysSinceBilled > OVERDUE_DAYS;
     });
@@ -539,12 +556,14 @@ export const getAccountantDashboard = async (req: Request, res: Response) => {
     const billingQueue = [...activeReady, ...awaitingBilling].map((o) => {
       const items = o.items ?? [];
       const totalAmount = items.reduce((s: number, i: any) => s + Number(i.amount), 0);
-      const stageSince = o.installed_at ? new Date(o.installed_at) : o.created_at;
+      const installedAt = rollupOrder(o).installed_at;
+      const stageSince = installedAt ?? o.created_at;
       return {
         id: o.id,
         order_no: o.order_no,
         client_name: o.client_name,
-        store_name: o.store_name,
+        store_name: storeLabelOf(o),
+        store_count: o.stores?.length ?? 1,
         status: o.status,
         total_amount: totalAmount,
         days_waiting: businessDaysBetween(stageSince, now),
@@ -555,15 +574,16 @@ export const getAccountantDashboard = async (req: Request, res: Response) => {
     const paymentQueue = awaitingPayment.map((o) => {
       const items = o.items ?? [];
       const totalAmount = items.reduce((s: number, i: any) => s + Number(i.amount), 0);
-      const billedAt = o.billing_completed_at ?? o.updated_at;
+      const billedAt = rollupOrder(o).billing_completed_at ?? o.updated_at;
       const daysSinceBilled = businessDaysBetween(new Date(billedAt), now);
       return {
         id: o.id,
         order_no: o.order_no,
         client_name: o.client_name,
-        store_name: o.store_name,
-        invoice_no: o.invoice_no,
-        bill_amount: Number(o.bill_amount) || 0,
+        store_name: storeLabelOf(o),
+        store_count: o.stores?.length ?? 1,
+        invoice_no: rollupOrder(o).invoice_no,
+        bill_amount: billedTotal(o) || 0,
         total_amount: totalAmount,
         days_since_billed: daysSinceBilled,
         billed_at: new Date(billedAt).toISOString(),
@@ -575,8 +595,8 @@ export const getAccountantDashboard = async (req: Request, res: Response) => {
     const completedList = recentlyPaid.map((o) => {
       const items = o.items ?? [];
       const totalAmount = items.reduce((s: number, i: any) => s + Number(i.amount), 0);
-      const billedAt = o.billing_completed_at;
-      const paidAt = o.payment_received_at ?? o.updated_at;
+      const billedAt = rollupOrder(o).billing_completed_at;
+      const paidAt = rollupOrder(o).payment_received_at ?? o.updated_at;
       const paymentTat = billedAt
         ? businessDaysBetween(new Date(billedAt), new Date(paidAt))
         : null;
@@ -584,10 +604,11 @@ export const getAccountantDashboard = async (req: Request, res: Response) => {
         id: o.id,
         order_no: o.order_no,
         client_name: o.client_name,
-        store_name: o.store_name,
-        invoice_no: o.invoice_no,
-        bill_amount: Number(o.bill_amount) || 0,
-        amount_received: Number(o.amount_received) || 0,
+        store_name: storeLabelOf(o),
+        store_count: o.stores?.length ?? 1,
+        invoice_no: rollupOrder(o).invoice_no,
+        bill_amount: billedTotal(o) || 0,
+        amount_received: Number(rollupOrder(o).amount_received) || 0,
         total_amount: totalAmount,
         payment_tat: paymentTat,
         paid_at: new Date(paidAt).toISOString(),
@@ -596,15 +617,15 @@ export const getAccountantDashboard = async (req: Request, res: Response) => {
 
     // Summary KPIs
     const totalBilled = awaitingPayment.reduce(
-      (s, o) => s + (Number(o.bill_amount) || 0),
+      (s, o) => s + (billedTotal(o) || 0),
       0
     );
     const totalCollected = recentlyPaid.reduce(
-      (s, o) => s + (Number(o.amount_received) || 0),
+      (s, o) => s + (Number(rollupOrder(o).amount_received) || 0),
       0
     );
     const overdueAmount = overdueOrders.reduce(
-      (s, o) => s + (Number(o.bill_amount) || 0),
+      (s, o) => s + (billedTotal(o) || 0),
       0
     );
 

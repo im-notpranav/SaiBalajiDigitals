@@ -11,6 +11,7 @@ import { Loader2, CheckCircle2, Flag, Users, ChevronsUpDown } from "lucide-react
 import { toast } from "sonner";
 import { StatusBadge } from "@/components/orders/StatusBadge";
 import type { Order, OrderItem } from "@sb-oms/shared-types";
+import { storeLabel, storeSubLabel } from "@/lib/stores";
 
 export const Route = createFileRoute("/_portal/prod-manager/assign")({
   head: () => ({ meta: [{ title: "Assign Work — SB OMS" }] }),
@@ -79,7 +80,7 @@ function ProdManagerAssignPage() {
                       <StatusBadge status={order.status} />
                     </div>
                     <p className="mt-0.5 text-sm text-muted-foreground">
-                      {order.client_name} · {order.store_name} ({order.location})
+                      {order.client_name} · {storeLabel(order as any)}{storeSubLabel(order as any) ? ` (${storeSubLabel(order as any)})` : ""}
                     </p>
                   </div>
                   <div className="text-right text-xs">

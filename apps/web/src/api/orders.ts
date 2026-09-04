@@ -1,5 +1,5 @@
 import { apiFetch, apiDownload, apiClient } from "./client";
-import type { CreateOrderInput, Order, ProductionOrder } from "@sb-oms/shared-types";
+import type { CreateOrderInput, Invoice, Order, OrderStore, ProductionOrder } from "@sb-oms/shared-types";
 
 export interface ImportResult {
   message: string;
@@ -72,6 +72,85 @@ export async function updateOrder(id: number, data: CreateOrderInput) {
 
 export async function deleteOrder(id: number) {
   return apiFetch<{ ok: boolean }>(`/orders/${id}`, { method: "DELETE" });
+}
+
+/* ─── Order header and stores ─────────────────────────────────────
+   Separate from updateOrder on purpose: header fields stay editable later in the
+   pipeline than line items, and are not restricted to the order's creator. */
+
+export interface OrderDetailsPatch {
+  client_name?: string;
+  /** null clears the PO; omit the key to leave it alone. */
+  po_number?: string | null;
+  remarks?: string | null;
+  remarks_other_text?: string | null;
+}
+
+export async function updateOrderDetails(id: number, data: OrderDetailsPatch) {
+  const res = await apiFetch<Order>(`/orders/${id}/details`, { method: "PATCH", data });
+  return { order: res };
+}
+
+export interface StorePatch {
+  store_name?: string;
+  location?: string;
+  /** null clears the PO; omit the key to leave it alone. */
+  po_number?: string | null;
+}
+
+export async function updateStore(orderId: number, storeId: number, data: StorePatch) {
+  return apiFetch<OrderStore>(`/orders/${orderId}/stores/${storeId}`, { method: "PATCH", data });
+}
+
+export async function addStore(orderId: number, data: { store_name: string; location: string; po_number?: string | null }) {
+  return apiFetch<OrderStore>(`/orders/${orderId}/stores`, { method: "POST", data });
+}
+
+export async function deleteStore(orderId: number, storeId: number) {
+  return apiFetch<{ message: string }>(`/orders/${orderId}/stores/${storeId}`, { method: "DELETE" });
+}
+
+export async function markStoreInstalled(orderId: number, storeId: number) {
+  const res = await apiFetch<Order>(`/orders/${orderId}/stores/${storeId}/install`, { method: "PUT", data: {} });
+  return { order: res };
+}
+
+/* ─── Invoices ─────────────────────────────────────────────────────
+   An order can carry several invoices, each covering its own set of stores. */
+
+export async function createInvoice(
+  orderId: number,
+  data: { invoice_no: string; bill_amount: number; billing_date: string; store_ids: number[] }
+) {
+  return apiFetch<Invoice & { covered_total: number }>(`/orders/${orderId}/invoices`, { method: "POST", data });
+}
+
+export async function recordInvoicePayment(
+  orderId: number,
+  invoiceId: number,
+  amount_received: number,
+  payment_date: string
+) {
+  return apiFetch<Invoice>(`/orders/${orderId}/invoices/${invoiceId}/payment`, {
+    method: "PUT",
+    data: { amount_received, payment_date },
+  });
+}
+
+export async function editInvoiceBilling(
+  orderId: number,
+  invoiceId: number,
+  data: { invoice_no?: string; bill_amount?: number; billing_date?: string; store_ids?: number[] }
+) {
+  return apiFetch<Invoice>(`/orders/${orderId}/invoices/${invoiceId}/billing`, { method: "PATCH", data });
+}
+
+export async function editInvoicePayment(
+  orderId: number,
+  invoiceId: number,
+  data: { amount_received?: number; payment_date?: string }
+) {
+  return apiFetch<Invoice>(`/orders/${orderId}/invoices/${invoiceId}/payment-edit`, { method: "PATCH", data });
 }
 
 export async function submitInvoice(id: number, invoice_no: string, bill_amount: number, billing_date: string) {

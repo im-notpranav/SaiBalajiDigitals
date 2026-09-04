@@ -1,10 +1,11 @@
 import { serializeDecimals } from "../utils/serialize";
 import { computeTotals } from "../utils/order-totals";
-import { isClosed, isCsmEditable, OPEN_STATUSES, CLOSED_STATUSES } from "../utils/order-status";
+import { isClosed, isCsmEditable, isHeaderEditable, isBillingStarted, OPEN_STATUSES, CLOSED_STATUSES } from "../utils/order-status";
 import { currentStage, lastProducedAt, businessDaysBetween } from "../utils/order-stage";
 import { Request, Response } from "express";
 import { prisma } from "../utils/prisma";
 import { generateOrderId } from "../utils/order-sequence";
+import { recomputeOrderStatus, rollupOrder, storeLabelOf, storeLocationOf } from "../utils/order-derive";
 
 import { notifyRole, notifyUser } from "../services/notifications.service";
 
@@ -42,16 +43,26 @@ export const getOrders = async (req: Request, res: Response) => {
 
     if (order_no) where.order_no = { contains: String(order_no), mode: "insensitive" };
     if (client) where.client_name = { contains: String(client), mode: "insensitive" };
-    if (store) where.store_name = { contains: String(store), mode: "insensitive" };
     if (status) where.status = status;
-    
+
+    // A store match may sit on any of the order's stores. Collected under AND so that a
+    // store filter and a free-text search can both apply instead of overwriting each other.
+    const storeMatch = (term: string) => [
+      { store_name: { contains: term, mode: "insensitive" } },
+      { stores: { some: { store_name: { contains: term, mode: "insensitive" } } } },
+    ];
+    const andClauses: any[] = [];
+    if (store) andClauses.push({ OR: storeMatch(String(store)) });
     if (q) {
-      where.OR = [
-        { order_no: { contains: String(q), mode: "insensitive" } },
-        { client_name: { contains: String(q), mode: "insensitive" } },
-        { store_name: { contains: String(q), mode: "insensitive" } }
-      ];
+      andClauses.push({
+        OR: [
+          { order_no: { contains: String(q), mode: "insensitive" } },
+          { client_name: { contains: String(q), mode: "insensitive" } },
+          ...storeMatch(String(q)),
+        ],
+      });
     }
+    if (andClauses.length > 0) where.AND = andClauses;
 
     if (user.role === "PRODUCTION") {
       where.status = "Active";
@@ -72,7 +83,11 @@ export const getOrders = async (req: Request, res: Response) => {
         skip,
         take,
         orderBy: { created_at: "desc" },
-        include: { items: { include: { assignments: { include: { user: { select: { id: true, name: true } } } } } } },
+        include: {
+          items: { include: { assignments: { include: { user: { select: { id: true, name: true } } } } } },
+          stores: { select: { id: true, s_no: true, store_name: true, location: true, installed_at: true, invoice_id: true }, orderBy: { s_no: "asc" } },
+          _count: { select: { stores: true } },
+        },
       }),
       prisma.order.count({ where }),
     ]);
@@ -83,14 +98,17 @@ export const getOrders = async (req: Request, res: Response) => {
         id: o.id,
         order_no: o.order_no,
         client_name: o.client_name,
-        store_name: o.store_name,
-        location: o.location,
+        store_name: storeLabelOf(o),
+        location: storeLocationOf(o),
+        stores: o.stores,
+        store_count: o._count.stores,
         status: o.status,
         date: o.date,
         items: o.items
           .filter((i: any) => i.assignments.some((a: any) => a.user_id === user.id))
           .map((i: any) => ({
             id: i.id,
+            order_store_id: i.order_store_id,
             s_no: i.s_no,
             media: i.media,
             width_inches: i.width_inches,
@@ -112,7 +130,8 @@ export const getOrders = async (req: Request, res: Response) => {
     
     const ordersWithTotal = orders.map((o: any) => {
       const { total_amount, loss_amount } = computeTotals(o.items);
-      return { ...o, total_amount, loss_amount };
+      const { _count, ...rest } = o;
+      return { ...rest, store_count: _count.stores, total_amount, loss_amount };
     });
     return res.status(200).json(serializeDecimals({ data: ordersWithTotal, total, page: Number(page) }));
   } catch (err) {
@@ -126,14 +145,26 @@ export const getOrder = async (req: Request, res: Response) => {
     const id = parseInt(req.params.id as string, 10);
     const order = await prisma.order.findUnique({
       where: { id },
-      include: { items: { include: { assignments: { include: { user: { select: { id: true, name: true } } } } } } },
+      include: {
+        // The flat item list stays: the export, dashboards and production queue all read it.
+        items: { include: { assignments: { include: { user: { select: { id: true, name: true } } } } } },
+        stores: {
+          include: {
+            items: { include: { assignments: { include: { user: { select: { id: true, name: true } } } } }, orderBy: { s_no: "asc" } },
+            installer: { select: { id: true, name: true } },
+          },
+          orderBy: { s_no: "asc" },
+        },
+        invoices: { orderBy: { id: "asc" } },
+      },
     });
 
     if (!order) return res.status(404).json({ message: "Order not found" });
 
-    if (req.user!.role === "CSM" && order.created_by !== req.user!.id) {
-      return res.status(403).json({ message: "Forbidden" });
-    }
+    // A CSM may open any order, not just their own: header fields (store, location, PO)
+    // are editable by any active CSM, and a stand-in cannot enter a PO on an order they
+    // cannot open. Their *list* stays scoped to their own orders — see getOrders.
+    // Line-item and installation actions remain creator-only.
 
     if (req.user!.role === "PRODUCTION") {
       if (order.status !== "Active") {
@@ -149,12 +180,14 @@ export const getOrder = async (req: Request, res: Response) => {
         id: order.id,
         order_no: order.order_no,
         client_name: order.client_name,
-        store_name: order.store_name,
-        location: order.location,
+        store_name: storeLabelOf(order),
+        location: storeLocationOf(order),
+        stores: order.stores.map((s: any) => ({ id: s.id, s_no: s.s_no, store_name: s.store_name, location: s.location })),
         status: order.status,
         date: order.date,
         items: myItems.map((i: any) => ({
           id: i.id,
+          order_store_id: i.order_store_id,
           s_no: i.s_no,
           media: i.media,
           width_inches: i.width_inches,
@@ -173,13 +206,16 @@ export const getOrder = async (req: Request, res: Response) => {
 
     
     const { total_amount, loss_amount } = computeTotals(order.items);
-    return res.status(200).json(serializeDecimals({ ...order, total_amount, loss_amount }));
+    // Each store carries the billable total of its own items — that is what an invoice
+    // covering this store is reconciled against.
+    const stores = order.stores.map((s: any) => ({ ...s, ...computeTotals(s.items) }));
+    return res.status(200).json(serializeDecimals({ ...order, stores, total_amount, loss_amount }));
   } catch (err) {
     return res.status(500).json({ message: "Internal server error" });
   }
 };
 
-import { createOrderSchema, updateOrderSchema, invoiceSchema, closeOrderSchema, forceCloseOrderSchema, paymentSchema } from "../utils/validators";
+import { createOrderSchema, updateOrderSchema, updateOrderDetailsSchema, updateStoreSchema, addStoreSchema, invoiceSchema, closeOrderSchema, forceCloseOrderSchema, paymentSchema } from "../utils/validators";
 
 export const createOrder = async (req: Request, res: Response) => {
   try {
@@ -187,7 +223,7 @@ export const createOrder = async (req: Request, res: Response) => {
     if (!parseResult.success) {
       return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parseResult.error) });
     }
-    const { client_name, store_name, location, po_number, items, remarks, remarks_other_text } = parseResult.data;
+    const { client_name, po_number, stores, remarks, remarks_other_text } = parseResult.data;
     const user = req.user!;
     const isAdmin = user.role === "ADMIN";
 
@@ -207,66 +243,88 @@ export const createOrder = async (req: Request, res: Response) => {
     };
 
     ensureLookupValue("client", client_name);
-    items.forEach((item: any) => ensureLookupValue("media", item.media));
+    stores.forEach((s) => s.items.forEach((item: any) => ensureLookupValue("media", item.media)));
 
-    const processedItems = items.map((item: any, index: number) => {
-      const w = Number(item.width_inches);
-      const h = Number(item.height_inches);
-      const q = Number(item.qty);
-      const r = Number(item.rate);
+    // Items are processed per store; s_no restarts at 1 inside each store.
+    const processedByStore = stores.map((store) =>
+      store.items.map((item: any, index: number) => {
+        const w = Number(item.width_inches);
+        const h = Number(item.height_inches);
+        const q = Number(item.qty);
+        const r = Number(item.rate);
 
-      if (w <= 0 || h <= 0 || q <= 0 || r <= 0) {
-        throw new Error("Item dimensions, qty, and rate must be positive numbers.");
-      }
+        if (w <= 0 || h <= 0 || q <= 0 || r <= 0) {
+          throw new Error("Item dimensions, qty, and rate must be positive numbers.");
+        }
 
-      const total_sft = Number(((w * h) / 144) * q).toFixed(2);
-      const amount = Number(parseFloat(total_sft) * r).toFixed(2);
+        const total_sft = Number(((w * h) / 144) * q).toFixed(2);
+        const amount = Number(parseFloat(total_sft) * r).toFixed(2);
 
-      return {
-        s_no: index + 1,
-        media: item.media,
-        width_inches: w,
-        height_inches: h,
-        qty: q,
-        total_sft: parseFloat(total_sft),
-        rate: r,
-        amount: parseFloat(amount),
-        // Loss remarks: employees may PROPOSE (remarks_confirmed=false, still billable until admin approves);
-        // an admin setting a remark auto-confirms it (excluded from the billable total).
-        remarks: item.remarks ?? null,
-        remarks_other_text: item.remarks === "Other" ? item.remarks_other_text : null,
-        remarks_set_at: item.remarks ? new Date() : null,
-        remarks_set_by: item.remarks ? user.id : null,
-        remarks_confirmed: item.remarks ? isAdmin : false,
-        remarks_confirmed_at: item.remarks && isAdmin ? new Date() : null,
-        remarks_confirmed_by: item.remarks && isAdmin ? user.id : null,
-      };
-    });
+        return {
+          s_no: index + 1,
+          media: item.media,
+          width_inches: w,
+          height_inches: h,
+          qty: q,
+          total_sft: parseFloat(total_sft),
+          rate: r,
+          amount: parseFloat(amount),
+          // Loss remarks: employees may PROPOSE (remarks_confirmed=false, still billable until admin approves);
+          // an admin setting a remark auto-confirms it (excluded from the billable total).
+          remarks: item.remarks ?? null,
+          remarks_other_text: item.remarks === "Other" ? item.remarks_other_text : null,
+          remarks_set_at: item.remarks ? new Date() : null,
+          remarks_set_by: item.remarks ? user.id : null,
+          remarks_confirmed: item.remarks ? isAdmin : false,
+          remarks_confirmed_at: item.remarks && isAdmin ? new Date() : null,
+          remarks_confirmed_by: item.remarks && isAdmin ? user.id : null,
+        };
+      })
+    );
 
     // If a non-admin proposed any loss remarks, flag the order for admin review.
-    const hasProposedLoss = !isAdmin && processedItems.some((i: any) => i.remarks != null);
+    const hasProposedLoss = !isAdmin && processedByStore.some((si) => si.some((i: any) => i.remarks != null));
 
     const order_no = await generateOrderId();
 
     const order = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT set_config('app.current_user_id', ${user.id.toString()}, true)`;
-      return tx.order.create({
+      const created = await tx.order.create({
         data: {
           order_no,
           client_name,
-          store_name,
-          location,
           po_number,
           created_by: user.id,
           creator_name: user.name,
           status: "Active",
           remarks,
           remarks_other_text,
-          items: {
-            create: processedItems,
+          stores: {
+            create: stores.map((s, index) => ({
+              s_no: index + 1,
+              store_name: s.store_name,
+              location: s.location,
+              po_number: s.po_number ?? null,
+            })),
           },
         },
-        include: { items: true },
+        include: { stores: { orderBy: { s_no: "asc" } } },
+      });
+      // s_no ascending matches the order the stores were supplied in, so each store's
+      // items line up by index. Items carry both ids; the composite key keeps them from
+      // ever disagreeing.
+      await tx.orderItem.createMany({
+        data: created.stores.flatMap((storeRow, index) =>
+          processedByStore[index]!.map((item: any) => ({
+            ...item,
+            order_id: created.id,
+            order_store_id: storeRow.id,
+          }))
+        ),
+      });
+      return tx.order.findUniqueOrThrow({
+        where: { id: created.id },
+        include: { items: true, stores: { orderBy: { s_no: "asc" } } },
       });
     });
 
@@ -297,8 +355,8 @@ export const createOrder = async (req: Request, res: Response) => {
       const summary: OrderSummary = {
         order_no: order.order_no,
         client_name: order.client_name,
-        store_name: order.store_name,
-        location: order.location,
+        store_name: storeLabelOf(order),
+        location: storeLocationOf(order),
         po_number: order.po_number,
         date: order.date.toLocaleDateString("en-IN"),
         total_amount: total_amount.toFixed(2),
@@ -335,6 +393,8 @@ export const updateOrder = async (req: Request, res: Response) => {
     if (!parseResult.success) {
       return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parseResult.error) });
     }
+    // Header fields are accepted for backward compatibility but handled elsewhere; see
+    // the guard below. This endpoint is line items only.
     const { client_name, store_name, location, po_number, items, remarks, remarks_other_text } = parseResult.data;
     const user = req.user!;
     const isAdmin = user.role === "ADMIN";
@@ -350,7 +410,6 @@ export const updateOrder = async (req: Request, res: Response) => {
       }
     };
 
-    if (client_name) ensureLookupValue("client", client_name);
     if (items) {
       items.forEach((item: any) => {
         if (item.media) ensureLookupValue("media", item.media);
@@ -359,11 +418,12 @@ export const updateOrder = async (req: Request, res: Response) => {
 
     const existingOrder = await prisma.order.findUnique({
       where: { id },
-      include: { items: true },
+      include: { items: true, stores: { orderBy: { s_no: "asc" } } },
     });
 
     if (!existingOrder) return res.status(404).json({ message: "Order not found" });
 
+    // Line items stay creator-restricted. Header fields do not — see updateOrderDetails.
     if (user.role === "CSM" && existingOrder.created_by !== user.id) {
       return res.status(403).json({ message: "Forbidden" });
     }
@@ -374,6 +434,29 @@ export const updateOrder = async (req: Request, res: Response) => {
 
     if (user.role === "CSM" && remarks !== undefined && remarks !== (existingOrder.remarks ?? null)) {
       return res.status(403).json({ message: "Only an administrator can set order remarks." });
+    }
+
+    // Header fields have their own endpoints. Rejected loudly rather than ignored:
+    // silently dropping a header edit is how these changes get lost.
+    if (client_name !== undefined || store_name !== undefined || location !== undefined || po_number !== undefined) {
+      return res.status(400).json({
+        message:
+          "Client, store, location and PO are no longer edited here. Use PATCH /api/orders/:id/details for the order header, or PATCH /api/orders/:orderId/stores/:storeId for a store.",
+      });
+    }
+
+    // Every store this order has, so an item can be appended to the right one.
+    const storeById = new Map(existingOrder.stores.map((s) => [s.id, s]));
+    const defaultStoreId = existingOrder.stores[0]?.id;
+    if (items && items.length > 0 && defaultStoreId === undefined) {
+      return res.status(409).json({ message: "This order has no store to attach line items to." });
+    }
+    if (items) {
+      for (const it of items as any[]) {
+        if (it.store_id !== undefined && !storeById.has(it.store_id)) {
+          return res.status(400).json({ message: `Store ${it.store_id} does not belong to this order.` });
+        }
+      }
     }
 
     if (items && items.length > 0) {
@@ -432,11 +515,6 @@ export const updateOrder = async (req: Request, res: Response) => {
       }
     };
 
-    if (client_name !== undefined) logChange("Client Name", existingOrder.client_name, client_name);
-    if (store_name !== undefined) logChange("Store Name", existingOrder.store_name, store_name);
-    if (location !== undefined) logChange("Location", existingOrder.location, location);
-    if (po_number !== undefined) logChange("PO Number", existingOrder.po_number || "", po_number || "");
-
     if (items) {
       const oldItems = existingOrder.items;
       items.forEach((newItem: any) => {
@@ -464,22 +542,26 @@ export const updateOrder = async (req: Request, res: Response) => {
     const updatedOrder = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT set_config('app.current_user_id', ${user.id.toString()}, true)`;
 
-      // Update header
-      const order = await tx.order.update({
-        where: { id },
-        data: {
-          client_name: client_name !== undefined ? client_name : undefined,
-          store_name: store_name !== undefined ? store_name : undefined,
-          location: location !== undefined ? location : undefined,
-          po_number: po_number !== undefined ? po_number : undefined,
-          remarks: remarks !== undefined ? remarks : undefined,
-          remarks_other_text: remarks_other_text !== undefined ? remarks_other_text : undefined,
-        },
-      });
+      // Order-level remarks are the only header field still settled here; client, store,
+      // location and PO have their own endpoints.
+      if (remarks !== undefined || remarks_other_text !== undefined) {
+        await tx.order.update({
+          where: { id },
+          data: {
+            remarks: remarks !== undefined ? remarks : undefined,
+            remarks_other_text: remarks_other_text !== undefined ? remarks_other_text : undefined,
+          },
+        });
+      }
 
       if (items && items.length > 0) {
         const oldItemsById = new Map(existingOrder.items.map((i: any) => [i.id, i]));
-        let nextSNo = existingOrder.items.length > 0 ? Math.max(...existingOrder.items.map((i: any) => i.s_no)) + 1 : 1;
+        // s_no is 1-based within each store, so numbering continues per store, not per order.
+        const nextSNoByStore = new Map<number, number>();
+        for (const s of existingOrder.stores) {
+          const own = existingOrder.items.filter((i: any) => i.order_store_id === s.id);
+          nextSNoByStore.set(s.id, own.length > 0 ? Math.max(...own.map((i: any) => i.s_no)) + 1 : 1);
+        }
 
         for (const newItem of items) {
           const w = Number(newItem.width_inches);
@@ -514,9 +596,12 @@ export const updateOrder = async (req: Request, res: Response) => {
               },
             });
           } else {
+            const targetStoreId = newItem.store_id ?? defaultStoreId!;
+            const sNo = nextSNoByStore.get(targetStoreId) ?? 1;
+            nextSNoByStore.set(targetStoreId, sNo + 1);
             await tx.orderItem.create({
               data: {
-                order_id: id, s_no: nextSNo++, media: newItem.media,
+                order_id: id, order_store_id: targetStoreId, s_no: sNo, media: newItem.media,
                 width_inches: w, height_inches: h, qty: q,
                 total_sft: parseFloat(total_sft), rate: r, amount: parseFloat(amount),
                 // Loss remarks: employees propose (unconfirmed, still billable); admins auto-confirm.
@@ -546,6 +631,9 @@ export const updateOrder = async (req: Request, res: Response) => {
         });
       }
 
+      // Line-item changes move the billable total, which can flip an order between
+      // BillingCompleted and Pending.
+      await recomputeOrderStatus(tx, id);
       return tx.order.findUnique({ where: { id }, include: { items: true } });
     });
 
@@ -571,6 +659,290 @@ export const updateOrder = async (req: Request, res: Response) => {
   }
 };
 
+// ---------------------------------------------------------------------------------------
+// Header edits.
+//
+// Deliberately separate from updateOrder: line items are append-only and freeze once
+// billing starts, but a store name may need correcting and a PO usually only arrives
+// *after* the invoice is raised. One gate cannot serve both.
+// ---------------------------------------------------------------------------------------
+
+/** Shared by every header edit: persist the change log and notify, exactly as updateOrder does. */
+const recordHeaderChanges = async (
+  tx: any,
+  orderId: number,
+  user: { id: number; role: string; name: string },
+  changes: { field: string; oldValue: string; newValue: string }[]
+) => {
+  if (changes.length === 0 || user.role !== "CSM") return;
+  await tx.orderChangeLog.createMany({
+    data: changes.map((c) => ({
+      order_id: orderId,
+      changed_by: user.id,
+      field_changed: c.field,
+      old_value: c.oldValue,
+      new_value: c.newValue,
+    })),
+  });
+};
+
+const collectChanges = () => {
+  const changes: { field: string; oldValue: string; newValue: string }[] = [];
+  return {
+    changes,
+    log: (field: string, oldVal: string, newVal: string) => {
+      if (oldVal !== newVal) changes.push({ field, oldValue: oldVal, newValue: newVal });
+    },
+  };
+};
+
+/** PATCH /api/orders/:id/details — client name, job PO and order remarks. No line items. */
+export const updateOrderDetails = async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id as string, 10);
+    const parseResult = updateOrderDetailsSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parseResult.error) });
+    }
+    const { client_name, po_number, remarks, remarks_other_text } = parseResult.data;
+    const user = req.user!;
+    const isAdmin = user.role === "ADMIN";
+
+    const order = await prisma.order.findUnique({ where: { id } });
+    if (!order) return res.status(404).json({ message: "Order not found" });
+
+    // No creator check: any active CSM may correct a header field. If the CSM who raised
+    // the order is on leave, the PO still has to get in.
+    if (!isAdmin && !isHeaderEditable(order.status)) {
+      return res.status(403).json({ message: "This order is settled. Ask an administrator to change it." });
+    }
+
+    if (!isAdmin && client_name !== undefined && client_name !== order.client_name && isBillingStarted(order.status)) {
+      return res.status(403).json({
+        message: "The invoice has already been raised against this client. Ask an administrator to change it.",
+      });
+    }
+
+    if (!isAdmin && remarks !== undefined && remarks !== (order.remarks ?? null)) {
+      return res.status(403).json({ message: "Only an administrator can set order remarks." });
+    }
+
+    if (client_name) {
+      try {
+        const trimmed = client_name.trim();
+        const existing = await prisma.client.findFirst({ where: { name: { equals: trimmed, mode: "insensitive" } } });
+        if (!existing && trimmed) await prisma.client.create({ data: { name: trimmed } });
+      } catch (e) {
+        console.error("Lookup upsert failed for client:", e);
+      }
+    }
+
+    const { changes, log } = collectChanges();
+    if (client_name !== undefined) log("Client Name", order.client_name, client_name);
+    // undefined leaves the PO alone; an explicit null clears it.
+    if (po_number !== undefined) log("PO Number", order.po_number || "", po_number || "");
+
+    const updated = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.current_user_id', ${user.id.toString()}, true)`;
+      const o = await tx.order.update({
+        where: { id },
+        data: {
+          client_name: client_name !== undefined ? client_name : undefined,
+          po_number: po_number !== undefined ? po_number : undefined,
+          remarks: remarks !== undefined ? remarks : undefined,
+          remarks_other_text: remarks_other_text !== undefined ? remarks_other_text : undefined,
+        },
+      });
+      await recordHeaderChanges(tx, id, user, changes);
+      return o;
+    });
+
+    if (changes.length > 0 && user.role === "CSM") {
+      await sendOrderEditEmail(order.order_no, user.name, changes as FieldChange[]);
+    }
+
+    return res.status(200).json(serializeDecimals(updated));
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+/** PATCH /api/orders/:orderId/stores/:storeId — one store's name, location and PO. */
+export const updateStore = async (req: Request, res: Response) => {
+  try {
+    const orderId = parseInt(req.params.orderId as string, 10);
+    const storeId = parseInt(req.params.storeId as string, 10);
+    const parseResult = updateStoreSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parseResult.error) });
+    }
+    const { store_name, location, po_number } = parseResult.data;
+    const user = req.user!;
+    const isAdmin = user.role === "ADMIN";
+
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: { stores: { orderBy: { s_no: "asc" } } },
+    });
+    if (!order) return res.status(404).json({ message: "Order not found" });
+
+    const store = order.stores.find((s) => s.id === storeId);
+    if (!store) return res.status(404).json({ message: "Store not found on this order" });
+
+    if (!isAdmin && !isHeaderEditable(order.status)) {
+      return res.status(403).json({ message: "This order is settled. Ask an administrator to change it." });
+    }
+
+    // Once a store is on an invoice, its identity is what accounts billed against.
+    const identityChange =
+      (store_name !== undefined && store_name !== store.store_name) ||
+      (location !== undefined && location !== store.location);
+    if (!isAdmin && identityChange && store.invoice_id !== null) {
+      return res.status(403).json({
+        message: "This store has already been invoiced. Ask an administrator to change its name or location.",
+      });
+    }
+
+    if (store_name !== undefined) {
+      const clash = order.stores.some(
+        (s) => s.id !== storeId && s.store_name.trim().toLowerCase() === store_name.trim().toLowerCase()
+      );
+      if (clash) return res.status(409).json({ message: "Another store in this order already has that name." });
+    }
+
+    const { changes, log } = collectChanges();
+    const label = `S${String(store.s_no).padStart(2, "0")}`;
+    if (store_name !== undefined) log(`${label} Store Name`, store.store_name, store_name);
+    if (location !== undefined) log(`${label} Location`, store.location, location);
+    if (po_number !== undefined) log(`${label} PO Number`, store.po_number || "", po_number || "");
+
+    const updated = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.current_user_id', ${user.id.toString()}, true)`;
+      const s = await tx.orderStore.update({
+        where: { id: storeId },
+        data: {
+          store_name: store_name !== undefined ? store_name : undefined,
+          location: location !== undefined ? location : undefined,
+          po_number: po_number !== undefined ? po_number : undefined,
+        },
+      });
+      await recordHeaderChanges(tx, orderId, user, changes);
+      return s;
+    });
+
+    if (changes.length > 0 && user.role === "CSM") {
+      await sendOrderEditEmail(order.order_no, user.name, changes as FieldChange[]);
+    }
+
+    return res.status(200).json(serializeDecimals(updated));
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+/** POST /api/orders/:id/stores — add another store to an existing order. */
+export const addStore = async (req: Request, res: Response) => {
+  try {
+    const orderId = parseInt(req.params.id as string, 10);
+    const parseResult = addStoreSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parseResult.error) });
+    }
+    const { store_name, location, po_number } = parseResult.data;
+    const user = req.user!;
+    const isAdmin = user.role === "ADMIN";
+
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: { stores: true },
+    });
+    if (!order) return res.status(404).json({ message: "Order not found" });
+
+    // A new store means new line items, so this follows the line-item rule, not the header one.
+    if (!isAdmin && !isCsmEditable(order.status)) {
+      return res.status(403).json({ message: "Stores can only be added before billing starts." });
+    }
+    if (order.stores.length >= 50) {
+      return res.status(409).json({ message: "An order can hold at most 50 stores." });
+    }
+    if (order.stores.some((s) => s.store_name.trim().toLowerCase() === store_name.trim().toLowerCase())) {
+      return res.status(409).json({ message: "This order already has a store with that name." });
+    }
+
+    const created = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.current_user_id', ${user.id.toString()}, true)`;
+      const maxSNo = order.stores.reduce((m, s) => Math.max(m, s.s_no), 0);
+      const s = await tx.orderStore.create({
+        data: { order_id: orderId, s_no: maxSNo + 1, store_name, location, po_number: po_number ?? null },
+      });
+      await recordHeaderChanges(tx, orderId, user, [
+        { field: `S${String(s.s_no).padStart(2, "0")} Store (added)`, oldValue: "—", newValue: `${store_name}, ${location}` },
+      ]);
+      // A new, uninstalled store reopens an order that had finished installing.
+      await recomputeOrderStatus(tx, orderId);
+      return s;
+    });
+
+    return res.status(201).json(serializeDecimals(created));
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+/** DELETE /api/orders/:orderId/stores/:storeId — only while empty and unbilled. */
+export const deleteStore = async (req: Request, res: Response) => {
+  try {
+    const orderId = parseInt(req.params.orderId as string, 10);
+    const storeId = parseInt(req.params.storeId as string, 10);
+    const user = req.user!;
+    const isAdmin = user.role === "ADMIN";
+
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: { stores: { include: { _count: { select: { items: true } } }, orderBy: { s_no: "asc" } } },
+    });
+    if (!order) return res.status(404).json({ message: "Order not found" });
+
+    const store = order.stores.find((s) => s.id === storeId);
+    if (!store) return res.status(404).json({ message: "Store not found on this order" });
+
+    if (!isAdmin && !isCsmEditable(order.status)) {
+      return res.status(403).json({ message: "Stores can only be removed before billing starts." });
+    }
+    if (store.invoice_id !== null) {
+      return res.status(409).json({ message: "This store has been invoiced and cannot be removed." });
+    }
+    if (store._count.items > 0) {
+      return res.status(409).json({ message: "Remove this store's line items before removing the store." });
+    }
+    if (order.stores.length === 1) {
+      return res.status(409).json({ message: "An order must keep at least one store." });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.current_user_id', ${user.id.toString()}, true)`;
+      await tx.orderStore.delete({ where: { id: storeId } });
+      await recordHeaderChanges(tx, orderId, user, [
+        {
+          field: `S${String(store.s_no).padStart(2, "0")} Store (removed)`,
+          oldValue: `${store.store_name}, ${store.location}`,
+          newValue: "—",
+        },
+      ]);
+      // Removing the last uninstalled store can complete the order's installation.
+      await recomputeOrderStatus(tx, orderId);
+    });
+
+    return res.status(200).json({ message: "Store removed" });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
 export const deleteOrder = async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id as string, 10);
@@ -584,19 +956,83 @@ export const deleteOrder = async (req: Request, res: Response) => {
   }
 };
 
-export const reconcileInvoice = async (req: Request, res: Response) => {
+// ---------------------------------------------------------------------------------------
+// Invoicing.
+//
+// An invoice covers a named set of stores, and its expected value is the billable total of
+// *those* stores — not of the whole order. That is what makes several invoices against one
+// order reconcilable rather than merely possible.
+// ---------------------------------------------------------------------------------------
+
+/**
+ * Is this store ready to bill? Mirrors the old whole-order gate, scoped to one store:
+ * anything that went through production must be produced and installation-confirmed;
+ * a supply-only store (nothing ever assigned) bills directly without an installation date.
+ */
+const storeBillingBlocker = (store: any): string | null => {
+  const assigned = store.items.filter((i: any) => i.assignments.length > 0);
+  if (assigned.length === 0) return null;
+  const pending = assigned.filter((i: any) => !i.production_completed);
+  if (pending.length > 0) {
+    return `Cannot bill ${store.store_name} — ${pending.length} assigned item(s) are still pending production completion.`;
+  }
+  if (store.installed_at == null) {
+    return `Cannot bill ${store.store_name} — the order creator must confirm its installation first.`;
+  }
+  return null;
+};
+
+const invoiceCreatedNotices = async (
+  order: any,
+  invoice: { invoice_no: string; bill_amount: number },
+  coveredTotal: number,
+  isMatch: boolean,
+  user: { name: string }
+) => {
+  if (!isMatch) {
+    await sendPendingInvoiceEmail(order.order_no, order.client_name, coveredTotal, invoice.bill_amount);
+  }
+  if (!order.created_by) return;
+  await notifyUser(
+    order.created_by,
+    `Invoice ${invoice.invoice_no} raised on ${order.order_no}`,
+    isMatch
+      ? `Covers ₹${invoice.bill_amount} in full — awaiting payment`
+      : `Billed ₹${invoice.bill_amount} against ₹${coveredTotal} of covered work`,
+    isMatch ? "success" : "warning",
+    order.id
+  );
+  const creatorUser = await prisma.user.findUnique({ where: { id: order.created_by }, select: { email: true } });
+  if (creatorUser?.email) {
+    sendStatusTransitionEmail(
+      creatorUser.email,
+      order.order_no,
+      order.client_name,
+      "Billing Completed",
+      `Invoice ${invoice.invoice_no} submitted. Bill amount: ₹${invoice.bill_amount}. ${
+        isMatch ? "Matches the covered stores' total." : `Short of the ₹${coveredTotal} covered — invoice is pending review.`
+      }`,
+      user.name
+    );
+  }
+};
+
+/**
+ * POST /api/orders/:id/invoices — raise an invoice over a set of this order's stores.
+ */
+export const createInvoice = async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id as string, 10);
     const parseResult = invoiceSchema.safeParse(req.body);
     if (!parseResult.success) {
       return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parseResult.error) });
     }
-    const { invoice_no, bill_amount, billing_date } = parseResult.data;
+    const { invoice_no, bill_amount, billing_date, store_ids } = parseResult.data;
     const user = req.user!;
 
     const order = await prisma.order.findUnique({
       where: { id },
-      include: { items: { include: { assignments: true } } },
+      include: { stores: { include: { items: { include: { assignments: true } } }, orderBy: { s_no: "asc" } } },
     });
     if (!order) return res.status(404).json({ message: "Order not found" });
 
@@ -604,102 +1040,109 @@ export const reconcileInvoice = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Order is already closed" });
     }
 
-    if (order.invoice_no) {
-      return res.status(400).json({ message: "Invoice already submitted for this order; corrections must go through an order edit." });
-    }
-
-    // Production + installation gate. Orders that went through production must be
-    // produced AND installation-confirmed by the employee before they can be billed.
-    // Supply-only orders (nothing assigned) skip this and bill directly from Active.
-    const hasProduction = order.items.some((i: any) => i.assignments.length > 0);
-    if (hasProduction) {
-      const pendingProduction = order.items.filter((i: any) => i.assignments.length > 0 && !i.production_completed);
-      if (pendingProduction.length > 0) {
-        return res.status(400).json({
-          message: `Cannot bill yet — ${pendingProduction.length} assigned item(s) are still pending production completion.`,
-        });
+    const byId = new Map(order.stores.map((s) => [s.id, s]));
+    const wanted = [...new Set(store_ids)];
+    const covered: NonNullable<ReturnType<typeof byId.get>>[] = [];
+    for (const sid of wanted) {
+      const store = byId.get(sid);
+      if (!store) return res.status(400).json({ message: `Store ${sid} does not belong to this order.` });
+      if (store.invoice_id !== null) {
+        return res.status(409).json({ message: `${store.store_name} is already on another invoice.` });
       }
-      if (order.status !== "Installed") {
-        return res.status(400).json({
-          message: "Cannot bill yet — the order creator must confirm installation first.",
-        });
-      }
+      const blocker = storeBillingBlocker(store);
+      if (blocker) return res.status(400).json({ message: blocker });
+      covered.push(store);
     }
 
-    // Bill only against the chargeable items — confirmed losses are excluded.
-    const orderTotal = computeTotals(order.items).total_amount;
-
-    // Reject overpayment
-    if (Number(bill_amount) > Number(orderTotal)) {
-      return res.status(400).json({ message: "Bill amount cannot exceed order total." });
+    if (await prisma.invoice.findFirst({ where: { order_id: id, invoice_no } })) {
+      return res.status(409).json({ message: `Invoice ${invoice_no} already exists on this order.` });
     }
 
-    const isMatch = Number(bill_amount).toFixed(2) === orderTotal.toFixed(2);
-    // Billing is now only the first of two accountant checkpoints — payment follows.
-    const newStatus = isMatch ? "BillingCompleted" : "Pending";
+    // The value this invoice is measured against: only the covered stores' items,
+    // confirmed losses excluded.
+    const coveredTotal = computeTotals(covered.flatMap((s) => s.items)).total_amount;
+    if (Number(bill_amount) > coveredTotal) {
+      return res.status(400).json({
+        message: `Bill amount cannot exceed the ₹${coveredTotal.toFixed(2)} billable across the selected store(s).`,
+      });
+    }
+    const isMatch = Number(bill_amount).toFixed(2) === coveredTotal.toFixed(2);
 
-    const updated = await prisma.$transaction(async (tx) => {
+    const invoice = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT set_config('app.current_user_id', ${user.id.toString()}, true)`;
-      return tx.order.update({
-        where: { id },
+      const inv = await tx.invoice.create({
         data: {
+          order_id: id,
           invoice_no,
           bill_amount,
           billing_date,
-          status: newStatus,
-          billing_completed_at: new Date(),
+          billing_completed_at: isMatch ? new Date() : null,
         },
       });
+      await tx.orderStore.updateMany({
+        where: { id: { in: covered.map((s) => s.id) } },
+        data: { invoice_id: inv.id },
+      });
+      await recomputeOrderStatus(tx, id);
+      return inv;
     });
 
-    if (!isMatch) {
-      await sendPendingInvoiceEmail(order.order_no, order.client_name, orderTotal, bill_amount);
-    }
+    await invoiceCreatedNotices(order, { invoice_no, bill_amount }, coveredTotal, isMatch, user);
 
-    if (order.created_by) {
-      await notifyUser(
-        order.created_by,
-        `Order ${order.order_no} Billed`,
-        isMatch ? `Fully billed at ${bill_amount} — awaiting payment` : `Partially billed at ${bill_amount}`,
-        isMatch ? "success" : "warning",
-        order.id
-      );
-
-      const creatorUser = await prisma.user.findUnique({ where: { id: order.created_by }, select: { email: true } });
-      if (creatorUser?.email) {
-        sendStatusTransitionEmail(
-          creatorUser.email,
-          order.order_no,
-          order.client_name,
-          "Billing Completed",
-          `Invoice ${invoice_no} submitted. Bill amount: ₹${bill_amount}. ${isMatch ? "Matches order total." : "Mismatch — order is pending review."}`,
-          user.name
-        );
-      }
-    }
-
-    return res.status(200).json(serializeDecimals(updated));
+    return res.status(201).json(serializeDecimals({ ...invoice, covered_total: coveredTotal }));
   } catch (err) {
     console.error(err);
     return res.status(500).json({ message: "Internal server error" });
   }
 };
 
+
 /**
  * The order creator confirms the produced order has been installed. This is the
  * hand-off from production to billing: only after installation can Accounts invoice.
  * Applies to orders that went through production (have assigned items).
  */
-export const markOrderInstalled = async (req: Request, res: Response) => {
+/** Accounts hears about an order once, when the last of its stores goes in — not per store. */
+const announceInstalled = async (order: { id: number; order_no: string; client_name: string }, user: { name: string }) => {
+  await notifyRole(
+    "ACCOUNTS",
+    `Order ${order.order_no} installed — ready to bill`,
+    `${user.name} confirmed installation. Produced and installed; ready for invoicing.`,
+    "success",
+    order.id
+  );
+  sendStatusTransitionEmail(
+    adminEmail,
+    order.order_no,
+    order.client_name,
+    "Installation Confirmed",
+    `${user.name} confirmed installation. Order is now ready for billing.`,
+    user.name
+  );
+};
+
+/**
+ * PUT /api/orders/:orderId/stores/:storeId/install
+ *
+ * Installation happens store by store, on different days. The order only reaches
+ * `Installed` once every store is in, which is when accounts is told.
+ */
+export const markStoreInstalled = async (req: Request, res: Response) => {
   try {
-    const id = parseInt(req.params.id as string, 10);
+    const orderId = parseInt(req.params.orderId as string, 10);
+    const storeId = parseInt(req.params.storeId as string, 10);
     const user = req.user!;
 
     const order = await prisma.order.findUnique({
-      where: { id },
-      include: { items: { include: { assignments: true } } },
+      where: { id: orderId },
+      include: {
+        stores: { include: { items: { include: { assignments: true } } }, orderBy: { s_no: "asc" } },
+      },
     });
     if (!order) return res.status(404).json({ message: "Order not found" });
+
+    const store = order.stores.find((s) => s.id === storeId);
+    if (!store) return res.status(404).json({ message: "Store not found on this order" });
 
     // Only the creating employee (or an admin) may confirm installation.
     if (user.role === "CSM" && order.created_by !== user.id) {
@@ -709,10 +1152,15 @@ export const markOrderInstalled = async (req: Request, res: Response) => {
     if (order.status !== "Active") {
       return res.status(400).json({ message: "Only active orders can be marked installed." });
     }
+    if (store.installed_at !== null) {
+      return res.status(400).json({ message: "This store is already marked installed." });
+    }
 
-    const assignedItems = order.items.filter((i: any) => i.assignments.length > 0);
+    // The production guard is scoped to this store's own items: store 1 can be installed
+    // while store 2 is still on the press.
+    const assignedItems = store.items.filter((i: any) => i.assignments.length > 0);
     if (assignedItems.length === 0) {
-      return res.status(400).json({ message: "This order has no production work, so it goes straight to billing." });
+      return res.status(400).json({ message: "This store has no production work, so it goes straight to billing." });
     }
     const stillInProduction = assignedItems.filter((i: any) => !i.production_completed);
     if (stillInProduction.length > 0) {
@@ -721,47 +1169,44 @@ export const markOrderInstalled = async (req: Request, res: Response) => {
       });
     }
 
-    const updated = await prisma.$transaction(async (tx) => {
+    const { status } = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT set_config('app.current_user_id', ${user.id.toString()}, true)`;
-      return tx.order.update({
-        where: { id },
-        data: { status: "Installed", installed_at: new Date(), installed_by: user.id },
+      await tx.orderStore.update({
+        where: { id: storeId },
+        data: { installed_at: new Date(), installed_by: user.id },
       });
+      return { status: await recomputeOrderStatus(tx, orderId) };
     });
 
-    // Now it's the accountant's turn.
-    await notifyRole(
-      "ACCOUNTS",
-      `Order ${order.order_no} installed — ready to bill`,
-      `${user.name} confirmed installation. Produced and installed; ready for invoicing.`,
-      "success",
-      order.id
-    );
+    if (status === "Installed") await announceInstalled(order, user);
 
-    sendStatusTransitionEmail(
-      adminEmail,
-      order.order_no,
-      order.client_name,
-      "Installation Confirmed",
-      `${user.name} confirmed installation. Order is now ready for billing.`,
-      user.name
-    );
-
-    return res.status(200).json(serializeDecimals(updated));
+    const fresh = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: { stores: { orderBy: { s_no: "asc" } } },
+    });
+    return res.status(200).json(serializeDecimals(fresh));
   } catch (err) {
     console.error(err);
     return res.status(500).json({ message: "Internal server error" });
   }
 };
 
+
 /**
  * Second accountant checkpoint: record payment against a billed order.
  * Full payment closes the order as PaymentReceived; a short payment leaves it
  * Pending so the shortfall stays visible.
  */
-export const recordPayment = async (req: Request, res: Response) => {
+/**
+ * PUT /api/orders/:orderId/invoices/:invoiceId/payment
+ *
+ * Payment is recorded per invoice. If a client settles three invoices in one transfer,
+ * that is recorded as three payments — there is no separate payments ledger.
+ */
+export const recordInvoicePayment = async (req: Request, res: Response) => {
   try {
-    const id = parseInt(req.params.id as string, 10);
+    const orderId = parseInt(req.params.orderId as string, 10);
+    const invoiceId = parseInt(req.params.invoiceId as string, 10);
     const parseResult = paymentSchema.safeParse(req.body);
     if (!parseResult.success) {
       return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parseResult.error) });
@@ -769,43 +1214,42 @@ export const recordPayment = async (req: Request, res: Response) => {
     const { amount_received, payment_date } = parseResult.data;
     const user = req.user!;
 
-    const order = await prisma.order.findUnique({ where: { id } });
+    const order = await prisma.order.findUnique({ where: { id: orderId }, include: { invoices: true } });
     if (!order) return res.status(404).json({ message: "Order not found" });
 
-    if (!order.invoice_no || !order.billing_completed_at) {
-      return res.status(400).json({ message: "Billing must be completed before a payment can be recorded." });
+    const invoice = order.invoices.find((i) => i.id === invoiceId);
+    if (!invoice) return res.status(404).json({ message: "Invoice not found on this order" });
+
+    if (order.status === "Completed") {
+      return res.status(400).json({ message: "Order is already closed" });
     }
-    if (order.status === "PaymentReceived" || order.status === "Completed") {
-      return res.status(400).json({ message: "Payment has already been recorded for this order." });
+    if (invoice.amount_received != null) {
+      return res.status(400).json({ message: `Payment has already been recorded against invoice ${invoice.invoice_no}.` });
     }
 
-    const billed = Number(order.bill_amount ?? 0);
+    const billed = Number(invoice.bill_amount ?? 0);
     if (Number(amount_received) > billed) {
       return res.status(400).json({ message: "Amount received cannot exceed the billed amount." });
     }
-
     const isFull = Number(amount_received).toFixed(2) === billed.toFixed(2);
 
     const updated = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT set_config('app.current_user_id', ${user.id.toString()}, true)`;
-      return tx.order.update({
-        where: { id },
-        data: {
-          amount_received,
-          payment_received_at: payment_date,
-          payment_received_by: user.id,
-          status: isFull ? "PaymentReceived" : "Pending",
-        },
+      const inv = await tx.invoice.update({
+        where: { id: invoiceId },
+        data: { amount_received, payment_received_at: payment_date, payment_received_by: user.id },
       });
+      await recomputeOrderStatus(tx, orderId);
+      return inv;
     });
 
     if (order.created_by) {
       await notifyUser(
         order.created_by,
-        `Payment ${isFull ? "received" : "partially received"} on ${order.order_no}`,
+        `Payment ${isFull ? "received" : "partially received"} on invoice ${invoice.invoice_no} (${order.order_no})`,
         isFull
-          ? `Full payment of ${amount_received} received. Order closed.`
-          : `Part payment of ${amount_received} received against ${billed}.`,
+          ? `Full payment of ${amount_received} received against invoice ${invoice.invoice_no}.`
+          : `Part payment of ${amount_received} received against ${billed} on invoice ${invoice.invoice_no}.`,
         isFull ? "success" : "warning",
         order.id
       );
@@ -818,8 +1262,8 @@ export const recordPayment = async (req: Request, res: Response) => {
           order.client_name,
           "Payment Received",
           isFull
-            ? `Full payment of ₹${amount_received} received. Order workflow complete.`
-            : `Partial payment of ₹${amount_received} received against ₹${billed}.`,
+            ? `Full payment of ₹${amount_received} received against invoice ${invoice.invoice_no}.`
+            : `Partial payment of ₹${amount_received} received against ₹${billed} on invoice ${invoice.invoice_no}.`,
           user.name
         );
       }
@@ -831,6 +1275,8 @@ export const recordPayment = async (req: Request, res: Response) => {
     return res.status(500).json({ message: "Internal server error" });
   }
 };
+
+
 
 export const closeOrder = async (req: Request, res: Response) => {
   try {
@@ -886,13 +1332,24 @@ export const exportOrders = async (req: Request, res: Response) => {
       where.OR = [
         { order_no: { contains: String(q), mode: "insensitive" } },
         { client_name: { contains: String(q), mode: "insensitive" } },
-        { store_name: { contains: String(q), mode: "insensitive" } }
+        { store_name: { contains: String(q), mode: "insensitive" } },
+        { stores: { some: { store_name: { contains: String(q), mode: "insensitive" } } } },
       ];
     }
 
     const orders = await prisma.order.findMany({
       where,
-      include: { items: { include: { assignments: true } }, creator: true },
+      include: {
+        // Each row names the store its own line item belongs to, so a multi-store order
+        // exports one block per store rather than repeating the first store's name.
+        items: {
+          include: { assignments: true, orderStore: true },
+          orderBy: [{ orderStore: { s_no: "asc" } }, { s_no: "asc" }],
+        },
+        stores: { orderBy: { s_no: "asc" } },
+        invoices: { orderBy: { id: "asc" } },
+        creator: true,
+      },
       orderBy: { order_no: "asc" },
       take: 10000, // Cap to prevent memory exhaustion on large exports
     });
@@ -906,6 +1363,7 @@ export const exportOrders = async (req: Request, res: Response) => {
       // Billable total excludes confirmed losses; used for the Pending Amount column.
       const total = computeTotals(order.items).total_amount;
       const producedAt = lastProducedAt(order);
+      const roll = rollupOrder(order);
       const stage = currentStage(order);
       for (const item of order.items) {
         const lossStatus = item.remarks == null ? "" : (item.remarks_confirmed ? "Loss (confirmed)" : "Loss (proposed)");
@@ -913,8 +1371,8 @@ export const exportOrders = async (req: Request, res: Response) => {
           "S.No": item.s_no,
           "Date": order.date.toLocaleDateString("en-IN"),
           "Client Name": order.client_name,
-          "Store Name": order.store_name,
-          "Location": order.location,
+          "Store Name": item.orderStore?.store_name ?? "",
+          "Location": item.orderStore?.location ?? "",
           "Order No": order.order_no,
           "Media": item.media,
           "Size (W) in": Number(item.width_inches),
@@ -930,25 +1388,25 @@ export const exportOrders = async (req: Request, res: Response) => {
           "Status": order.status,
         };
         if (user.role === "ADMIN" || user.role === "ACCOUNTS") {
-          row["Invoice No"] = order.invoice_no || "";
-          row["Bill Amount"] = order.bill_amount !== null ? Number(order.bill_amount) : "";
-          row["Amount Received"] = order.amount_received !== null ? Number(order.amount_received) : "";
+          row["Invoice No"] = roll.invoice_no || "";
+          row["Bill Amount"] = roll.bill_amount !== null ? roll.bill_amount : "";
+          row["Amount Received"] = roll.amount_received !== null ? roll.amount_received : "";
           // Outstanding = billable total less whatever has actually been received.
-          row["Pending Amount"] = isClosed(order.status) ? "" : total - Number(order.amount_received ?? 0);
-          row["Billing Date"] = order.billing_date ? order.billing_date.toLocaleDateString("en-IN") : "";
-          row["Billing Completed On"] = order.billing_completed_at ? order.billing_completed_at.toLocaleDateString("en-IN") : "";
-          row["Payment Received On"] = order.payment_received_at ? order.payment_received_at.toLocaleDateString("en-IN") : "";
+          row["Pending Amount"] = isClosed(order.status) ? "" : total - Number(roll.amount_received ?? 0);
+          row["Billing Date"] = d(roll.billing_date);
+          row["Billing Completed On"] = d(roll.billing_completed_at);
+          row["Payment Received On"] = d(roll.payment_received_at);
         }
         if (user.role === "ADMIN") {
           row["Created By"] = order.creator_name;
           // TAT (Phase 6): milestone dates + stage-to-stage durations, in days.
           row["Produced On"] = d(producedAt);
-          row["Installed On"] = d(order.installed_at);
+          row["Installed On"] = d(roll.installed_at);
           row["Days: Create→Produce"] = dayspan(order.created_at, producedAt);
-          row["Days: Produce→Install"] = dayspan(producedAt, order.installed_at);
-          row["Days: Install→Bill"] = dayspan(order.installed_at, order.billing_completed_at);
-          row["Days: Bill→Pay"] = dayspan(order.billing_completed_at, order.payment_received_at);
-          row["Total TAT (days)"] = dayspan(order.created_at, order.payment_received_at);
+          row["Days: Produce→Install"] = dayspan(producedAt, roll.installed_at);
+          row["Days: Install→Bill"] = dayspan(roll.installed_at, roll.billing_completed_at);
+          row["Days: Bill→Pay"] = dayspan(roll.billing_completed_at, roll.payment_received_at);
+          row["Total TAT (days)"] = dayspan(order.created_at, roll.payment_received_at);
           row["Current Stage"] = stage ? stage.stage : "Closed";
           row["Days in Stage"] = stage ? stage.days_in_stage : "";
         }
@@ -1005,35 +1463,81 @@ export const forceCloseOrder = async (req: Request, res: Response) => {
 
 import { flagItemSchema, itemLossRemarkSchema, assignItemSchema, completeItemSchema, editBillingSchema, editPaymentSchema, followUpSchema } from "../utils/validators";
 
-export const editBilling = async (req: Request, res: Response) => {
+/** PATCH /api/orders/:orderId/invoices/:invoiceId/billing */
+export const editInvoiceBilling = async (req: Request, res: Response) => {
   try {
-    const id = parseInt(req.params.id as string, 10);
+    const orderId = parseInt(req.params.orderId as string, 10);
+    const invoiceId = parseInt(req.params.invoiceId as string, 10);
     const parseResult = editBillingSchema.safeParse(req.body);
     if (!parseResult.success) {
       return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parseResult.error) });
     }
-    const { invoice_no, bill_amount, billing_date } = parseResult.data;
+    const { invoice_no, bill_amount, billing_date, store_ids } = parseResult.data;
     const user = req.user!;
 
-    const order = await prisma.order.findUnique({ where: { id } });
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        invoices: true,
+        stores: { include: { items: { include: { assignments: true } } }, orderBy: { s_no: "asc" } },
+      },
+    });
     if (!order) return res.status(404).json({ message: "Order not found" });
 
-    if (!order.invoice_no) {
+    const invoice = order.invoices.find((i) => i.id === invoiceId);
+    if (!invoice) {
       return res.status(400).json({ message: "No billing record to edit — submit an invoice first." });
     }
 
-    const changes: FieldChange[] = [];
-    if (invoice_no !== undefined && invoice_no !== order.invoice_no) {
-      changes.push({ field: "Invoice No", oldValue: order.invoice_no || "—", newValue: invoice_no });
+    // Re-scoping which stores an invoice covers changes what it is measured against, so
+    // it is only allowed while nothing has been paid against it.
+    let covered = order.stores.filter((s) => s.invoice_id === invoiceId);
+    if (store_ids !== undefined) {
+      if (invoice.amount_received != null) {
+        return res.status(409).json({ message: "This invoice has been paid; its store coverage can no longer be changed." });
+      }
+      const byId = new Map(order.stores.map((s) => [s.id, s]));
+      const next: typeof covered = [];
+      for (const sid of [...new Set(store_ids)]) {
+        const store = byId.get(sid);
+        if (!store) return res.status(400).json({ message: `Store ${sid} does not belong to this order.` });
+        if (store.invoice_id !== null && store.invoice_id !== invoiceId) {
+          return res.status(409).json({ message: `${store.store_name} is already on another invoice.` });
+        }
+        const blocker = storeBillingBlocker(store);
+        if (blocker) return res.status(400).json({ message: blocker });
+        next.push(store);
+      }
+      covered = next;
     }
-    if (bill_amount !== undefined && Number(bill_amount).toFixed(2) !== Number(order.bill_amount ?? 0).toFixed(2)) {
-      changes.push({ field: "Bill Amount", oldValue: `₹${Number(order.bill_amount ?? 0).toFixed(2)}`, newValue: `₹${Number(bill_amount).toFixed(2)}` });
+
+    const coveredTotal = computeTotals(covered.flatMap((s) => s.items)).total_amount;
+    const effectiveAmount = bill_amount !== undefined ? Number(bill_amount) : Number(invoice.bill_amount ?? 0);
+    if (effectiveAmount > coveredTotal) {
+      return res.status(400).json({
+        message: `Bill amount cannot exceed the ₹${coveredTotal.toFixed(2)} billable across the selected store(s).`,
+      });
+    }
+
+    const changes: FieldChange[] = [];
+    if (invoice_no !== undefined && invoice_no !== invoice.invoice_no) {
+      changes.push({ field: "Invoice No", oldValue: invoice.invoice_no || "—", newValue: invoice_no });
+    }
+    if (bill_amount !== undefined && Number(bill_amount).toFixed(2) !== Number(invoice.bill_amount ?? 0).toFixed(2)) {
+      changes.push({ field: "Bill Amount", oldValue: `₹${Number(invoice.bill_amount ?? 0).toFixed(2)}`, newValue: `₹${Number(bill_amount).toFixed(2)}` });
     }
     if (billing_date !== undefined) {
-      const oldDate = order.billing_date ? order.billing_date.toLocaleDateString("en-IN") : "—";
+      const oldDate = invoice.billing_date ? invoice.billing_date.toLocaleDateString("en-IN") : "—";
       const newDate = billing_date.toLocaleDateString("en-IN");
       if (oldDate !== newDate) {
         changes.push({ field: "Billing Date", oldValue: oldDate, newValue: newDate });
+      }
+    }
+    if (store_ids !== undefined) {
+      const oldNames = order.stores.filter((s) => s.invoice_id === invoiceId).map((s) => s.store_name).join(", ") || "—";
+      const newNames = covered.map((s) => s.store_name).join(", ") || "—";
+      if (oldNames !== newNames) {
+        changes.push({ field: `Invoice ${invoice.invoice_no} Stores`, oldValue: oldNames, newValue: newNames });
       }
     }
 
@@ -1046,7 +1550,7 @@ export const editBilling = async (req: Request, res: Response) => {
 
       await tx.orderChangeLog.createMany({
         data: changes.map((c) => ({
-          order_id: id,
+          order_id: orderId,
           changed_by: user.id,
           field_changed: c.field,
           old_value: c.oldValue,
@@ -1054,14 +1558,27 @@ export const editBilling = async (req: Request, res: Response) => {
         })),
       });
 
-      return tx.order.update({
-        where: { id },
+      if (store_ids !== undefined) {
+        const keep = covered.map((s) => s.id);
+        await tx.orderStore.updateMany({
+          where: { order_id: orderId, invoice_id: invoiceId, id: { notIn: keep } },
+          data: { invoice_id: null },
+        });
+        await tx.orderStore.updateMany({ where: { id: { in: keep } }, data: { invoice_id: invoiceId } });
+      }
+
+      const inv = await tx.invoice.update({
+        where: { id: invoiceId },
         data: {
           ...(invoice_no !== undefined ? { invoice_no } : {}),
           ...(bill_amount !== undefined ? { bill_amount } : {}),
           ...(billing_date !== undefined ? { billing_date } : {}),
+          // Whether the invoice fully covers its stores can change with either edit.
+          billing_completed_at: effectiveAmount.toFixed(2) === coveredTotal.toFixed(2) ? (invoice.billing_completed_at ?? new Date()) : null,
         },
       });
+      await recomputeOrderStatus(tx, orderId);
+      return inv;
     });
 
     sendBillingEditEmail(order.order_no, user.name, user.role, changes);
@@ -1073,9 +1590,11 @@ export const editBilling = async (req: Request, res: Response) => {
   }
 };
 
-export const editPayment = async (req: Request, res: Response) => {
+/** PATCH /api/orders/:orderId/invoices/:invoiceId/payment-edit */
+export const editInvoicePayment = async (req: Request, res: Response) => {
   try {
-    const id = parseInt(req.params.id as string, 10);
+    const orderId = parseInt(req.params.orderId as string, 10);
+    const invoiceId = parseInt(req.params.invoiceId as string, 10);
     const parseResult = editPaymentSchema.safeParse(req.body);
     if (!parseResult.success) {
       return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parseResult.error) });
@@ -1083,19 +1602,24 @@ export const editPayment = async (req: Request, res: Response) => {
     const { amount_received, payment_date } = parseResult.data;
     const user = req.user!;
 
-    const order = await prisma.order.findUnique({ where: { id } });
+    const order = await prisma.order.findUnique({ where: { id: orderId }, include: { invoices: true } });
     if (!order) return res.status(404).json({ message: "Order not found" });
 
-    if (!order.payment_received_at) {
+    const invoice = order.invoices.find((i) => i.id === invoiceId);
+    if (!invoice || !invoice.payment_received_at) {
       return res.status(400).json({ message: "No payment record to edit — record a payment first." });
     }
 
+    if (amount_received !== undefined && Number(amount_received) > Number(invoice.bill_amount ?? 0)) {
+      return res.status(400).json({ message: "Amount received cannot exceed the billed amount." });
+    }
+
     const changes: FieldChange[] = [];
-    if (amount_received !== undefined && Number(amount_received).toFixed(2) !== Number(order.amount_received ?? 0).toFixed(2)) {
-      changes.push({ field: "Amount Received", oldValue: `₹${Number(order.amount_received ?? 0).toFixed(2)}`, newValue: `₹${Number(amount_received).toFixed(2)}` });
+    if (amount_received !== undefined && Number(amount_received).toFixed(2) !== Number(invoice.amount_received ?? 0).toFixed(2)) {
+      changes.push({ field: "Amount Received", oldValue: `₹${Number(invoice.amount_received ?? 0).toFixed(2)}`, newValue: `₹${Number(amount_received).toFixed(2)}` });
     }
     if (payment_date !== undefined) {
-      const oldDate = order.payment_received_at ? order.payment_received_at.toLocaleDateString("en-IN") : "—";
+      const oldDate = invoice.payment_received_at ? invoice.payment_received_at.toLocaleDateString("en-IN") : "—";
       const newDate = payment_date.toLocaleDateString("en-IN");
       if (oldDate !== newDate) {
         changes.push({ field: "Payment Date", oldValue: oldDate, newValue: newDate });
@@ -1111,7 +1635,7 @@ export const editPayment = async (req: Request, res: Response) => {
 
       await tx.orderChangeLog.createMany({
         data: changes.map((c) => ({
-          order_id: id,
+          order_id: orderId,
           changed_by: user.id,
           field_changed: c.field,
           old_value: c.oldValue,
@@ -1119,13 +1643,15 @@ export const editPayment = async (req: Request, res: Response) => {
         })),
       });
 
-      return tx.order.update({
-        where: { id },
+      const inv = await tx.invoice.update({
+        where: { id: invoiceId },
         data: {
           ...(amount_received !== undefined ? { amount_received } : {}),
           ...(payment_date !== undefined ? { payment_received_at: payment_date } : {}),
         },
       });
+      await recomputeOrderStatus(tx, orderId);
+      return inv;
     });
 
     sendBillingEditEmail(order.order_no, user.name, user.role, changes);
@@ -1136,6 +1662,8 @@ export const editPayment = async (req: Request, res: Response) => {
     return res.status(500).json({ message: "Internal server error" });
   }
 };
+
+
 
 export const getFollowUps = async (req: Request, res: Response) => {
   try {
@@ -1161,10 +1689,10 @@ export const createFollowUp = async (req: Request, res: Response) => {
     const { note } = parseResult.data;
     const user = req.user!;
 
-    const order = await prisma.order.findUnique({ where: { id: orderId } });
+    const order = await prisma.order.findUnique({ where: { id: orderId }, include: { invoices: true } });
     if (!order) return res.status(404).json({ message: "Order not found" });
 
-    if (!order.billing_completed_at) {
+    if (!rollupOrder(order).billing_completed_at) {
       return res.status(400).json({ message: "Follow-ups can only be added after billing is completed." });
     }
 
@@ -1440,7 +1968,7 @@ export const setItemLossRemark = async (req: Request, res: Response) => {
     // Clearing the remark rejects it — the line becomes chargeable again.
     const item = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT set_config('app.current_user_id', ${user.id.toString()}, true)`;
-      return tx.orderItem.update({
+      const updated = await tx.orderItem.update({
         where: { id: itemId },
         data: {
           remarks,
@@ -1452,6 +1980,10 @@ export const setItemLossRemark = async (req: Request, res: Response) => {
           remarks_confirmed_by: remarks ? user.id : null,
         },
       });
+      // Confirming or rejecting a loss changes the billable total the invoices are
+      // reconciled against.
+      await recomputeOrderStatus(tx, updated.order_id);
+      return updated;
     });
     return res.status(200).json(serializeDecimals(item));
   } catch (err) {
@@ -1489,12 +2021,21 @@ export const emailExport = async (req: Request, res: Response) => {
         { order_no: { contains: String(q), mode: "insensitive" } },
         { client_name: { contains: String(q), mode: "insensitive" } },
         { store_name: { contains: String(q), mode: "insensitive" } },
+        { stores: { some: { store_name: { contains: String(q), mode: "insensitive" } } } },
       ];
     }
 
     const orders = await prisma.order.findMany({
       where,
-      include: { items: { include: { assignments: true } }, creator: true },
+      include: {
+        items: {
+          include: { assignments: true, orderStore: true },
+          orderBy: [{ orderStore: { s_no: "asc" } }, { s_no: "asc" }],
+        },
+        stores: { orderBy: { s_no: "asc" } },
+        invoices: { orderBy: { id: "asc" } },
+        creator: true,
+      },
       orderBy: { order_no: "asc" },
       take: 10000, // Cap to prevent memory exhaustion on large exports
     });
@@ -1507,6 +2048,7 @@ export const emailExport = async (req: Request, res: Response) => {
     for (const order of orders) {
       const total = computeTotals(order.items).total_amount;
       const producedAt = lastProducedAt(order);
+      const roll = rollupOrder(order);
       const stage = currentStage(order);
       for (const item of order.items) {
         const lossStatus = item.remarks == null ? "" : (item.remarks_confirmed ? "Loss (confirmed)" : "Loss (proposed)");
@@ -1514,8 +2056,8 @@ export const emailExport = async (req: Request, res: Response) => {
           "S.No": item.s_no,
           "Date": order.date.toLocaleDateString("en-IN"),
           "Client Name": order.client_name,
-          "Store Name": order.store_name,
-          "Location": order.location,
+          "Store Name": item.orderStore?.store_name ?? "",
+          "Location": item.orderStore?.location ?? "",
           "Order No": order.order_no,
           "Media": item.media,
           "Size (W) in": Number(item.width_inches),
@@ -1531,11 +2073,11 @@ export const emailExport = async (req: Request, res: Response) => {
           "Status": order.status,
         };
         if (user.role === "ADMIN" || user.role === "ACCOUNTS") {
-          row["Invoice No"] = order.invoice_no || "";
-          row["Bill Amount"] = order.bill_amount !== null ? Number(order.bill_amount) : "";
-          row["Amount Received"] = order.amount_received !== null ? Number(order.amount_received) : "";
-          row["Pending Amount"] = isClosed(order.status) ? "" : total - Number(order.amount_received ?? 0);
-          row["Billing Date"] = order.billing_date ? order.billing_date.toLocaleDateString("en-IN") : "";
+          row["Invoice No"] = roll.invoice_no || "";
+          row["Bill Amount"] = roll.bill_amount !== null ? roll.bill_amount : "";
+          row["Amount Received"] = roll.amount_received !== null ? roll.amount_received : "";
+          row["Pending Amount"] = isClosed(order.status) ? "" : total - Number(roll.amount_received ?? 0);
+          row["Billing Date"] = d(roll.billing_date);
         }
         if (user.role === "ADMIN") {
           row["Created By"] = order.creator_name;

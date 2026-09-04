@@ -4,6 +4,7 @@ import { serializeDecimals } from "../utils/serialize";
 import { computeTotals } from "../utils/order-totals";
 import { currentStage } from "../utils/order-stage";
 import { OPEN_STATUSES } from "../utils/order-status";
+import { storeLabelOf, storeLocationOf } from "../utils/order-derive";
 
 export const getAuditLog = async (req: Request, res: Response) => {
   try {
@@ -76,7 +77,10 @@ export const getOverdueReport = async (req: Request, res: Response) => {
 
     const orders = await prisma.order.findMany({
       where: { status: { in: OPEN_STATUSES } },
-      include: { items: { include: { assignments: true } } },
+      include: {
+        items: { include: { assignments: true } },
+        stores: { select: { id: true, s_no: true, store_name: true, location: true }, orderBy: { s_no: "asc" } },
+      },
       orderBy: { created_at: "asc" },
     });
 
@@ -91,8 +95,10 @@ export const getOverdueReport = async (req: Request, res: Response) => {
         id: o.id,
         order_no: o.order_no,
         client_name: o.client_name,
-        store_name: o.store_name,
-        location: o.location,
+        store_name: storeLabelOf(o),
+        location: storeLocationOf(o),
+        stores: o.stores,
+        store_count: o.stores.length,
         status: o.status,
         creator_name: o.creator_name,
         stage: s.stage,

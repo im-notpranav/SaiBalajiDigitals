@@ -12,6 +12,7 @@ import { StatusBadge } from "@/components/orders/StatusBadge";
 import type { Order } from "@sb-oms/shared-types";
 import { formatDistanceToNow } from "date-fns";
 import { SortableHead, useSortableTable } from "@/hooks/useSortableTable";
+import { storeLabel, storeSubLabel } from "@/lib/stores";
 
 interface ProductionQueueTableProps {
   orders: Order[];
@@ -29,8 +30,8 @@ export function ProductionQueueTable({
       if (key === "created_at") return o.created_at ? new Date(o.created_at) : new Date(0);
       if (key === "order_no") return o.order_no;
       if (key === "client_name") return o.client_name;
-      if (key === "store_name") return o.store_name;
-      if (key === "location") return o.location || "";
+      if (key === "store") return storeLabel(o);
+      if (key === "location") return storeSubLabel(o);
       if (key === "status") return o.status;
       return "";
     },
@@ -49,10 +50,10 @@ export function ProductionQueueTable({
                 <SortableHead label="Client" column="client_name" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
               </TableHead>
               <TableHead>
-                <SortableHead label="Store" column="store_name" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                <SortableHead label="Store" column="store" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
               </TableHead>
               <TableHead>
-                <SortableHead label="Location" column="location" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                <SortableHead label="Location" column="store" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
               </TableHead>
               <TableHead>
                 <SortableHead label="Status" column="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
@@ -76,8 +77,8 @@ export function ProductionQueueTable({
                 <TableRow className="group bg-muted/10">
                   <TableCell className="font-mono text-xs font-semibold text-primary">{o.order_no}</TableCell>
                   <TableCell className="font-medium">{o.client_name}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{o.store_name}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{o.location || "—"}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{storeLabel(o)}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{storeSubLabel(o) || "—"}</TableCell>
                   <TableCell><StatusBadge status={o.status} /></TableCell>
                   <TableCell className="text-xs text-muted-foreground">
                     {o.created_at
