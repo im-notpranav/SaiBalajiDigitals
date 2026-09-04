@@ -22,8 +22,10 @@ import { Route as PortalAccountantReportsRouteImport } from './routes/_portal.ac
 import { Route as PortalAdminAuditRouteImport } from './routes/_portal.admin.audit'
 import { Route as PortalAdminDashboardRouteImport } from './routes/_portal.admin.dashboard'
 import { Route as PortalAdminFinancialYearRouteImport } from './routes/_portal.admin.financial-year'
+import { Route as PortalAdminImportRouteImport } from './routes/_portal.admin.import'
 import { Route as PortalAdminLossReportRouteImport } from './routes/_portal.admin.loss-report'
 import { Route as PortalAdminOrdersRouteImport } from './routes/_portal.admin.orders'
+import { Route as PortalAdminOverdueRouteImport } from './routes/_portal.admin.overdue'
 import { Route as PortalAdminReportsRouteImport } from './routes/_portal.admin.reports'
 import { Route as PortalAdminSettingsRouteImport } from './routes/_portal.admin.settings'
 import { Route as PortalAdminUsersRouteImport } from './routes/_portal.admin.users'
@@ -31,6 +33,9 @@ import { Route as PortalEmployeeDashboardRouteImport } from './routes/_portal.em
 import { Route as PortalEmployeeNewOrderRouteImport } from './routes/_portal.employee.new-order'
 import { Route as PortalEmployeeNotificationsRouteImport } from './routes/_portal.employee.notifications'
 import { Route as PortalEmployeeOrdersRouteImport } from './routes/_portal.employee.orders'
+import { Route as PortalProdManagerAssignRouteImport } from './routes/_portal.prod-manager.assign'
+import { Route as PortalProdManagerDashboardRouteImport } from './routes/_portal.prod-manager.dashboard'
+import { Route as PortalProdManagerNotificationsRouteImport } from './routes/_portal.prod-manager.notifications'
 import { Route as PortalProductionDashboardRouteImport } from './routes/_portal.production.dashboard'
 import { Route as PortalProductionNotificationsRouteImport } from './routes/_portal.production.notifications'
 import { Route as PortalProductionQueueRouteImport } from './routes/_portal.production.queue'
@@ -109,6 +114,11 @@ const PortalAdminFinancialYearRoute =
     path: '/admin/financial-year',
     getParentRoute: () => PortalRoute,
   } as any)
+const PortalAdminImportRoute = PortalAdminImportRouteImport.update({
+  id: '/admin/import',
+  path: '/admin/import',
+  getParentRoute: () => PortalRoute,
+} as any)
 const PortalAdminLossReportRoute = PortalAdminLossReportRouteImport.update({
   id: '/admin/loss-report',
   path: '/admin/loss-report',
@@ -117,6 +127,11 @@ const PortalAdminLossReportRoute = PortalAdminLossReportRouteImport.update({
 const PortalAdminOrdersRoute = PortalAdminOrdersRouteImport.update({
   id: '/admin/orders',
   path: '/admin/orders',
+  getParentRoute: () => PortalRoute,
+} as any)
+const PortalAdminOverdueRoute = PortalAdminOverdueRouteImport.update({
+  id: '/admin/overdue',
+  path: '/admin/overdue',
   getParentRoute: () => PortalRoute,
 } as any)
 const PortalAdminReportsRoute = PortalAdminReportsRouteImport.update({
@@ -155,6 +170,23 @@ const PortalEmployeeOrdersRoute = PortalEmployeeOrdersRouteImport.update({
   path: '/employee/orders',
   getParentRoute: () => PortalRoute,
 } as any)
+const PortalProdManagerAssignRoute = PortalProdManagerAssignRouteImport.update({
+  id: '/prod-manager/assign',
+  path: '/prod-manager/assign',
+  getParentRoute: () => PortalRoute,
+} as any)
+const PortalProdManagerDashboardRoute =
+  PortalProdManagerDashboardRouteImport.update({
+    id: '/prod-manager/dashboard',
+    path: '/prod-manager/dashboard',
+    getParentRoute: () => PortalRoute,
+  } as any)
+const PortalProdManagerNotificationsRoute =
+  PortalProdManagerNotificationsRouteImport.update({
+    id: '/prod-manager/notifications',
+    path: '/prod-manager/notifications',
+    getParentRoute: () => PortalRoute,
+  } as any)
 const PortalProductionDashboardRoute =
   PortalProductionDashboardRouteImport.update({
     id: '/production/dashboard',
@@ -219,8 +251,10 @@ export interface FileRoutesByFullPath {
   '/admin/audit': typeof PortalAdminAuditRoute
   '/admin/dashboard': typeof PortalAdminDashboardRoute
   '/admin/financial-year': typeof PortalAdminFinancialYearRoute
+  '/admin/import': typeof PortalAdminImportRoute
   '/admin/loss-report': typeof PortalAdminLossReportRoute
   '/admin/orders': typeof PortalAdminOrdersRoute
+  '/admin/overdue': typeof PortalAdminOverdueRoute
   '/admin/reports': typeof PortalAdminReportsRoute
   '/admin/settings': typeof PortalAdminSettingsRoute
   '/admin/users': typeof PortalAdminUsersRoute
@@ -228,6 +262,9 @@ export interface FileRoutesByFullPath {
   '/employee/new-order': typeof PortalEmployeeNewOrderRoute
   '/employee/notifications': typeof PortalEmployeeNotificationsRoute
   '/employee/orders': typeof PortalEmployeeOrdersRoute
+  '/prod-manager/assign': typeof PortalProdManagerAssignRoute
+  '/prod-manager/dashboard': typeof PortalProdManagerDashboardRoute
+  '/prod-manager/notifications': typeof PortalProdManagerNotificationsRoute
   '/production/dashboard': typeof PortalProductionDashboardRoute
   '/production/notifications': typeof PortalProductionNotificationsRoute
   '/production/queue': typeof PortalProductionQueueRoute
@@ -251,8 +288,10 @@ export interface FileRoutesByTo {
   '/admin/audit': typeof PortalAdminAuditRoute
   '/admin/dashboard': typeof PortalAdminDashboardRoute
   '/admin/financial-year': typeof PortalAdminFinancialYearRoute
+  '/admin/import': typeof PortalAdminImportRoute
   '/admin/loss-report': typeof PortalAdminLossReportRoute
   '/admin/orders': typeof PortalAdminOrdersRoute
+  '/admin/overdue': typeof PortalAdminOverdueRoute
   '/admin/reports': typeof PortalAdminReportsRoute
   '/admin/settings': typeof PortalAdminSettingsRoute
   '/admin/users': typeof PortalAdminUsersRoute
@@ -260,6 +299,9 @@ export interface FileRoutesByTo {
   '/employee/new-order': typeof PortalEmployeeNewOrderRoute
   '/employee/notifications': typeof PortalEmployeeNotificationsRoute
   '/employee/orders': typeof PortalEmployeeOrdersRoute
+  '/prod-manager/assign': typeof PortalProdManagerAssignRoute
+  '/prod-manager/dashboard': typeof PortalProdManagerDashboardRoute
+  '/prod-manager/notifications': typeof PortalProdManagerNotificationsRoute
   '/production/dashboard': typeof PortalProductionDashboardRoute
   '/production/notifications': typeof PortalProductionNotificationsRoute
   '/production/queue': typeof PortalProductionQueueRoute
@@ -285,8 +327,10 @@ export interface FileRoutesById {
   '/_portal/admin/audit': typeof PortalAdminAuditRoute
   '/_portal/admin/dashboard': typeof PortalAdminDashboardRoute
   '/_portal/admin/financial-year': typeof PortalAdminFinancialYearRoute
+  '/_portal/admin/import': typeof PortalAdminImportRoute
   '/_portal/admin/loss-report': typeof PortalAdminLossReportRoute
   '/_portal/admin/orders': typeof PortalAdminOrdersRoute
+  '/_portal/admin/overdue': typeof PortalAdminOverdueRoute
   '/_portal/admin/reports': typeof PortalAdminReportsRoute
   '/_portal/admin/settings': typeof PortalAdminSettingsRoute
   '/_portal/admin/users': typeof PortalAdminUsersRoute
@@ -294,6 +338,9 @@ export interface FileRoutesById {
   '/_portal/employee/new-order': typeof PortalEmployeeNewOrderRoute
   '/_portal/employee/notifications': typeof PortalEmployeeNotificationsRoute
   '/_portal/employee/orders': typeof PortalEmployeeOrdersRoute
+  '/_portal/prod-manager/assign': typeof PortalProdManagerAssignRoute
+  '/_portal/prod-manager/dashboard': typeof PortalProdManagerDashboardRoute
+  '/_portal/prod-manager/notifications': typeof PortalProdManagerNotificationsRoute
   '/_portal/production/dashboard': typeof PortalProductionDashboardRoute
   '/_portal/production/notifications': typeof PortalProductionNotificationsRoute
   '/_portal/production/queue': typeof PortalProductionQueueRoute
@@ -319,8 +366,10 @@ export interface FileRouteTypes {
     | '/admin/audit'
     | '/admin/dashboard'
     | '/admin/financial-year'
+    | '/admin/import'
     | '/admin/loss-report'
     | '/admin/orders'
+    | '/admin/overdue'
     | '/admin/reports'
     | '/admin/settings'
     | '/admin/users'
@@ -328,6 +377,9 @@ export interface FileRouteTypes {
     | '/employee/new-order'
     | '/employee/notifications'
     | '/employee/orders'
+    | '/prod-manager/assign'
+    | '/prod-manager/dashboard'
+    | '/prod-manager/notifications'
     | '/production/dashboard'
     | '/production/notifications'
     | '/production/queue'
@@ -351,8 +403,10 @@ export interface FileRouteTypes {
     | '/admin/audit'
     | '/admin/dashboard'
     | '/admin/financial-year'
+    | '/admin/import'
     | '/admin/loss-report'
     | '/admin/orders'
+    | '/admin/overdue'
     | '/admin/reports'
     | '/admin/settings'
     | '/admin/users'
@@ -360,6 +414,9 @@ export interface FileRouteTypes {
     | '/employee/new-order'
     | '/employee/notifications'
     | '/employee/orders'
+    | '/prod-manager/assign'
+    | '/prod-manager/dashboard'
+    | '/prod-manager/notifications'
     | '/production/dashboard'
     | '/production/notifications'
     | '/production/queue'
@@ -384,8 +441,10 @@ export interface FileRouteTypes {
     | '/_portal/admin/audit'
     | '/_portal/admin/dashboard'
     | '/_portal/admin/financial-year'
+    | '/_portal/admin/import'
     | '/_portal/admin/loss-report'
     | '/_portal/admin/orders'
+    | '/_portal/admin/overdue'
     | '/_portal/admin/reports'
     | '/_portal/admin/settings'
     | '/_portal/admin/users'
@@ -393,6 +452,9 @@ export interface FileRouteTypes {
     | '/_portal/employee/new-order'
     | '/_portal/employee/notifications'
     | '/_portal/employee/orders'
+    | '/_portal/prod-manager/assign'
+    | '/_portal/prod-manager/dashboard'
+    | '/_portal/prod-manager/notifications'
     | '/_portal/production/dashboard'
     | '/_portal/production/notifications'
     | '/_portal/production/queue'
@@ -503,6 +565,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PortalAdminFinancialYearRouteImport
       parentRoute: typeof PortalRoute
     }
+    '/_portal/admin/import': {
+      id: '/_portal/admin/import'
+      path: '/admin/import'
+      fullPath: '/admin/import'
+      preLoaderRoute: typeof PortalAdminImportRouteImport
+      parentRoute: typeof PortalRoute
+    }
     '/_portal/admin/loss-report': {
       id: '/_portal/admin/loss-report'
       path: '/admin/loss-report'
@@ -515,6 +584,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/orders'
       fullPath: '/admin/orders'
       preLoaderRoute: typeof PortalAdminOrdersRouteImport
+      parentRoute: typeof PortalRoute
+    }
+    '/_portal/admin/overdue': {
+      id: '/_portal/admin/overdue'
+      path: '/admin/overdue'
+      fullPath: '/admin/overdue'
+      preLoaderRoute: typeof PortalAdminOverdueRouteImport
       parentRoute: typeof PortalRoute
     }
     '/_portal/admin/reports': {
@@ -564,6 +640,27 @@ declare module '@tanstack/react-router' {
       path: '/employee/orders'
       fullPath: '/employee/orders'
       preLoaderRoute: typeof PortalEmployeeOrdersRouteImport
+      parentRoute: typeof PortalRoute
+    }
+    '/_portal/prod-manager/assign': {
+      id: '/_portal/prod-manager/assign'
+      path: '/prod-manager/assign'
+      fullPath: '/prod-manager/assign'
+      preLoaderRoute: typeof PortalProdManagerAssignRouteImport
+      parentRoute: typeof PortalRoute
+    }
+    '/_portal/prod-manager/dashboard': {
+      id: '/_portal/prod-manager/dashboard'
+      path: '/prod-manager/dashboard'
+      fullPath: '/prod-manager/dashboard'
+      preLoaderRoute: typeof PortalProdManagerDashboardRouteImport
+      parentRoute: typeof PortalRoute
+    }
+    '/_portal/prod-manager/notifications': {
+      id: '/_portal/prod-manager/notifications'
+      path: '/prod-manager/notifications'
+      fullPath: '/prod-manager/notifications'
+      preLoaderRoute: typeof PortalProdManagerNotificationsRouteImport
       parentRoute: typeof PortalRoute
     }
     '/_portal/production/dashboard': {
@@ -643,8 +740,10 @@ interface PortalRouteChildren {
   PortalAdminAuditRoute: typeof PortalAdminAuditRoute
   PortalAdminDashboardRoute: typeof PortalAdminDashboardRoute
   PortalAdminFinancialYearRoute: typeof PortalAdminFinancialYearRoute
+  PortalAdminImportRoute: typeof PortalAdminImportRoute
   PortalAdminLossReportRoute: typeof PortalAdminLossReportRoute
   PortalAdminOrdersRoute: typeof PortalAdminOrdersRoute
+  PortalAdminOverdueRoute: typeof PortalAdminOverdueRoute
   PortalAdminReportsRoute: typeof PortalAdminReportsRoute
   PortalAdminSettingsRoute: typeof PortalAdminSettingsRoute
   PortalAdminUsersRoute: typeof PortalAdminUsersRoute
@@ -652,6 +751,9 @@ interface PortalRouteChildren {
   PortalEmployeeNewOrderRoute: typeof PortalEmployeeNewOrderRoute
   PortalEmployeeNotificationsRoute: typeof PortalEmployeeNotificationsRoute
   PortalEmployeeOrdersRoute: typeof PortalEmployeeOrdersRoute
+  PortalProdManagerAssignRoute: typeof PortalProdManagerAssignRoute
+  PortalProdManagerDashboardRoute: typeof PortalProdManagerDashboardRoute
+  PortalProdManagerNotificationsRoute: typeof PortalProdManagerNotificationsRoute
   PortalProductionDashboardRoute: typeof PortalProductionDashboardRoute
   PortalProductionNotificationsRoute: typeof PortalProductionNotificationsRoute
   PortalProductionQueueRoute: typeof PortalProductionQueueRoute
@@ -674,8 +776,10 @@ const PortalRouteChildren: PortalRouteChildren = {
   PortalAdminAuditRoute: PortalAdminAuditRoute,
   PortalAdminDashboardRoute: PortalAdminDashboardRoute,
   PortalAdminFinancialYearRoute: PortalAdminFinancialYearRoute,
+  PortalAdminImportRoute: PortalAdminImportRoute,
   PortalAdminLossReportRoute: PortalAdminLossReportRoute,
   PortalAdminOrdersRoute: PortalAdminOrdersRoute,
+  PortalAdminOverdueRoute: PortalAdminOverdueRoute,
   PortalAdminReportsRoute: PortalAdminReportsRoute,
   PortalAdminSettingsRoute: PortalAdminSettingsRoute,
   PortalAdminUsersRoute: PortalAdminUsersRoute,
@@ -683,6 +787,9 @@ const PortalRouteChildren: PortalRouteChildren = {
   PortalEmployeeNewOrderRoute: PortalEmployeeNewOrderRoute,
   PortalEmployeeNotificationsRoute: PortalEmployeeNotificationsRoute,
   PortalEmployeeOrdersRoute: PortalEmployeeOrdersRoute,
+  PortalProdManagerAssignRoute: PortalProdManagerAssignRoute,
+  PortalProdManagerDashboardRoute: PortalProdManagerDashboardRoute,
+  PortalProdManagerNotificationsRoute: PortalProdManagerNotificationsRoute,
   PortalProductionDashboardRoute: PortalProductionDashboardRoute,
   PortalProductionNotificationsRoute: PortalProductionNotificationsRoute,
   PortalProductionQueueRoute: PortalProductionQueueRoute,

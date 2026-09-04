@@ -12,7 +12,7 @@ export const notifyUser = async (userId: number, title: string, body: string, ki
   });
 };
 
-export const notifyRole = async (role: "ADMIN" | "EMPLOYEE" | "ACCOUNTS" | "PRODUCTION", title: string, body: string, kind: string = "info", orderId?: number | null) => {
+export const notifyRole = async (role: "ADMIN" | "CSM" | "ACCOUNTS" | "PRODUCTION" | "PRODUCTION_MANAGER", title: string, body: string, kind: string = "info", orderId?: number | null) => {
   const users = await prisma.user.findMany({ where: { role, is_active: true } });
 
   if (users.length === 0) return;

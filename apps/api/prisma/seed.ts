@@ -15,25 +15,41 @@ async function main() {
     },
   });
 
-  // Create demo users
+  // Create demo users — ONLY on a fresh database.
+  //
+  // These upserts key on `username`. If an account is later renamed in the admin
+  // portal, the upsert no longer matches it and would create a duplicate account
+  // with a new id (this previously produced two "Bablu Goud" and two "Mahesh Goud"
+  // accounts). Seeding is therefore skipped whenever any user already exists.
+  // Set SEED_FORCE_USERS=true only against a database you intend to re-seed.
+  const existingUsers = await prisma.user.count();
+  if (existingUsers > 0 && process.env.SEED_FORCE_USERS !== "true") {
+    console.log(`Skipping user seed — ${existingUsers} user(s) already exist (set SEED_FORCE_USERS=true to override).`);
+    console.log("Database seeded successfully (sequence only)");
+    return;
+  }
+
   const password = await bcrypt.hash("demo1234", 12);
 
   const users = [
-    { name: "Bablu Goud", username: "employee", role: "EMPLOYEE" },
+    { name: "Bablu Goud", username: "employee", role: "CSM" },
     { name: "Karthik Menon", username: "production", role: "PRODUCTION" },
+    { name: "Ravi Teja", username: "production2", role: "PRODUCTION" },
     { name: "Priya Sharma", username: "accountant", role: "ACCOUNTS" },
-    { name: "Mahesh Goud", username: "admin", role: "ADMIN" },
+    { name: "Mahesh Goud", username: "maheshgoud", role: "ADMIN", is_super_admin: true },
+    { name: "Suresh Kumar", username: "operator", role: "PRODUCTION_MANAGER" },
   ];
 
   for (const u of users) {
     await prisma.user.upsert({
       where: { username: u.username },
-      update: {},
+      update: { is_super_admin: u.is_super_admin ?? false },
       create: {
         name: u.name,
         username: u.username,
         password,
         role: u.role as any,
+        is_super_admin: u.is_super_admin ?? false,
       },
     });
   }

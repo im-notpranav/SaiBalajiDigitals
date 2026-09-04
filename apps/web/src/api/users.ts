@@ -6,6 +6,10 @@ export async function fetchUsers() {
   return apiFetch<{ users: AppUser[] }>("/users");
 }
 
+export async function fetchProductionStaff() {
+  return apiFetch<{ users: Array<{ id: number; name: string; username: string }> }>("/users/production-staff");
+}
+
 export async function checkUsername(username: string) {
   return apiFetch<{ available: boolean }>(`/users/check?username=${encodeURIComponent(username)}`);
 }
@@ -48,6 +52,14 @@ export async function toggleUserStatus(id: number, is_active: boolean) {
     data: { is_active },
   });
   return { user: res };
+}
+
+/** Admin-initiated password reset for another account (super-admin only). */
+export async function resetUserPassword(id: number, new_password: string) {
+  return apiFetch<{ message: string }>(`/users/${id}/password`, {
+    method: "PUT",
+    data: { new_password },
+  });
 }
 
 export async function updateUser(id: number, data: { name: string; username: string; role: string }) {

@@ -15,6 +15,7 @@ import type { Order } from "@sb-oms/shared-types";
 import { Link } from "@tanstack/react-router";
 import { formatDistanceToNow } from "date-fns";
 import { SortableHead, useSortableTable } from "@/hooks/useSortableTable";
+import { storeLabel, storeSubLabel } from "@/lib/stores";
 
 interface OrdersTableProps {
   orders: Order[];
@@ -37,7 +38,7 @@ export function OrdersTable({
       if (key === "total_amount") return o.total_amount ?? 0;
       if (key === "order_no") return o.order_no;
       if (key === "client_name") return o.client_name;
-      if (key === "store_name") return o.store_name;
+      if (key === "store") return storeLabel(o);
       if (key === "status") return o.status;
       if (key === "creator_name") return o.creator_name ?? "";
       if (key === "items") return o.items.length;
@@ -60,7 +61,7 @@ export function OrdersTable({
                 <SortableHead label="Client" column="client_name" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
               </TableHead>
               <TableHead>
-                <SortableHead label="Store" column="store_name" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                <SortableHead label="Store" column="store" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
               </TableHead>
               {showCreator && (
                 <TableHead>
@@ -96,7 +97,12 @@ export function OrdersTable({
               <TableRow key={o.id} className="group">
                 <TableCell className="font-mono text-xs font-semibold text-primary">{o.order_no}</TableCell>
                 <TableCell className="font-medium">{o.client_name}</TableCell>
-                <TableCell className="text-sm text-muted-foreground">{o.store_name}</TableCell>
+                <TableCell className="text-sm text-muted-foreground">
+                  <div>{storeLabel(o)}</div>
+                  {storeSubLabel(o) && (
+                    <div className="text-xs text-muted-foreground/70">{storeSubLabel(o)}</div>
+                  )}
+                </TableCell>
                 {showCreator && <TableCell className="text-sm text-muted-foreground">{o.creator_name}</TableCell>}
                 <TableCell className="text-sm text-muted-foreground">{o.items.length}</TableCell>
                 {showAmount && (
