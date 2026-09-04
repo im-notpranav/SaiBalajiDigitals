@@ -6,25 +6,78 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Flag, MessageSquare, Ban, CheckCircle2, Factory } from "lucide-react";
+import { Flag, MessageSquare, Ban, CheckCircle2, Factory, PackageCheck, Pencil } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { StatusBadge } from "./StatusBadge";
 import { inr } from "@/lib/format";
 import { remarkLabel, LOSS_REMARK_TYPES } from "@/lib/constants";
 import type { Order, OrderItem, RemarkType } from "@sb-oms/shared-types";
-import { flagOrderItem, setItemLossRemark } from "@/api/orders";
+import { flagOrderItem, setItemLossRemark, markStoreInstalled, updateStore, updateOrderDetails } from "@/api/orders";
+import { storeRef } from "@/lib/stores";
 import { useQueryClient } from "@tanstack/react-query";
 
 export interface OrderDetailProps {
   order: Order | any;
   actions?: React.ReactNode;
   userRole?: string;
+  /** The signed-in user, so per-store install is offered only to the order's creator. */
+  currentUserId?: number;
 }
 
-export function OrderDetail({ order, actions, userRole }: OrderDetailProps) {
+export function OrderDetail({ order, actions, userRole, currentUserId }: OrderDetailProps) {
   const queryClient = useQueryClient();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ["order", order.id.toString()] });
+
+  const isAdmin = userRole === "ADMIN";
+  const isCreator = currentUserId != null && order.created_by === currentUserId;
+  /** Installation is the creator's hand-off to billing (or an admin's). */
+  const canInstall = order.status === "Active" && (isAdmin || (userRole === "CSM" && isCreator));
+  /** Header fields stay editable until the order is settled — a PO usually arrives late. */
+  const canEditHeader =
+    (isAdmin || userRole === "CSM") &&
+    ["Active", "Installed", "BillingCompleted", "Pending"].includes(order.status);
+
+  const handleInstallStore = async (storeId: number, storeName: string) => {
+    setIsSubmitting(true);
+    try {
+      await markStoreInstalled(order.id, storeId);
+      toast.success(`${storeName} marked installed`);
+      refresh();
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+    } catch (err: any) {
+      toast.error("Couldn't mark installed", { description: err?.response?.data?.message || err.message });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleStorePo = async (storeId: number, po: string) => {
+    setIsSubmitting(true);
+    try {
+      await updateStore(order.id, storeId, { po_number: po.trim() || null });
+      toast.success(po.trim() ? "Store PO saved" : "Store PO cleared");
+      refresh();
+    } catch (err: any) {
+      toast.error("Couldn't save the PO", { description: err?.response?.data?.message || err.message });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleJobPo = async (po: string) => {
+    setIsSubmitting(true);
+    try {
+      await updateOrderDetails(order.id, { po_number: po.trim() || null });
+      toast.success(po.trim() ? "Job PO saved" : "Job PO cleared");
+      refresh();
+    } catch (err: any) {
+      toast.error("Couldn't save the PO", { description: err?.response?.data?.message || err.message });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   const handleFlagItem = async (itemId: number, isFlagged: boolean, reason?: string) => {
     setIsSubmitting(true);
@@ -72,6 +125,109 @@ export function OrderDetail({ order, actions, userRole }: OrderDetailProps) {
   const producedItems = assignedItems.filter((i: OrderItem) => i.production_completed).length;
   const allProduced = showProduction && producedItems === assignedItems.length;
 
+  const stores: any[] = order.stores ?? [];
+  const invoiceById = new Map<number, any>((order.invoices ?? []).map((i: any) => [i.id, i]));
+  /** Group under store headings only when the server sent stores carrying their items. */
+  const grouped = stores.length > 0 && stores.some((s) => (s.items?.length ?? 0) > 0);
+
+  /** The item table, shared by the grouped and flat layouts. */
+  const ItemsTable = ({ items }: { items: OrderItem[] }) => (
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead className="w-12 text-center">#</TableHead>
+          <TableHead>Media</TableHead>
+          <TableHead className="text-right">Size (in)</TableHead>
+          <TableHead className="text-right">Qty</TableHead>
+          <TableHead className="text-right">Total Sft</TableHead>
+          {hasFinancials && <TableHead className="text-right">Rate (₹)</TableHead>}
+          {hasFinancials && <TableHead className="text-right">Amount (₹)</TableHead>}
+          {showProduction && <TableHead>Production</TableHead>}
+          <TableHead>Remarks / Flags</TableHead>
+          {userRole && <TableHead className="text-right">Actions</TableHead>}
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {items?.map((item: OrderItem) => (
+          <TableRow key={item.id}>
+            <TableCell className="text-center text-muted-foreground">{item.s_no}</TableCell>
+            <TableCell className="font-medium">{item.media}</TableCell>
+            <TableCell className="text-right">{item.width_inches} x {item.height_inches}</TableCell>
+            <TableCell className="text-right">{item.qty}</TableCell>
+            <TableCell className="text-right">{(item.total_sft || 0).toFixed(2)}</TableCell>
+            {hasFinancials && <TableCell className="text-right">{item.rate}</TableCell>}
+            {hasFinancials && <TableCell className="text-right font-semibold">{inr(item.amount || 0)}</TableCell>}
+            {showProduction && (
+              <TableCell>
+                <ProductionCell item={item} />
+              </TableCell>
+            )}
+            <TableCell>
+              <div className="space-y-1">
+                {item.is_flagged && (
+                  <div className="inline-flex items-center rounded-md bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive">
+                    Flagged
+                    {item.flag_reason && <span className="ml-1 font-normal opacity-80">({item.flag_reason})</span>}
+                  </div>
+                )}
+                {item.remarks && item.remarks_confirmed && (
+                  <div className="text-xs">
+                    <span className="font-medium text-amber-600 dark:text-amber-500">Loss: {remarkLabel(item.remarks)}</span>
+                    {item.remarks_other_text && <div className="text-muted-foreground mt-0.5 whitespace-pre-wrap max-w-[200px] truncate" title={item.remarks_other_text}>{item.remarks_other_text}</div>}
+                  </div>
+                )}
+                {item.remarks && !item.remarks_confirmed && (
+                  <div className="text-xs">
+                    <span className="inline-flex items-center rounded-md bg-blue-500/10 px-2 py-0.5 font-medium text-blue-600 dark:text-blue-400">
+                      Proposed loss: {remarkLabel(item.remarks)}
+                    </span>
+                    <div className="text-muted-foreground mt-0.5">pending admin approval</div>
+                    {item.remarks_other_text && <div className="text-muted-foreground mt-0.5 whitespace-pre-wrap max-w-[200px] truncate" title={item.remarks_other_text}>{item.remarks_other_text}</div>}
+                  </div>
+                )}
+                {!item.is_flagged && !item.remarks && (
+                  <span className="text-muted-foreground">-</span>
+                )}
+              </div>
+            </TableCell>
+            {userRole && (
+              <TableCell className="text-right">
+                <div className="flex items-center justify-end space-x-2">
+                  {(userRole === "CSM" || userRole === "ADMIN") && (order.status === "Active" || order.status === "Installed") && (
+                    <FlagDialog
+                      item={item}
+                      onSave={(flagged, reason) => handleFlagItem(item.id!, flagged, reason)}
+                      isSubmitting={isSubmitting}
+                    />
+                  )}
+                  {userRole === "ADMIN" && item.is_flagged && (
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-7 w-7 border-destructive/40 text-destructive hover:bg-destructive/10"
+                      title="Reject flag"
+                      onClick={() => handleRejectFlag(item.id!)}
+                      disabled={isSubmitting}
+                    >
+                      <Ban className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                  {userRole === "ADMIN" && (
+                    <RemarkDialog
+                      item={item}
+                      onSave={(remark, custom) => handleSetRemark(item.id!, remark, custom)}
+                      isSubmitting={isSubmitting}
+                    />
+                  )}
+                </div>
+              </TableCell>
+            )}
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  );
+
   return (
     <div className="space-y-6">
       <motion.section
@@ -93,19 +249,36 @@ export function OrderDetail({ order, actions, userRole }: OrderDetailProps) {
             <div className="font-semibold">{order.client_name}</div>
           </div>
           <div>
-            <div className="text-xs text-muted-foreground uppercase">Store & Location</div>
-            <div className="font-semibold">{order.store_name} ({order.location})</div>
+            <div className="text-xs text-muted-foreground uppercase">
+              {stores.length > 1 ? "Stores" : "Store & Location"}
+            </div>
+            <div className="font-semibold">
+              {stores.length > 1
+                ? `${stores.length} stores`
+                : stores.length === 1
+                  ? `${stores[0].store_name} (${stores[0].location})`
+                  : "—"}
+            </div>
           </div>
           <div>
             <div className="text-xs text-muted-foreground uppercase">Date</div>
             <div className="font-semibold">{format(new Date(order.date || order.created_at), "MMM d, yyyy")}</div>
           </div>
-          {order.po_number && (
-            <div>
-              <div className="text-xs text-muted-foreground uppercase">PO Number</div>
-              <div className="font-semibold">{order.po_number}</div>
+          <div>
+            <div className="text-xs text-muted-foreground uppercase">Job PO Number</div>
+            <div className="flex items-center gap-2">
+              <span className="font-semibold">{order.po_number || <span className="text-muted-foreground font-normal">Not set</span>}</span>
+              {canEditHeader && (
+                <PoDialog
+                  title="Job PO Number"
+                  description="Covers the whole order. Leave blank to clear it."
+                  current={order.po_number ?? ""}
+                  onSave={handleJobPo}
+                  isSubmitting={isSubmitting}
+                />
+              )}
             </div>
-          )}
+          </div>
           {order.creator && (
             <div>
               <div className="text-xs text-muted-foreground uppercase">Created By</div>
@@ -142,101 +315,68 @@ export function OrderDetail({ order, actions, userRole }: OrderDetailProps) {
             </span>
           )}
         </div>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-12 text-center">#</TableHead>
-              <TableHead>Media</TableHead>
-              <TableHead className="text-right">Size (in)</TableHead>
-              <TableHead className="text-right">Qty</TableHead>
-              <TableHead className="text-right">Total Sft</TableHead>
-              {hasFinancials && <TableHead className="text-right">Rate (₹)</TableHead>}
-              {hasFinancials && <TableHead className="text-right">Amount (₹)</TableHead>}
-              {showProduction && <TableHead>Production</TableHead>}
-              <TableHead>Remarks / Flags</TableHead>
-              {userRole && <TableHead className="text-right">Actions</TableHead>}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {order.items?.map((item: OrderItem) => (
-              <TableRow key={item.id}>
-                <TableCell className="text-center text-muted-foreground">{item.s_no}</TableCell>
-                <TableCell className="font-medium">{item.media}</TableCell>
-                <TableCell className="text-right">{item.width_inches} x {item.height_inches}</TableCell>
-                <TableCell className="text-right">{item.qty}</TableCell>
-                <TableCell className="text-right">{(item.total_sft || 0).toFixed(2)}</TableCell>
-                {hasFinancials && <TableCell className="text-right">{item.rate}</TableCell>}
-                {hasFinancials && <TableCell className="text-right font-semibold">{inr(item.amount || 0)}</TableCell>}
-                {showProduction && (
-                  <TableCell>
-                    <ProductionCell item={item} />
-                  </TableCell>
-                )}
-                <TableCell>
-                  <div className="space-y-1">
-                    {item.is_flagged && (
-                      <div className="inline-flex items-center rounded-md bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive">
-                        Flagged
-                        {item.flag_reason && <span className="ml-1 font-normal opacity-80">({item.flag_reason})</span>}
+
+        {grouped ? (
+          stores.map((store: any) => {
+            const invoice = store.invoice_id != null ? invoiceById.get(store.invoice_id) : undefined;
+            return (
+              <div key={store.id} className="border-t">
+                <div className="flex flex-wrap items-start justify-between gap-3 bg-muted/20 px-6 py-3">
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold">
+                      {storeRef(store)}
+                      <span className="ml-2 font-normal text-muted-foreground">{store.location}</span>
+                    </div>
+                    <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                      <span>
+                        PO: {store.po_number || <span className="italic">not set</span>}
+                        {canEditHeader && (
+                          <PoDialog
+                            title={`PO for ${store.store_name}`}
+                            description="Covers this store only. Leave blank to clear it."
+                            current={store.po_number ?? ""}
+                            onSave={(po) => handleStorePo(store.id, po)}
+                            isSubmitting={isSubmitting}
+                            compact
+                          />
+                        )}
+                      </span>
+                      <span>
+                        {store.installed_at
+                          ? `Installed ${format(new Date(store.installed_at), "MMM d, yyyy")}`
+                          : "Not yet installed"}
+                      </span>
+                      {invoice && <span>Invoice {invoice.invoice_no}</span>}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {hasFinancials && store.total_amount !== undefined && (
+                      <div className="text-right">
+                        <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Store total</div>
+                        <div className="font-semibold">{inr(store.total_amount)}</div>
                       </div>
                     )}
-                    {item.remarks && item.remarks_confirmed && (
-                      <div className="text-xs">
-                        <span className="font-medium text-amber-600 dark:text-amber-500">Loss: {remarkLabel(item.remarks)}</span>
-                        {item.remarks_other_text && <div className="text-muted-foreground mt-0.5 whitespace-pre-wrap max-w-[200px] truncate" title={item.remarks_other_text}>{item.remarks_other_text}</div>}
-                      </div>
-                    )}
-                    {item.remarks && !item.remarks_confirmed && (
-                      <div className="text-xs">
-                        <span className="inline-flex items-center rounded-md bg-blue-500/10 px-2 py-0.5 font-medium text-blue-600 dark:text-blue-400">
-                          Proposed loss: {remarkLabel(item.remarks)}
-                        </span>
-                        <div className="text-muted-foreground mt-0.5">pending admin approval</div>
-                        {item.remarks_other_text && <div className="text-muted-foreground mt-0.5 whitespace-pre-wrap max-w-[200px] truncate" title={item.remarks_other_text}>{item.remarks_other_text}</div>}
-                      </div>
-                    )}
-                    {!item.is_flagged && !item.remarks && (
-                      <span className="text-muted-foreground">-</span>
+                    {canInstall && !store.installed_at && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="rounded-lg"
+                        disabled={isSubmitting}
+                        onClick={() => handleInstallStore(store.id, store.store_name)}
+                      >
+                        <PackageCheck className="mr-1 h-3.5 w-3.5" /> Mark installed
+                      </Button>
                     )}
                   </div>
-                </TableCell>
-                {userRole && (
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end space-x-2">
-                      {(userRole === "CSM" || userRole === "ADMIN") && (order.status === "Active" || order.status === "Installed") && (
-                        <FlagDialog 
-                          item={item} 
-                          onSave={(flagged, reason) => handleFlagItem(item.id!, flagged, reason)} 
-                          isSubmitting={isSubmitting} 
-                        />
-                      )}
-                      {userRole === "ADMIN" && item.is_flagged && (
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className="h-7 w-7 border-destructive/40 text-destructive hover:bg-destructive/10"
-                          title="Reject flag"
-                          onClick={() => handleRejectFlag(item.id!)}
-                          disabled={isSubmitting}
-                        >
-                          <Ban className="h-3.5 w-3.5" />
-                        </Button>
-                      )}
-                      {userRole === "ADMIN" && (
-                        <RemarkDialog
-                          item={item}
-                          onSave={(remark, custom) => handleSetRemark(item.id!, remark, custom)}
-                          isSubmitting={isSubmitting}
-                        />
-                      )}
-                    </div>
-                  </TableCell>
-                )}
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-        
+                </div>
+                <ItemsTable items={store.items ?? []} />
+              </div>
+            );
+          })
+        ) : (
+          <ItemsTable items={order.items ?? []} />
+        )}
+
         {hasFinancials && order.total_amount !== undefined && (
           <div className="bg-muted/30 p-6 flex flex-wrap justify-end gap-8">
             {order.loss_amount ? (
@@ -266,6 +406,60 @@ export function OrderDetail({ order, actions, userRole }: OrderDetailProps) {
         </motion.section>
       )}
     </div>
+  );
+}
+
+/**
+ * One-field PO editor. A PO usually turns up after the invoice, and reopening the whole
+ * order form to type it in is what made people skip it.
+ */
+function PoDialog({
+  title, description, current, onSave, isSubmitting, compact,
+}: {
+  title: string;
+  description: string;
+  current: string;
+  onSave: (po: string) => void;
+  isSubmitting: boolean;
+  compact?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [value, setValue] = useState(current);
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSave(value);
+    setOpen(false);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o) setValue(current); }}>
+      <DialogTrigger asChild>
+        <Button
+          variant="ghost"
+          size={compact ? "sm" : "icon"}
+          className={compact ? "ml-1 h-5 px-1.5 text-[10px]" : "h-6 w-6"}
+          title={current ? "Edit PO number" : "Add PO number"}
+        >
+          {compact ? (current ? "Edit" : "Add") : <Pencil className="h-3 w-3" />}
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={submit} className="space-y-4 pt-2">
+          <p className="text-xs text-muted-foreground">{description}</p>
+          <div className="space-y-2">
+            <Label>PO Number</Label>
+            <Input value={value} onChange={(e) => setValue(e.target.value)} placeholder="e.g. PO-12345" autoFocus />
+          </div>
+          <DialogFooter>
+            <Button type="submit" disabled={isSubmitting}>Save</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 

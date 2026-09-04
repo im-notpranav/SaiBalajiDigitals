@@ -143,7 +143,7 @@ function OrderDetailAdmin() {
         description="Full administrative view of order details."
         crumbs={[{ label: "Administrator" }, { label: "Orders", to: "/admin/orders" }, { label: "Details" }]}
       />
-      <OrderDetail order={data.order} actions={actions} userRole={user?.role} />
+      <OrderDetail order={data.order} actions={actions} userRole={user?.role} currentUserId={user?.id} />
     </>
   );
 }

@@ -58,9 +58,9 @@ model User {
   flaggedItems  OrderItem[]      @relation("ItemFlagger")
   assignments   OrderItemAssignment[] @relation("AssignmentAssignee")
   assignmentsMade OrderItemAssignment[] @relation("AssignmentAssigner")
-  paymentsReceived Order[]         @relation("OrderPaymentReceiver")
-  installedOrders Order[]         @relation("OrderInstaller")
   followUps       PaymentFollowUp[] @relation("FollowUpAuthor")
+  installedStores OrderStore[]    @relation("StoreInstaller")
+  invoicePayments Invoice[]       @relation("InvoicePaymentReceiver")
 }
 
 model OrderSequence {
@@ -70,32 +70,26 @@ model OrderSequence {
   is_locked   Boolean @default(false)
 }
 
+/// The identity and numbering record for a job. Stores, line items and invoices hang off
+/// it; nothing about a particular store or a particular invoice lives here any more.
 model Order {
   id                     Int                   @id @default(autoincrement())
   order_no               String                @unique
   client_name            String
-  store_name             String
-  location               String
   date                   DateTime              @default(now())
+  /// Job-level PO covering the whole order. Per-store POs live on OrderStore.
   po_number              String?
+  /// Derived from the stores and invoices — see utils/order-derive.ts. Never assign it
+  /// directly, except `Completed`, which an admin sets by closing the order.
   status                 OrderStatus           @default(Active)
-  invoice_no             String?
-  bill_amount            Decimal?              @db.Decimal(10, 2)
-  billing_date           DateTime?
-  installed_at           DateTime?
-  installed_by           Int?
-  installer              User?                 @relation("OrderInstaller", fields: [installed_by], references: [id], onDelete: SetNull)
-  billing_completed_at   DateTime?
-  amount_received        Decimal?              @db.Decimal(10, 2)
-  payment_received_at    DateTime?
-  payment_received_by    Int?
-  paymentReceiver        User?                 @relation("OrderPaymentReceiver", fields: [payment_received_by], references: [id], onDelete: SetNull)
   created_by             Int?
   creator                User?                 @relation(fields: [created_by], references: [id], onDelete: SetNull)
   creator_name           String
   remarks                RemarkType?
   remarks_other_text     String?
   items                  OrderItem[]
+  stores                 OrderStore[]
+  invoices               Invoice[]
   changeLogs             OrderChangeLog[]
   notifications          Notification[]        @relation("OrderNotifications")
   followUps              PaymentFollowUp[]
@@ -103,7 +97,6 @@ model Order {
   updated_at             DateTime              @updatedAt
 
   @@index([client_name])
-  @@index([store_name])
   @@index([status])
   @@index([created_by])
 }
@@ -112,6 +105,12 @@ model OrderItem {
   id            Int         @id @default(autoincrement())
   order_id      Int
   order         Order       @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  // order_id is kept alongside order_store_id on purpose: every existing order.items
+  // read keeps working, and the composite key below makes the two impossible to
+  // disagree — Postgres rejects an item whose order differs from its store's order.
+  order_store_id Int
+  orderStore    OrderStore  @relation(fields: [order_id, order_store_id], references: [order_id, id], onDelete: Cascade)
+  // s_no numbers the item within its store, not within the order.
   s_no          Int
   media         String
   width_inches  Decimal     @db.Decimal(10, 2)
@@ -139,6 +138,63 @@ model OrderItem {
   assignments             OrderItemAssignment[]
   production_completed    Boolean   @default(false)
   production_completed_at DateTime?
+
+  @@index([order_store_id])
+}
+
+/// One physical store within an order. Twenty stores handed over together share a single
+/// order_no and appear as twenty OrderStore rows, each with its own line items, its own
+/// installation date and its own PO.
+model OrderStore {
+  id           Int         @id @default(autoincrement())
+  order_id     Int
+  order        Order       @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  /// 1-based within the order. Referenced in the UI as "ORD260123 / S03 — Banjara Hills".
+  s_no         Int
+  store_name   String
+  location     String
+  /// Per-store PO. The job-level PO covering the whole order lives on Order.po_number.
+  po_number    String?
+  installed_at DateTime?
+  installed_by Int?
+  installer    User?       @relation("StoreInstaller", fields: [installed_by], references: [id], onDelete: SetNull)
+  /// The invoice this store was billed on. Null until accounts raises one covering it.
+  invoice_id   Int?
+  invoice      Invoice?    @relation(fields: [invoice_id], references: [id], onDelete: SetNull)
+  items        OrderItem[]
+  created_at   DateTime    @default(now())
+  updated_at   DateTime    @updatedAt
+
+  /// Redundant against the primary key, but required as the target of OrderItem's
+  /// composite foreign key.
+  @@unique([order_id, id])
+  @@unique([order_id, s_no])
+  @@index([order_id])
+  @@index([invoice_id])
+  @@index([store_name])
+}
+
+/// One invoice raised against a specific set of stores in an order. Its expected value is
+/// the billable total of the stores pointing at it, not of the whole order.
+model Invoice {
+  id                   Int          @id @default(autoincrement())
+  order_id             Int
+  order                Order        @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  invoice_no           String
+  bill_amount          Decimal      @db.Decimal(10, 2)
+  billing_date         DateTime?
+  billing_completed_at DateTime?
+  amount_received      Decimal?     @db.Decimal(10, 2)
+  payment_received_at  DateTime?
+  payment_received_by  Int?
+  paymentReceiver      User?        @relation("InvoicePaymentReceiver", fields: [payment_received_by], references: [id], onDelete: SetNull)
+  stores               OrderStore[]
+  created_at           DateTime     @default(now())
+  updated_at           DateTime     @updatedAt
+
+  /// Scoped to the order, not global: historical invoice numbers are not globally unique.
+  @@unique([order_id, invoice_no])
+  @@index([order_id])
 }
 
 model OrderItemAssignment {

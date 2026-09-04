@@ -1,3 +1,4 @@
+import { rollupOrder } from "./order-derive";
 /**
  * Turnaround (TAT) helpers — derive an order's current pipeline stage and how long
  * it has been sitting there. "Overdue" (Phase 6) means stuck at the current stage
@@ -55,18 +56,20 @@ export function currentStage(order: any): StageInfo | null {
   const assignedItems = items.filter((i: any) => (i.assignments?.length ?? 0) > 0);
   const hasProduction = assignedItems.length > 0;
 
+  // The milestone dates are rolled up from the order's stores and invoices.
+  const roll = rollupOrder(order);
   let stage: string;
   let since: Date;
 
   if (status === "BillingCompleted") {
     stage = "Awaiting payment";
-    since = order.billing_completed_at ?? order.updated_at ?? order.created_at;
+    since = roll.billing_completed_at ?? order.updated_at ?? order.created_at;
   } else if (status === "Pending") {
     stage = "Pending (billing / payment)";
-    since = order.billing_completed_at ?? order.updated_at ?? order.created_at;
+    since = roll.billing_completed_at ?? order.updated_at ?? order.created_at;
   } else if (status === "Installed") {
     stage = "Awaiting billing";
-    since = order.installed_at ?? order.updated_at ?? order.created_at;
+    since = roll.installed_at ?? order.updated_at ?? order.created_at;
   } else {
     // Active
     if (!hasProduction) {

@@ -6,8 +6,15 @@ import {
   getOrder,
   createOrder,
   updateOrder,
+  updateOrderDetails,
+  updateStore,
+  addStore,
+  deleteStore,
   deleteOrder,
-  reconcileInvoice,
+  createInvoice,
+  recordInvoicePayment,
+  editInvoiceBilling,
+  editInvoicePayment,
   closeOrder,
   exportOrders,
   forceCloseOrder,
@@ -15,10 +22,7 @@ import {
   setItemLossRemark,
   assignOrderItem,
   completeOrderItem,
-  markOrderInstalled,
-  recordPayment,
-  editBilling,
-  editPayment,
+  markStoreInstalled,
   getFollowUps,
   createFollowUp,
   emailExport,
@@ -52,12 +56,19 @@ router.get("/", getOrders);
 router.get("/:id", getOrder);
 router.post("/", authorize("CSM", "ADMIN"), createOrder);
 router.put("/:id", authorize("CSM", "ADMIN"), updateOrder);
+// Header edits are separate from line items: they stay open later in the pipeline, and
+// they are not restricted to the CSM who raised the order.
+router.patch("/:id/details", authorize("CSM", "ADMIN"), updateOrderDetails);
+router.post("/:id/stores", authorize("CSM", "ADMIN"), addStore);
+router.patch("/:orderId/stores/:storeId", authorize("CSM", "ADMIN"), updateStore);
+router.delete("/:orderId/stores/:storeId", authorize("CSM", "ADMIN"), deleteStore);
 router.delete("/:id", authorize("ADMIN"), deleteOrder);
-router.put("/:id/install", authorize("CSM", "ADMIN"), markOrderInstalled);
-router.put("/:id/invoice", authorize("ACCOUNTS", "ADMIN"), reconcileInvoice);
-router.put("/:id/payment", authorize("ACCOUNTS", "ADMIN"), recordPayment);
-router.patch("/:id/billing", authorize("ACCOUNTS", "ADMIN"), editBilling);
-router.patch("/:id/payment-edit", authorize("ACCOUNTS", "ADMIN"), editPayment);
+router.put("/:orderId/stores/:storeId/install", authorize("CSM", "ADMIN"), markStoreInstalled);
+// An order can carry several invoices, each covering its own set of stores.
+router.post("/:id/invoices", authorize("ACCOUNTS", "ADMIN"), createInvoice);
+router.put("/:orderId/invoices/:invoiceId/payment", authorize("ACCOUNTS", "ADMIN"), recordInvoicePayment);
+router.patch("/:orderId/invoices/:invoiceId/billing", authorize("ACCOUNTS", "ADMIN"), editInvoiceBilling);
+router.patch("/:orderId/invoices/:invoiceId/payment-edit", authorize("ACCOUNTS", "ADMIN"), editInvoicePayment);
 router.get("/:id/follow-ups", getFollowUps);
 router.post("/:id/follow-ups", authorize("CSM", "ACCOUNTS", "ADMIN"), createFollowUp);
 router.put("/:id/close", authorize("ADMIN"), closeOrder);

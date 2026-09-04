@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-store";
 import { formatDistanceToNow } from "date-fns";
 import type { OrderItem } from "@sb-oms/shared-types";
+import { billingRollup, installedAt } from "@/lib/stores";
 
 export const Route = createFileRoute("/_portal/employee/orders_/$id")({
   head: () => ({ meta: [{ title: "Order Details — SB OMS" }] }),
@@ -39,19 +40,12 @@ function OrderDetailEmployee() {
       toast.error("Couldn't mark installed", { description: err?.response?.data?.message || err.message }),
   });
 
-  if (isLoading) {
-    return <div className="p-8 flex justify-center"><Loader2 className="animate-spin text-primary w-8 h-8" /></div>;
-  }
-  if (error || !data?.order) {
-    return <div className="p-8 text-destructive">Failed to load order.</div>;
-  }
-
-  const order = data.order;
-
+  // Declared before the early returns below: a hook that only runs on the loaded path
+  // changes the hook count between renders and tears the component down.
   const { data: followUps = [] } = useQuery({
     queryKey: ["follow-ups", id],
     queryFn: () => getFollowUps(Number(id)),
-    enabled: !!order.billing_completed_at,
+    enabled: !!(data?.order && billingRollup(data.order).billing_completed_at),
   });
 
   const followUpMutation = useMutation({
@@ -65,13 +59,25 @@ function OrderDetailEmployee() {
       toast.error("Failed to add note", { description: err?.response?.data?.message || err.message }),
   });
 
+  if (isLoading) {
+    return <div className="p-8 flex justify-center"><Loader2 className="animate-spin text-primary w-8 h-8" /></div>;
+  }
+  if (error || !data?.order) {
+    return <div className="p-8 text-destructive">Failed to load order.</div>;
+  }
+
+  const order = data.order;
+
   const items = order.items ?? [];
   const assignedItems = items.filter((i: OrderItem) => (i.assignments?.length ?? 0) > 0);
   const hasProduction = assignedItems.length > 0;
   const allProduced = hasProduction && assignedItems.every((i: OrderItem) => i.production_completed);
 
   // Installation is the employee's hand-off to billing — only for produced orders.
-  const canInstall = hasProduction && allProduced && order.status === "Active";
+  // A multi-store order is installed store by store, from the store headings above.
+  const storeCount = order.stores?.length ?? 1;
+  const lastInstalledAt = installedAt(order);
+  const canInstall = hasProduction && allProduced && order.status === "Active" && storeCount <= 1;
 
   const actions =
     order.status === "Installed" ? (
@@ -80,7 +86,7 @@ function OrderDetailEmployee() {
           <CheckCircle2 className="h-5 w-5" /> Installation confirmed
         </div>
         <p className="mt-1 text-muted-foreground">
-          Sent to accounts for billing{order.installed_at ? ` on ${new Date(order.installed_at).toLocaleDateString("en-IN")}` : ""}.
+          Sent to accounts for billing{lastInstalledAt ? ` on ${new Date(lastInstalledAt).toLocaleDateString("en-IN")}` : ""}.
         </p>
       </div>
     ) : canInstall ? (
@@ -96,13 +102,18 @@ function OrderDetailEmployee() {
           Mark as Installed
         </Button>
       </div>
+    ) : hasProduction && order.status === "Active" && storeCount > 1 ? (
+      <div className="rounded-xl border bg-muted/30 p-6 text-sm text-muted-foreground">
+        This order covers {storeCount} stores. Confirm each one from its heading above as it goes in —
+        accounts is told once the last store is installed.
+      </div>
     ) : hasProduction && order.status === "Active" ? (
       <div className="rounded-xl border bg-muted/30 p-6 text-sm text-muted-foreground">
         Installation can be confirmed once all assigned items are produced.
       </div>
     ) : null;
 
-  const followUpSection = order.billing_completed_at ? (
+  const followUpSection = billingRollup(order).billing_completed_at ? (
     <div className="rounded-xl border bg-card p-6">
       <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold">
         <MessageSquarePlus className="h-4 w-4 text-primary" /> Payment Follow-Up Notes
@@ -164,7 +175,7 @@ function OrderDetailEmployee() {
         description="Full order details and line items."
         crumbs={[{ label: "Employee" }, { label: "Orders", to: "/employee/orders" }, { label: "Details" }]}
       />
-      <OrderDetail order={order} userRole={user?.role} actions={<>{actions}{followUpSection}</>} />
+      <OrderDetail order={order} userRole={user?.role} currentUserId={user?.id} actions={<>{actions}{followUpSection}</>} />
     </>
   );
 }

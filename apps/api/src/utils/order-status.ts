@@ -29,3 +29,12 @@ export const isBillingStarted = (status: string) => (BILLING_STARTED_STATUSES as
 /** CSM-editable statuses: line items may be added until billing touches the order. */
 export const CSM_EDITABLE_STATUSES: OrderStatus[] = ["Active", "Installed"];
 export const isCsmEditable = (status: string) => (CSM_EDITABLE_STATUSES as string[]).includes(status);
+
+/**
+ * Header fields (store, location, PO) stay editable until the order is settled.
+ *
+ * Deliberately wider than CSM_EDITABLE_STATUSES: a PO usually arrives *after* the invoice
+ * is raised, so gating it on the line-item rule locks employees out of entering it.
+ */
+export const HEADER_EDITABLE_STATUSES: OrderStatus[] = ["Active", "Installed", "BillingCompleted", "Pending"];
+export const isHeaderEditable = (status: string) => (HEADER_EDITABLE_STATUSES as string[]).includes(status);
