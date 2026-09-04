@@ -75,7 +75,7 @@ function AuditPage() {
       />
 
       <div className="surface-panel mb-4 flex flex-wrap items-center gap-3 p-3">
-        <div className="relative min-w-[240px] flex-1">
+        <div className="relative min-w-0 flex-1 sm:min-w-[240px]">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by user, order, or detail" className="pl-9" />
         </div>
