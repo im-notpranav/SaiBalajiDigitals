@@ -1696,9 +1696,12 @@ export const createFollowUp = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Follow-ups can only be added after billing is completed." });
     }
 
-    const followUp = await prisma.paymentFollowUp.create({
-      data: { order_id: orderId, note, created_by: user.id },
-      include: { author: { select: { id: true, name: true, role: true } } },
+    const followUp = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.current_user_id', ${user.id.toString()}, true)`;
+      return tx.paymentFollowUp.create({
+        data: { order_id: orderId, note, created_by: user.id },
+        include: { author: { select: { id: true, name: true, role: true } } },
+      });
     });
 
     return res.status(201).json(followUp);
@@ -1919,11 +1922,16 @@ export const flagOrderItem = async (req: Request, res: Response) => {
     // Capture who raised the flag before we clear it (needed to notify them on an admin reject).
     const priorItem = await prisma.orderItem.findUnique({ where: { id: itemId } });
 
-    const item = await prisma.orderItem.update({
-      where: { id: itemId },
-      data: is_flagged
-        ? { is_flagged: true, flag_reason, flagged_at: new Date(), flagged_by: user.id }
-        : { is_flagged: false, flag_reason: null, flagged_at: null, flagged_by: null },
+    // In a transaction so the audit trigger can attribute the change: set_config is
+    // transaction-scoped, so a bare update records the row with no user against it.
+    const item = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.current_user_id', ${user.id.toString()}, true)`;
+      return tx.orderItem.update({
+        where: { id: itemId },
+        data: is_flagged
+          ? { is_flagged: true, flag_reason, flagged_at: new Date(), flagged_by: user.id }
+          : { is_flagged: false, flag_reason: null, flagged_at: null, flagged_by: null },
+      });
     });
 
     const itemLabel = `#${item.s_no} — ${item.media} (${Number(item.width_inches)}x${Number(item.height_inches)} in, qty ${Number(item.qty)})`;
