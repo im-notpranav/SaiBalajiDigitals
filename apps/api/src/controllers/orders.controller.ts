@@ -768,6 +768,14 @@ export const updateOrderDetails = async (req: Request, res: Response) => {
   }
 };
 
+/**
+ * Whether an existing store is the same store as the given name and location. A chain
+ * repeats a name across places, so only the pair identifies a store within an order.
+ */
+const sameStore = (s: { store_name: string; location: string }, name: string, location: string) =>
+  s.store_name.trim().toLowerCase() === name.trim().toLowerCase() &&
+  s.location.trim().toLowerCase() === location.trim().toLowerCase();
+
 /** PATCH /api/orders/:orderId/stores/:storeId — one store's name, location and PO. */
 export const updateStore = async (req: Request, res: Response) => {
   try {
@@ -804,11 +812,15 @@ export const updateStore = async (req: Request, res: Response) => {
       });
     }
 
-    if (store_name !== undefined) {
+    // A store is identified by name and location together, so the clash test has to see
+    // both — renaming to a sibling's name is fine as long as they are in different places.
+    if (store_name !== undefined || location !== undefined) {
+      const nextName = store_name !== undefined ? store_name : store.store_name;
+      const nextLocation = location !== undefined ? location : store.location;
       const clash = order.stores.some(
-        (s) => s.id !== storeId && s.store_name.trim().toLowerCase() === store_name.trim().toLowerCase()
+        (s) => s.id !== storeId && sameStore(s, nextName, nextLocation)
       );
-      if (clash) return res.status(409).json({ message: "Another store in this order already has that name." });
+      if (clash) return res.status(409).json({ message: "Another store in this order is already at that name and location." });
     }
 
     const { changes, log } = collectChanges();
@@ -867,8 +879,8 @@ export const addStore = async (req: Request, res: Response) => {
     if (order.stores.length >= 50) {
       return res.status(409).json({ message: "An order can hold at most 50 stores." });
     }
-    if (order.stores.some((s) => s.store_name.trim().toLowerCase() === store_name.trim().toLowerCase())) {
-      return res.status(409).json({ message: "This order already has a store with that name." });
+    if (order.stores.some((s) => sameStore(s, store_name, location))) {
+      return res.status(409).json({ message: "This order already has that store at that location." });
     }
 
     const created = await prisma.$transaction(async (tx) => {
@@ -2161,7 +2173,7 @@ const LINE_ITEM_TEMPLATE_HEADER = [
 const LINE_ITEM_COLUMN_GUIDE: string[][] = [
   ["Column", "Required", "What to enter", "Example"],
   ["Store Name", "Yes", "The store this line item belongs to. Repeat it on every row of that store.", "MG Road"],
-  ["Location", "Yes", "City or area of the store. Needed on the store's first row; may be left blank on its later rows.", "Bengaluru"],
+  ["Location", "Yes", "Where that store is. Needed on the store's first row; blank on later rows means the same place.", "Bengaluru"],
   ["Store PO Number", "No", "PO covering this store only. Leave blank if it has not arrived — it can be added in the app later.", "PO-11"],
   ["Media", "Yes", "Material for this line item.", "Vinyl"],
   ["Size (W) in", "Yes", "Width in inches. Up to two decimals.", "48"],
@@ -2170,9 +2182,11 @@ const LINE_ITEM_COLUMN_GUIDE: string[][] = [
   ["Rate", "Yes", "Rate per square foot.", "40"],
   [],
   ["Rules"],
-  ["One row is one line item. Rows that share a Store Name become one store in the order."],
+  ["One row is one line item. Rows that share a Store Name AND a Location become one store."],
+  ["The same name in two places is two stores: MG Road, Bengaluru and MG Road, Pune are separate."],
   ["Never leave Store Name blank. It is read as a mistake, not as \"same as the row above\"."],
-  ["Two rows of the same store must not give different Locations, or different Store PO Numbers."],
+  ["A blank Location repeats the last one used for that store name, so fill it in when the place changes."],
+  ["One store cannot have two different Store PO Numbers."],
   ["Client Name and Job PO Number are not in this sheet. Enter them on the form — they cover the whole order."],
   ["Limits: 500 rows per file, 50 stores per order."],
   [],

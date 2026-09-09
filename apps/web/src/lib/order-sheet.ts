@@ -1,9 +1,9 @@
 /**
  * Parses the New Order line-item spreadsheet into stores.
  *
- * One row is one line item; rows sharing a Store Name become one store. The header
- * aliases match `apps/api/src/controllers/import.controller.ts` wherever the columns
- * overlap, so staff learn one file format rather than two.
+ * One row is one line item; rows sharing a Store Name *and* Location become one store.
+ * A chain puts the same name in several places, so the name alone does not identify a
+ * store — "MG Road, Bengaluru" and "MG Road, Pune" are two stores, not a contradiction.
  *
  * Pure functions — no React, no form types. It takes what `xlsx.utils.sheet_to_json`
  * produces and hands back stores plus human-readable errors.
@@ -54,11 +54,10 @@ const cell = (row: any, keys: string[]) => {
 
 const num = (row: any, keys: string[]) => Number(String(cell(row, keys)).replace(/,/g, ""));
 
-/** A store being assembled, tracking which row first supplied each shared field. */
+/** A store being assembled, tracking which row first supplied its PO. */
 interface StoreDraft {
   store_name: string;
   location: string;
-  locationRow: number;
   po_number: string;
   poRow: number;
   items: ParsedItem[];
@@ -78,23 +77,12 @@ export function parseOrderSheet(rows: any[]): SheetParseResult {
 
   // Insertion-ordered, so stores come out in the order they appear in the sheet.
   const drafts = new Map<string, StoreDraft>();
-
   /**
-   * A field that must agree across a store. A blank means "same as the rest of the
-   * store" — only two different filled-in values are a conflict.
+   * The last Location seen for each store name. A blank Location means "the same place
+   * as the row above", which is what lets a store's later rows leave it out — but the
+   * name can move to a new location further down and start a second store.
    */
-  const reconcile = (
-    current: string, currentRow: number,
-    incoming: string, rowNum: number,
-    label: string, storeName: string
-  ): { value: string; row: number } => {
-    if (!incoming) return { value: current, row: currentRow };
-    if (!current) return { value: incoming, row: rowNum };
-    if (current !== incoming) {
-      errors.push(`Row ${rowNum}: ${label} '${incoming}' conflicts with '${current}' used on row ${currentRow} for store '${storeName}'.`);
-    }
-    return { value: current, row: currentRow };
-  };
+  const lastLocationForName = new Map<string, string>();
 
   data.forEach((row, idx) => {
     const rowNum = idx + 2; // the header occupies row 1
@@ -114,15 +102,24 @@ export function parseOrderSheet(rows: any[]): SheetParseResult {
       return;
     }
 
-    // Group case-insensitively but keep the first spelling seen. OrderForm.submit
-    // rejects duplicate names case-insensitively, so grouping any other way would
-    // parse cleanly and then fail on save.
-    const key = storeName.toLowerCase();
+    // Match names case-insensitively but keep the first spelling seen, so a store typed
+    // two ways is still one store.
+    const nameKey = storeName.toLowerCase();
+    const effectiveLocation = location || lastLocationForName.get(nameKey) || "";
+    if (location) lastLocationForName.set(nameKey, location);
+
+    // Without a location there is no store to file this row under.
+    if (hadStoreColumn && !effectiveLocation) {
+      errors.push(`Row ${rowNum}: store '${storeName}' needs a Location.`);
+      return;
+    }
+
+    const key = `${nameKey}\u0000${effectiveLocation.toLowerCase()}`;
     let draft = drafts.get(key);
     if (!draft) {
       draft = {
         store_name: storeName,
-        location: "", locationRow: rowNum,
+        location: effectiveLocation,
         po_number: "", poRow: rowNum,
         items: [],
         firstRow: rowNum,
@@ -130,13 +127,16 @@ export function parseOrderSheet(rows: any[]): SheetParseResult {
       drafts.set(key, draft);
     }
 
-    const loc = reconcile(draft.location, draft.locationRow, location, rowNum, "Location", draft.store_name);
-    draft.location = loc.value;
-    draft.locationRow = loc.row;
-
-    const po = reconcile(draft.po_number, draft.poRow, storePo, rowNum, "Store PO Number", draft.store_name);
-    draft.po_number = po.value;
-    draft.poRow = po.row;
+    // One store cannot have two different POs. A blank still means "same as the rest
+    // of this store", so only two filled-in values disagree.
+    if (storePo) {
+      if (!draft.po_number) {
+        draft.po_number = storePo;
+        draft.poRow = rowNum;
+      } else if (draft.po_number !== storePo) {
+        errors.push(`Row ${rowNum}: Store PO Number '${storePo}' conflicts with '${draft.po_number}' used on row ${draft.poRow} for '${draft.store_name}, ${draft.location}'.`);
+      }
+    }
 
     // A row that fails validation is skipped; its store still exists if other rows
     // in the group are good.
@@ -160,14 +160,6 @@ export function parseOrderSheet(rows: any[]): SheetParseResult {
 
   if (drafted.length > MAX_STORES) {
     errors.push(`Row ${drafted[MAX_STORES]!.firstRow}: this file has ${drafted.length} stores. An order can hold at most ${MAX_STORES}.`);
-  }
-
-  if (hadStoreColumn) {
-    for (const d of drafted) {
-      if (!d.location) {
-        errors.push(`Row ${d.firstRow}: store '${d.store_name}' has no Location.`);
-      }
-    }
   }
 
   return {

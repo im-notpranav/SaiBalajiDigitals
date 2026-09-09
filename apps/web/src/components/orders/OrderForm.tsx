@@ -108,6 +108,13 @@ const toLine = (item: any): Line => ({
   remarks_other_text: item.remarks_other_text ?? null,
 });
 
+/**
+ * What makes a store distinct within an order: its name AND its location. A chain has
+ * the same name in several places, so the name on its own does not identify a store.
+ */
+const storeKey = (name: string, location: string) =>
+  `${name.trim().toLowerCase()}\u0000${location.trim().toLowerCase()}`;
+
 /** A line the user has actually started filling in. */
 const lineHasContent = (l: Line) =>
   l.media.trim() !== "" || numOf(l.width_inches) > 0 || numOf(l.height_inches) > 0;
@@ -189,15 +196,15 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
     setPendingImport(null);
   };
 
-  /** Append, merging into a block of the same name — submit rejects duplicates. */
+  /** Append, merging into a block for the same store and location — submit rejects duplicates. */
   const applyAppend = () => {
     const parsedStores = pendingImport?.stores;
     if (parsedStores) {
       setStores((ss) => {
         const next = [...ss];
         for (const parsed of parsedStores) {
-          const key = parsed.store_name.trim().toLowerCase();
-          const at = next.findIndex((b) => b.store_name.trim().toLowerCase() === key);
+          const key = storeKey(parsed.store_name, parsed.location);
+          const at = next.findIndex((b) => storeKey(b.store_name, b.location) === key);
           if (at === -1) {
             next.push(toStoreBlock(parsed));
             continue;
@@ -297,9 +304,9 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
     if (stores.some((s) => !s.store_name.trim() || !s.location.trim())) {
       throw new Error("Every store needs a name and a location.");
     }
-    const names = stores.map((s) => s.store_name.trim().toLowerCase());
-    if (new Set(names).size !== names.length) {
-      throw new Error("The same store appears more than once in this order.");
+    const keys = stores.map((s) => storeKey(s.store_name, s.location));
+    if (new Set(keys).size !== keys.length) {
+      throw new Error("The same store at the same location appears more than once in this order.");
     }
     if (allLines.some((l) => !l.media.trim() || numOf(l.width_inches) <= 0 || numOf(l.height_inches) <= 0 || l.qty <= 0 || numOf(l.rate) <= 0)) {
       throw new Error("Every line item needs valid media, dimensions, quantity, and rate.");
