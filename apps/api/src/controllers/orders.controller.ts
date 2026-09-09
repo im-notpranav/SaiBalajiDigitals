@@ -2144,17 +2144,73 @@ export const getRecentRecipients = async (req: Request, res: Response) => {
   }
 };
 
-/** Download a line-item-only Excel template for CSM import into the order form. */
+/**
+ * Downloadable .xlsx for the New Order form.
+ *
+ * Three sheets, in the order an employee meets them: "Line Items" is the one that opens,
+ * and it holds nothing but the column headings, so the job is to type — not to read an
+ * instruction page and then clear out sample rows. The worked example and the field
+ * reference sit behind it for whoever wants them.
+ */
+const LINE_ITEM_TEMPLATE_HEADER = [
+  "Store Name", "Location", "Store PO Number",
+  "Media", "Size (W) in", "Size (H) in", "Qty", "Rate",
+];
+
+/** One row per column, so the guide reads as a lookup table rather than prose. */
+const LINE_ITEM_COLUMN_GUIDE: string[][] = [
+  ["Column", "Required", "What to enter", "Example"],
+  ["Store Name", "Yes", "The store this line item belongs to. Repeat it on every row of that store.", "MG Road"],
+  ["Location", "Yes", "City or area of the store. Needed on the store's first row; may be left blank on its later rows.", "Bengaluru"],
+  ["Store PO Number", "No", "PO covering this store only. Leave blank if it has not arrived — it can be added in the app later.", "PO-11"],
+  ["Media", "Yes", "Material for this line item.", "Vinyl"],
+  ["Size (W) in", "Yes", "Width in inches. Up to two decimals.", "48"],
+  ["Size (H) in", "Yes", "Height in inches. Up to two decimals.", "36"],
+  ["Qty", "Yes", "Whole number — no fractions.", "2"],
+  ["Rate", "Yes", "Rate per square foot.", "40"],
+  [],
+  ["Rules"],
+  ["One row is one line item. Rows that share a Store Name become one store in the order."],
+  ["Never leave Store Name blank. It is read as a mistake, not as \"same as the row above\"."],
+  ["Two rows of the same store must not give different Locations, or different Store PO Numbers."],
+  ["Client Name and Job PO Number are not in this sheet. Enter them on the form — they cover the whole order."],
+  ["Limits: 500 rows per file, 50 stores per order."],
+  [],
+  ["Type into the \"Line Items\" sheet. This sheet and \"Example\" are reference only and are never read."],
+];
+
 export const lineItemTemplate = async (_req: Request, res: Response) => {
   try {
-    const header = ["Media", "Size (W) in", "Size (H) in", "Qty", "Rate"];
-    const example = [
-      { "Media": "Vinyl", "Size (W) in": 48, "Size (H) in": 36, "Qty": 2, "Rate": 40 },
-      { "Media": "Flex", "Size (W) in": 96, "Size (H) in": 48, "Qty": 1, "Rate": 25 },
-    ];
-    const ws = xlsx.utils.json_to_sheet(example, { header });
     const wb = xlsx.utils.book_new();
-    xlsx.utils.book_append_sheet(wb, ws, "Line Items");
+    const widths = LINE_ITEM_TEMPLATE_HEADER.map((h) => ({ wch: Math.max(14, h.length + 4) }));
+
+    // 1. The fill-in sheet, first so it is what opens: headings and nothing else.
+    const sheet = xlsx.utils.aoa_to_sheet([LINE_ITEM_TEMPLATE_HEADER]);
+    sheet["!cols"] = widths;
+    xlsx.utils.book_append_sheet(wb, sheet, "Line Items");
+
+    // 2. A worked example, kept off the fill-in sheet so nothing has to be deleted.
+    //    Each store's second row leaves Location and PO blank, which is what that rule
+    //    looks like in practice.
+    const row = (store: string, location: string, po: string, media: string, w: number, h: number, q: number, r: number) => ({
+      "Store Name": store, "Location": location, "Store PO Number": po,
+      "Media": media, "Size (W) in": w, "Size (H) in": h, "Qty": q, "Rate": r,
+    });
+    const example = [
+      row("MG Road", "Bengaluru", "PO-11", "Vinyl", 48, 36, 2, 40),
+      row("MG Road", "", "", "Flex", 96, 48, 1, 25),
+      row("Indiranagar", "Bengaluru", "PO-12", "Vinyl", 36, 24, 3, 40),
+      row("Indiranagar", "", "", "Flex", 72, 48, 1, 25),
+    ];
+    const ex = xlsx.utils.json_to_sheet(example, { header: LINE_ITEM_TEMPLATE_HEADER });
+    ex["!cols"] = widths;
+    xlsx.utils.book_append_sheet(wb, ex, "Example (do not fill)");
+
+    // 3. The field reference last — there when wanted, out of the way when not.
+    const guide = xlsx.utils.aoa_to_sheet(LINE_ITEM_COLUMN_GUIDE);
+    guide["!cols"] = [{ wch: 18 }, { wch: 10 }, { wch: 95 }, { wch: 12 }];
+    xlsx.utils.book_append_sheet(wb, guide, "Column Guide");
+
     const buffer = xlsx.write(wb, { type: "buffer", bookType: "xlsx" });
     res.setHeader("Content-Disposition", "attachment; filename=line_item_template.xlsx");
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
