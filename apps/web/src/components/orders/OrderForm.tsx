@@ -258,12 +258,13 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
       try {
         const data = new Uint8Array(ev.target?.result as ArrayBuffer);
         const wb = xlsx.read(data, { type: "array" });
-        // The template ships an Instructions sheet first; the data lives on "Line Items".
+        // Look the sheet up by name: the template also ships an example and a guide sheet,
+        // and neither of those is data.
         const sheetName = wb.SheetNames.find((n) => n.trim().toLowerCase() === "line items") ?? wb.SheetNames[0];
         const rows: any[] = xlsx.utils.sheet_to_json(wb.Sheets[sheetName], { defval: "" });
 
         if (rows.length === 0) {
-          alert("The spreadsheet has no data rows.");
+          alert("The 'Line Items' sheet is empty. Enter the rows there — the 'Example' sheet is never read.");
           return;
         }
 
