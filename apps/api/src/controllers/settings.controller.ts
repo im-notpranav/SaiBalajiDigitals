@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { prisma } from "../utils/prisma";
+import { deriveYY } from "../utils/order-sequence";
 
 // GET /admin/settings/order-sequence
 export const getOrderSequence = async (req: Request, res: Response) => {
@@ -139,16 +140,3 @@ export const updateOrderSequence = async (req: Request, res: Response) => {
     res.status(500).json({ message: "Internal server error" });
   }
 };
-
-function deriveYY(): string {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth(); 
-  
-  let fyStartYear = year;
-  if (month < 4) {
-    fyStartYear = year - 1;
-  }
-  
-  return String(fyStartYear).slice(-2);
-}
