@@ -338,7 +338,19 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
   };
 
   return (
-    <form onSubmit={(e) => { e.preventDefault(); submit(e).catch(err => { if (err.message !== "Unhandled") { throw err; } }) }} className="grid gap-6 lg:grid-cols-3">
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        // submit() throws when the form fails its own checks. Show that to the user:
+        // it used to be rethrown as an unhandled rejection, so a blocked save looked
+        // like nothing happening at all. Failures from the API are already caught and
+        // reported by the page that owns onSubmit, so this only ever sees validation.
+        submit(e).catch((err) =>
+          toast.error(err instanceof Error ? err.message : "Could not save this order.")
+        );
+      }}
+      className="grid gap-6 lg:grid-cols-3"
+    >
       <div className="space-y-6 lg:col-span-2">
         <motion.section
           initial={{ opacity: 0, y: 10 }}
