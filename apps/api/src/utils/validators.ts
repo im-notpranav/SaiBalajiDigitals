@@ -48,17 +48,21 @@ export const createOrderStoreSchema = z.object({
   items: z.array(orderItemSchema).min(1),
 });
 
-/** A client cannot hand over the same store twice under one order number. */
-const uniqueStoreNames = (data: { stores: { store_name: string }[] }) => {
+/**
+ * A client cannot hand over the same store twice under one order number. A store is its
+ * name AND its location: a chain repeats a name across places, so "MG Road, Bengaluru"
+ * and "MG Road, Pune" are two stores rather than one entered twice.
+ */
+const uniqueStores = (data: { stores: { store_name: string; location: string }[] }) => {
   const seen = new Set<string>();
   for (const s of data.stores) {
-    const key = s.store_name.trim().toLowerCase();
+    const key = `${s.store_name.trim().toLowerCase()}\u0000${s.location.trim().toLowerCase()}`;
     if (seen.has(key)) return false;
     seen.add(key);
   }
   return true;
 };
-const uniqueStoreNamesConfig = { message: "The same store appears more than once in this order.", path: ["stores"] };
+const uniqueStoresConfig = { message: "The same store at the same location appears more than once in this order.", path: ["stores"] };
 
 export const createOrderSchema = z.object({
   client_name: z.string().min(1).max(100),
@@ -70,7 +74,7 @@ export const createOrderSchema = z.object({
   stores: z.array(createOrderStoreSchema).min(1).max(50),
 })
   .refine(remarksTextRefine, { message: "A reason is required for this remark type.", path: ["remarks_other_text"] })
-  .refine(uniqueStoreNames, uniqueStoreNamesConfig);
+  .refine(uniqueStores, uniqueStoresConfig);
 
 /**
  * Line items only. Header fields (client, store, location, PO) have their own endpoints;
