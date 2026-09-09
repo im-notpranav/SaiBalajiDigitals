@@ -22,6 +22,14 @@ export function deriveYY(): string {
 }
 
 /**
+ * How many numbers are held back at the start of each financial year. The sequence
+ * begins issuing at RESERVED_NUMBERS + 1, leaving 1-12 free to be assigned by hand.
+ *
+ * Exported so the admin settings screen enforces the same floor the minter starts from.
+ */
+export const RESERVED_NUMBERS = 12;
+
+/**
  * Atomic, row-locked transaction to generate ORD{YY}{NNNN}
  */
 export const generateOrderId = async (): Promise<string> => {
@@ -37,7 +45,7 @@ export const generateOrderId = async (): Promise<string> => {
     
     if (year_code !== currentYY) {
       year_code = currentYY;
-      last_number = 12; // first 12 numbers are reserved
+      last_number = RESERVED_NUMBERS;
     }
 
     last_number += 1;
