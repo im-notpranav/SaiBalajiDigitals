@@ -174,8 +174,6 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
   const billable = isAdmin ? total - lossTotal : total;
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  /** Which store block an Excel import should load into, or null for a whole-order import. */
-  const importTargetRef = useRef<string | null>(null);
   /** A parsed sheet held while the user decides how to merge it into a form with content. */
   const [pendingImport, setPendingImport] = useState<SheetParseResult | null>(null);
 
@@ -278,23 +276,10 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
         const totalItems = result.stores.reduce((n, st) => n + st.items.length, 0);
         if (totalItems === 0) return;
 
-        const targetId = importTargetRef.current;
-
-        // Per-store import: flatten everything into the block that asked for it,
-        // ignoring any store columns the file happens to carry.
-        if (targetId !== null) {
-          const flat = result.stores.flatMap((st) => st.items.map(toLine));
-          setStores((ss) => ss.map((st) => {
-            if (st.id !== targetId) return st;
-            const nonEmpty = st.lines.filter((l) => l.media.trim() !== "" || numOf(l.width_inches) > 0 || numOf(l.height_inches) > 0);
-            return { ...st, lines: nonEmpty.length > 0 ? [...nonEmpty, ...flat] : flat };
-          }));
-          return;
-        }
-
-        // Order-level import. An untouched form, or a file with no store column,
-        // applies straight away; otherwise ask before discarding typed work.
-        if (isFormUntouched() || !result.hadStoreColumn) {
+        // An untouched form applies straight away. Otherwise ask first, including for a
+        // sheet with no Store Name column: that arrives as one unnamed store and would
+        // otherwise replace whatever is already typed in.
+        if (isFormUntouched()) {
           setStores(result.stores.map(toStoreBlock));
           return;
         }
@@ -395,7 +380,7 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
               size="sm"
               variant="outline"
               title="Loads every store in the file, with its own location, PO and line items"
-              onClick={() => { importTargetRef.current = null; fileInputRef.current?.click(); }}
+              onClick={() => fileInputRef.current?.click()}
               className="rounded-lg"
             >
               <Upload className="mr-1 h-3.5 w-3.5" /> Import all stores
@@ -457,25 +442,9 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
 
           <div className="mb-4 mt-6 flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Line Items</h3>
-            <div className="flex items-center gap-2">
-              {!defaultValues && (
-                <>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    title="Loads line items into this store only"
-                    onClick={() => { importTargetRef.current = store.id; fileInputRef.current?.click(); }}
-                    className="rounded-lg"
-                  >
-                    <Upload className="mr-1 h-3.5 w-3.5" /> Import Excel
-                  </Button>
-                </>
-              )}
-              <Button type="button" size="sm" variant="outline" onClick={() => addLine(store.id)} className="rounded-lg" disabled={lineItemsLocked}>
-                <Plus className="mr-1 h-3.5 w-3.5" /> Add item
-              </Button>
-            </div>
+            <Button type="button" size="sm" variant="outline" onClick={() => addLine(store.id)} className="rounded-lg" disabled={lineItemsLocked}>
+              <Plus className="mr-1 h-3.5 w-3.5" /> Add item
+            </Button>
           </div>
 
           {lineItemsLocked && (
