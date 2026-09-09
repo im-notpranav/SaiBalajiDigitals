@@ -19,6 +19,17 @@ import { inr } from "@/lib/format";
 import { LOSS_REMARK_TYPES } from "@/lib/constants";
 import type { CreateOrderInput, CreateOrderItemInput, Order, UserRole } from "@sb-oms/shared-types";
 import { ClientCombobox, MediaCombobox } from "./AutocompleteComboboxes";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { parseOrderSheet, type ParsedStore, type SheetParseResult } from "@/lib/order-sheet";
 
 interface Line {
   id: string;
@@ -97,6 +108,20 @@ const toLine = (item: any): Line => ({
   remarks_other_text: item.remarks_other_text ?? null,
 });
 
+/** A line the user has actually started filling in. */
+const lineHasContent = (l: Line) =>
+  l.media.trim() !== "" || numOf(l.width_inches) > 0 || numOf(l.height_inches) > 0;
+
+/** A store parsed from a sheet becomes a form block, with fresh ids. */
+const toStoreBlock = (s: ParsedStore): StoreBlock => ({
+  id: crypto.randomUUID(),
+  store_name: s.store_name,
+  location: s.location,
+  po_number: s.po_number,
+  // A store whose rows all failed validation still gets an editable block.
+  lines: s.items.length > 0 ? s.items.map(toLine) : [blankLine()],
+});
+
 /** Existing order -> store blocks. Falls back to the flat item list for older payloads. */
 function storeBlocksOf(order?: Order): StoreBlock[] {
   if (!order) return [blankStore()];
@@ -149,8 +174,46 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
   const billable = isAdmin ? total - lossTotal : total;
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  /** Which store block an Excel import should load into. */
+  /** Which store block an Excel import should load into, or null for a whole-order import. */
   const importTargetRef = useRef<string | null>(null);
+  /** A parsed sheet held while the user decides how to merge it into a form with content. */
+  const [pendingImport, setPendingImport] = useState<SheetParseResult | null>(null);
+
+  /** One blank store block with nothing typed into it. */
+  const isFormUntouched = () =>
+    stores.length === 1 &&
+    !stores[0]!.store_name.trim() &&
+    !stores[0]!.location.trim() &&
+    !stores[0]!.lines.some(lineHasContent);
+
+  const applyReplace = () => {
+    if (pendingImport) setStores(pendingImport.stores.map(toStoreBlock));
+    setPendingImport(null);
+  };
+
+  /** Append, merging into a block of the same name — submit rejects duplicates. */
+  const applyAppend = () => {
+    const parsedStores = pendingImport?.stores;
+    if (parsedStores) {
+      setStores((ss) => {
+        const next = [...ss];
+        for (const parsed of parsedStores) {
+          const key = parsed.store_name.trim().toLowerCase();
+          const at = next.findIndex((b) => b.store_name.trim().toLowerCase() === key);
+          if (at === -1) {
+            next.push(toStoreBlock(parsed));
+            continue;
+          }
+          const existing = next[at]!;
+          const kept = existing.lines.filter(lineHasContent);
+          const merged = [...kept, ...parsed.items.map(toLine)];
+          next[at] = { ...existing, lines: merged.length > 0 ? merged : [blankLine()] };
+        }
+        return next;
+      });
+    }
+    setPendingImport(null);
+  };
 
   const patchStore = (storeId: string, patch: Partial<StoreBlock>) =>
     setStores((ss) => ss.map((s) => (s.id === storeId ? { ...s, ...patch } : s)));
@@ -195,68 +258,46 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
       try {
         const data = new Uint8Array(ev.target?.result as ArrayBuffer);
         const wb = xlsx.read(data, { type: "array" });
-        const sheet = wb.Sheets[wb.SheetNames[0]];
-        const rows: any[] = xlsx.utils.sheet_to_json(sheet, { defval: "" });
+        // The template ships an Instructions sheet first; the data lives on "Line Items".
+        const sheetName = wb.SheetNames.find((n) => n.trim().toLowerCase() === "line items") ?? wb.SheetNames[0];
+        const rows: any[] = xlsx.utils.sheet_to_json(wb.Sheets[sheetName], { defval: "" });
 
         if (rows.length === 0) {
           alert("The spreadsheet has no data rows.");
           return;
         }
 
-        // Tolerant column header matching
-        const H: Record<string, string[]> = {
-          media: ["Media", "media", "MEDIA"],
-          width: ["Size (W) in", "Width", "Width (in)", "W", "width_inches", "width"],
-          height: ["Size (H) in", "Height", "Height (in)", "H", "height_inches", "height"],
-          qty: ["Qty", "Quantity", "qty", "QTY"],
-          rate: ["Rate", "Rate (per Sq.Ft.)", "rate", "RATE"],
-        };
-        const cell = (row: any, keys: string[]) => {
-          for (const k of keys) if (row[k] !== undefined && String(row[k]).trim() !== "") return row[k];
-          return "";
-        };
+        const result = parseOrderSheet(rows);
 
-        const parsed: Line[] = [];
-        const errors: string[] = [];
-        rows.forEach((row, idx) => {
-          const media = String(cell(row, H.media)).trim();
-          const w = Number(String(cell(row, H.width)).replace(/,/g, ""));
-          const h = Number(String(cell(row, H.height)).replace(/,/g, ""));
-          const q = Number(String(cell(row, H.qty)).replace(/,/g, ""));
-          const r = Number(String(cell(row, H.rate)).replace(/,/g, ""));
-
-          if (!media) { errors.push(`Row ${idx + 2}: Missing Media`); return; }
-          if (!Number.isFinite(w) || w <= 0) { errors.push(`Row ${idx + 2}: Invalid Width`); return; }
-          if (!Number.isFinite(h) || h <= 0) { errors.push(`Row ${idx + 2}: Invalid Height`); return; }
-          if (!Number.isFinite(q) || q <= 0) { errors.push(`Row ${idx + 2}: Invalid Qty`); return; }
-          if (!Number.isInteger(q)) { errors.push(`Row ${idx + 2}: Qty must be a whole number`); return; }
-          if (!Number.isFinite(r) || r <= 0) { errors.push(`Row ${idx + 2}: Invalid Rate`); return; }
-
-          parsed.push({
-            id: crypto.randomUUID(),
-            media,
-            width_inches: String(w),
-            height_inches: String(h),
-            qty: q,
-            rate: String(r),
-            remarks: null,
-            remarks_other_text: null,
-          });
-        });
-
-        if (errors.length > 0) {
-          alert(`Import found ${errors.length} problem(s):\n\n${errors.slice(0, 10).join("\n")}${errors.length > 10 ? `\n...and ${errors.length - 10} more` : ""}`);
+        // Errors first, so the user decides with the problems already in front of them.
+        if (result.errors.length > 0) {
+          alert(`Import found ${result.errors.length} problem(s):\n\n${result.errors.slice(0, 10).join("\n")}${result.errors.length > 10 ? `\n...and ${result.errors.length - 10} more` : ""}`);
         }
 
-        if (parsed.length > 0) {
-          // Replace the empty default line, or append, within the store that asked for it.
-          const targetId = importTargetRef.current;
-          setStores((ss) => ss.map((s) => {
-            if (s.id !== targetId) return s;
-            const nonEmpty = s.lines.filter((l) => l.media.trim() !== "" || numOf(l.width_inches) > 0 || numOf(l.height_inches) > 0);
-            return { ...s, lines: nonEmpty.length > 0 ? [...nonEmpty, ...parsed] : parsed };
+        const totalItems = result.stores.reduce((n, st) => n + st.items.length, 0);
+        if (totalItems === 0) return;
+
+        const targetId = importTargetRef.current;
+
+        // Per-store import: flatten everything into the block that asked for it,
+        // ignoring any store columns the file happens to carry.
+        if (targetId !== null) {
+          const flat = result.stores.flatMap((st) => st.items.map(toLine));
+          setStores((ss) => ss.map((st) => {
+            if (st.id !== targetId) return st;
+            const nonEmpty = st.lines.filter((l) => l.media.trim() !== "" || numOf(l.width_inches) > 0 || numOf(l.height_inches) > 0);
+            return { ...st, lines: nonEmpty.length > 0 ? [...nonEmpty, ...flat] : flat };
           }));
+          return;
         }
+
+        // Order-level import. An untouched form, or a file with no store column,
+        // applies straight away; otherwise ask before discarding typed work.
+        if (isFormUntouched() || !result.hadStoreColumn) {
+          setStores(result.stores.map(toStoreBlock));
+          return;
+        }
+        setPendingImport(result);
       } catch {
         alert("Could not read the file. Make sure it is a valid .xlsx or .xls file.");
       }
@@ -335,6 +376,32 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
           className="hidden"
         />
 
+        {/* Order-level import: one sheet fills every store block at once. */}
+        {!defaultValues && (
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={handleTemplateDownload}
+              className="rounded-lg text-xs"
+              title="Download the order line item template"
+            >
+              <FileSpreadsheet className="mr-1 h-3.5 w-3.5" /> Template
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              title="Loads every store in the file, with its own location, PO and line items"
+              onClick={() => { importTargetRef.current = null; fileInputRef.current?.click(); }}
+              className="rounded-lg"
+            >
+              <Upload className="mr-1 h-3.5 w-3.5" /> Import all stores
+            </Button>
+          </div>
+        )}
+
         {stores.map((store, storeIdx) => (
         <motion.section
           key={store.id}
@@ -395,17 +462,8 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
                   <Button
                     type="button"
                     size="sm"
-                    variant="ghost"
-                    onClick={handleTemplateDownload}
-                    className="rounded-lg text-xs"
-                    title="Download line item template"
-                  >
-                    <FileSpreadsheet className="mr-1 h-3.5 w-3.5" /> Template
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
                     variant="outline"
+                    title="Loads line items into this store only"
                     onClick={() => { importTargetRef.current = store.id; fileInputRef.current?.click(); }}
                     className="rounded-lg"
                   >
@@ -605,6 +663,30 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
           </div>
         </div>
       </motion.aside>
+      {/* Asked only when the form already has typed content, so an import never
+          silently discards someone's work. */}
+      <AlertDialog open={pendingImport !== null} onOpenChange={(o) => { if (!o) setPendingImport(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Import {pendingImport?.stores.length ?? 0} store
+              {(pendingImport?.stores.length ?? 0) === 1 ? "" : "s"} from this file?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              The form already has {stores.length} store{stores.length === 1 ? "" : "s"} with{" "}
+              {allLines.filter(lineHasContent).length} line item
+              {allLines.filter(lineHasContent).length === 1 ? "" : "s"}.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col gap-2 sm:flex-row">
+            <AlertDialogCancel onClick={() => setPendingImport(null)}>Cancel</AlertDialogCancel>
+            <Button type="button" variant="outline" onClick={applyAppend}>
+              Add as new stores
+            </Button>
+            <AlertDialogAction onClick={applyReplace}>Replace everything</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </form>
   );
 }
