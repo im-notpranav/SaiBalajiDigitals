@@ -9,7 +9,11 @@ export const apiClient = axios.create({
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response && error.response.status === 401) {
+    // /auth/me only asks who is signed in; a 401 there means "nobody", which the
+    // portal guard already handles. Redirecting on it would yank logged-out visitors
+    // off public pages like the 404.
+    const isWhoAmI = error.config?.url === "/auth/me";
+    if (error.response && error.response.status === 401 && !isWhoAmI) {
       if (typeof window !== "undefined" && !window.location.pathname.includes("/login")) {
         window.location.href = "/login";
       }

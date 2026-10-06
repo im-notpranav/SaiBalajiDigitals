@@ -15,6 +15,9 @@ const loginLimiter = rateLimit({
 
 router.post("/login", loginLimiter, login);
 router.post("/logout", logout);
-router.get("/me", authenticate, getMe);
+// "Who am I?" is asked on every page load, including the login page. With no
+// session cookie at all the honest answer is "nobody", not an error — a 401 here
+// shows up red in the console of every visitor who simply hasn't signed in yet.
+router.get("/me", (req, res, next) => (req.cookies?.token ? next() : res.json({ user: null })), authenticate, getMe);
 
 export default router;
