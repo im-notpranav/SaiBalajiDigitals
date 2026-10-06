@@ -9,6 +9,10 @@ export const getRouter = (queryClient: QueryClient) => {
     context: { queryClient },
     scrollRestoration: true,
     defaultPreloadStaleTime: 0,
+    // Render unknown URLs at the root. In the default "fuzzy" mode the pathless
+    // _portal layout claims them, and its auth guard bounces the visitor to /login
+    // before the 404 page can show.
+    notFoundMode: "root",
   });
 
   return router;
