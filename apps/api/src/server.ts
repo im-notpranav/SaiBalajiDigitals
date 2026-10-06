@@ -15,6 +15,11 @@ app.set("trust proxy", 1);
 
 app.use(helmet());
 
+// Health checks sit ahead of CORS and the rate limiter so uptime monitors
+// (which send no Origin and ping on a schedule) are never blocked or throttled.
+import healthRoutes from "./routes/health.routes";
+app.use("/health", healthRoutes);
+
 // Support comma-separated origins so preview deployments don't need an API redeploy.
 const allowedOrigins = CLIENT_URL.split(",").map((o) => o.trim()).filter(Boolean);
 
@@ -58,10 +63,6 @@ app.use("/api/clients", clientsRoutes);
 app.use("/api/media", mediaRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/notifications", notificationsRoutes);
-
-app.get("/health", (req, res) => {
-  res.status(200).json({ status: "ok" });
-});
 
 app.listen(PORT, async () => {
   console.log(`Server listening on port ${PORT}`);
