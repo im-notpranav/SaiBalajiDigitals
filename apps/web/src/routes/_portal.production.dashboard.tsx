@@ -37,7 +37,7 @@ function ProductionDashboard() {
         crumbs={[{ label: "Production" }, { label: "Dashboard" }]}
       />
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard label="Active Workload" value={active} icon={Factory} accent="info" delay={0} />
         <KpiCard label="Pending Billing" value={pending} icon={Receipt} accent="warning" delay={0.05} />
         <KpiCard label="Completed" value={completed} icon={CheckCircle2} accent="success" delay={0.1} />

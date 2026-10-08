@@ -2,17 +2,16 @@ import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { prisma } from "../utils/prisma";
-
-const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret";
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "7d";
+import { JWT_SECRET, JWT_EXPIRES_IN } from "../utils/config";
 
 import { loginSchema } from "../utils/validators";
+import { sanitizeZodErrors } from "../utils/sanitize-errors";
 
 export const login = async (req: Request, res: Response) => {
   try {
     const parseResult = loginSchema.safeParse(req.body);
     if (!parseResult.success) {
-      return res.status(400).json({ message: "Invalid input", errors: parseResult.error.errors });
+      return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parseResult.error) });
     }
     const { username, password } = parseResult.data;
 

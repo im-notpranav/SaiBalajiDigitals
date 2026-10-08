@@ -13,9 +13,10 @@ export function useGoToOrder() {
     const params = { id: String(orderId) };
     switch (user?.role) {
       case "ADMIN":
+      case "OPERATION_MANAGER":
         navigate({ to: "/admin/orders/$id", params });
         break;
-      case "EMPLOYEE":
+      case "CSM":
         navigate({ to: "/employee/orders/$id", params });
         break;
       case "PRODUCTION":
@@ -23,6 +24,9 @@ export function useGoToOrder() {
         break;
       case "ACCOUNTS":
         navigate({ to: "/accountant/billing/$id", params });
+        break;
+      case "PRODUCTION_MANAGER":
+        navigate({ to: "/prod-manager/assign" });
         break;
       default:
         break;

@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { prisma } from "../utils/prisma";
+import { deriveYY, RESERVED_NUMBERS } from "../utils/order-sequence";
 
 // GET /admin/settings/order-sequence
 export const getOrderSequence = async (req: Request, res: Response) => {
@@ -19,9 +20,11 @@ export const getOrderSequence = async (req: Request, res: Response) => {
     let display_last_number = last_number;
     let display_year_code = year_code;
     
+    // A year that has rolled over has not been written yet: the next order will be the
+    // first past the reservation, not ORD{YY}0001.
     if (display_year_code !== currentYY) {
       display_year_code = currentYY;
-      display_last_number = 0;
+      display_last_number = RESERVED_NUMBERS;
     }
     
     const next_order_number = `ORD${display_year_code}${String(display_last_number + 1).padStart(4, "0")}`;
@@ -60,7 +63,7 @@ export const updateOrderSequence = async (req: Request, res: Response) => {
     
     if (current_year_code !== currentYY) {
       current_year_code = currentYY;
-      current_last_number = 0;
+      current_last_number = RESERVED_NUMBERS;
     }
 
     let updated_last_number = current_last_number;
@@ -88,6 +91,12 @@ export const updateOrderSequence = async (req: Request, res: Response) => {
       }
 
       const new_last_number = inputNumber - 1;
+
+      if (new_last_number < RESERVED_NUMBERS) {
+        return res.status(400).json({
+          message: `The first ${RESERVED_NUMBERS} numbers of each financial year are reserved. The earliest you can set is ORD${current_year_code}${String(RESERVED_NUMBERS + 1).padStart(4, "0")}.`,
+        });
+      }
 
       if (new_last_number < current_last_number) {
         return res.status(400).json({ message: "Cannot set next order number lower than current sequence. Risk of duplicates." });
@@ -139,16 +148,3 @@ export const updateOrderSequence = async (req: Request, res: Response) => {
     res.status(500).json({ message: "Internal server error" });
   }
 };
-
-function deriveYY(): string {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth(); 
-  
-  let fyStartYear = year;
-  if (month < 4) {
-    fyStartYear = year - 1;
-  }
-  
-  return String(fyStartYear).slice(-2);
-}

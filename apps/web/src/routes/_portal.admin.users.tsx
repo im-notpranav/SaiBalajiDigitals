@@ -18,9 +18,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { fetchUsers, createUser, toggleUserStatus, updateUser } from "@/api/users";
+import { fetchUsers, createUser, toggleUserStatus, updateUser, resetUserPassword } from "@/api/users";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-store";
+import { ROLES, roleLabel } from "@/lib/constants";
 
 export const Route = createFileRoute("/_portal/admin/users")({
   head: () => ({ meta: [{ title: "User Management — SB OMS" }] }),
@@ -31,8 +32,11 @@ function UsersPage() {
   const [q, setQ] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [newUser, setNewUser] = useState({ name: "", username: "", password: "", role: "EMPLOYEE" as any });
+  const [newUser, setNewUser] = useState({ name: "", username: "", password: "", role: "CSM" as any });
   const [editUser, setEditUser] = useState<any>(null);
+  const [isPwDialogOpen, setIsPwDialogOpen] = useState(false);
+  const [pwUser, setPwUser] = useState<any>(null);
+  const [newPassword, setNewPassword] = useState("");
   
   const { user: currentUser } = useAuth();
 
@@ -44,7 +48,7 @@ function UsersPage() {
     onSuccess: () => {
       toast.success("User created successfully");
       setIsDialogOpen(false);
-      setNewUser({ name: "", username: "", password: "", role: "EMPLOYEE" });
+      setNewUser({ name: "", username: "", password: "", role: "CSM" });
       queryClient.invalidateQueries({ queryKey: ["users"] });
     },
     onError: (err: any) => {
@@ -69,6 +73,17 @@ function UsersPage() {
       const data = err?.response?.data;
       toast.error(data?.message || "Failed to update user");
     }
+  });
+
+  const resetPwMutation = useMutation({
+    mutationFn: () => resetUserPassword(pwUser.id, newPassword),
+    onSuccess: () => {
+      toast.success(`Password reset for ${pwUser?.username}`);
+      setIsPwDialogOpen(false);
+      setPwUser(null);
+      setNewPassword("");
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.message || "Failed to reset password"),
   });
 
   const toggleMutation = useMutation({
@@ -125,10 +140,9 @@ function UsersPage() {
                   <Select value={newUser.role} onValueChange={(val) => setNewUser({ ...newUser, role: val })}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="EMPLOYEE">Employee</SelectItem>
-                      <SelectItem value="PRODUCTION">Production</SelectItem>
-                      <SelectItem value="ACCOUNTS">Accountant</SelectItem>
-                      <SelectItem value="ADMIN">Administrator</SelectItem>
+                      {ROLES.map((r) => (
+                        <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -166,10 +180,9 @@ function UsersPage() {
                 <Select value={editUser.role} onValueChange={(val) => setEditUser({ ...editUser, role: val })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="EMPLOYEE">Employee</SelectItem>
-                    <SelectItem value="PRODUCTION">Production</SelectItem>
-                    <SelectItem value="ACCOUNTS">Accountant</SelectItem>
-                    <SelectItem value="ADMIN">Administrator</SelectItem>
+                    {ROLES.map((r) => (
+                      <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -180,6 +193,39 @@ function UsersPage() {
             <Button onClick={() => updateMutation.mutate(editUser)} disabled={updateMutation.isPending || !editUser?.name || !editUser?.username}>
               {updateMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Save changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isPwDialogOpen} onOpenChange={setIsPwDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reset password{pwUser ? ` — ${pwUser.name}` : ""}</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <p className="text-sm text-muted-foreground">
+              Sets a new password for <strong>@{pwUser?.username}</strong> immediately. They are not asked for
+              their old password, so share the new one with them directly.
+            </p>
+            <div className="grid gap-2">
+              <Label>New password</Label>
+              <Input
+                type="text"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="At least 8 characters"
+              />
+              {newPassword.length > 0 && newPassword.length < 8 && (
+                <p className="text-xs text-destructive">Must be at least 8 characters.</p>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsPwDialogOpen(false)}>Cancel</Button>
+            <Button onClick={() => resetPwMutation.mutate()} disabled={resetPwMutation.isPending || newPassword.length < 8}>
+              {resetPwMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Reset password
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -225,7 +271,7 @@ function UsersPage() {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="capitalize">{u.role.toLowerCase()}</Badge>
+                      <Badge variant="outline">{roleLabel(u.role)}</Badge>
                       {u.is_super_admin && (
                         <Badge className="bg-rose-500/10 text-rose-500 hover:bg-rose-500/20 capitalize border-rose-500/20">
                           Super Admin
@@ -249,6 +295,13 @@ function UsersPage() {
                         setEditUser(u);
                         setIsEditDialogOpen(true);
                       }}>Edit</Button>
+                    )}
+                    {currentUser?.is_super_admin && (
+                      <Button variant="ghost" size="sm" onClick={() => {
+                        setPwUser(u);
+                        setNewPassword("");
+                        setIsPwDialogOpen(true);
+                      }}>Password</Button>
                     )}
                     {(!u.is_super_admin) && (
                       <Button

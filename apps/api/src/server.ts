@@ -1,26 +1,49 @@
+// Config import must come first — it loads dotenv and validates required env vars.
+import { PORT, CLIENT_URL } from "./utils/config";
+
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import cookieParser from "cookie-parser";
-import dotenv from "dotenv";
-
-dotenv.config();
+import rateLimit from "express-rate-limit";
+import { clientIpKey } from "./utils/rate-limit";
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+
+// Behind Cloudflare -> Render. Required for correct req.ip and rate limiting.
+app.set("trust proxy", 1);
 
 app.use(helmet());
+
+// Health checks sit ahead of CORS and the rate limiter so uptime monitors
+// (which send no Origin and ping on a schedule) are never blocked or throttled.
+import healthRoutes from "./routes/health.routes";
+app.use("/health", healthRoutes);
+
+// Support comma-separated origins so preview deployments don't need an API redeploy.
+const allowedOrigins = CLIENT_URL.split(",").map((o) => o.trim()).filter(Boolean);
+
 app.use(
   cors({
-    origin: [
-      process.env.CLIENT_URL || "http://localhost:5173",
-    ],
+    origin: allowedOrigins,
     credentials: true,
     exposedHeaders: ["Content-Disposition"],
   })
 );
-app.use(express.json());
+app.use(express.json({ limit: "1mb" }));
 app.use(cookieParser());
+
+// Global rate limit: 200 requests per minute per IP (generous for 50-60 employees)
+app.use(
+  rateLimit({
+    windowMs: 60 * 1000,
+    max: 200,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: clientIpKey,
+    message: { message: "Too many requests. Please slow down." },
+  })
+);
 
 import authRoutes from "./routes/auth.routes";
 import ordersRoutes from "./routes/orders.routes";
@@ -40,10 +63,6 @@ app.use("/api/clients", clientsRoutes);
 app.use("/api/media", mediaRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/notifications", notificationsRoutes);
-
-app.get("/health", (req, res) => {
-  res.status(200).json({ status: "ok" });
-});
 
 app.listen(PORT, async () => {
   console.log(`Server listening on port ${PORT}`);

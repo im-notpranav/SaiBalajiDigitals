@@ -1,6 +1,35 @@
 import { prisma } from "./prisma";
 
 /**
+ * The financial year code used in ORD{YY}{NNNN}.
+ *
+ * The FY runs 1 April to 31 March, and the code is the last two digits of the year the
+ * FY *started* in: 1 Apr 2026 – 31 Mar 2027 is "26". So the rollover lands on 31 March —
+ * orders dated 31 Mar 2027 are still ORD26xxxx, and 1 Apr 2027 begins ORD27xxxx.
+ *
+ * Exported because the admin settings screen must derive the same code the minter does;
+ * two copies of this rule previously disagreed with each other during April and May.
+ */
+export function deriveYY(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth(); // 0-indexed: 0 = Jan, 3 = Apr
+
+  // Jan, Feb and Mar still belong to the FY that started the previous April.
+  const fyStartYear = month < 3 ? year - 1 : year;
+
+  return String(fyStartYear).slice(-2);
+}
+
+/**
+ * How many numbers are held back at the start of each financial year. The sequence
+ * begins issuing at RESERVED_NUMBERS + 1, leaving 1-12 free to be assigned by hand.
+ *
+ * Exported so the admin settings screen enforces the same floor the minter starts from.
+ */
+export const RESERVED_NUMBERS = 12;
+
+/**
  * Atomic, row-locked transaction to generate ORD{YY}{NNNN}
  */
 export const generateOrderId = async (): Promise<string> => {
@@ -16,9 +45,9 @@ export const generateOrderId = async (): Promise<string> => {
     
     if (year_code !== currentYY) {
       year_code = currentYY;
-      last_number = 0;
+      last_number = RESERVED_NUMBERS;
     }
-    
+
     last_number += 1;
     
     await tx.orderSequence.update({
@@ -28,20 +57,4 @@ export const generateOrderId = async (): Promise<string> => {
     
     return `ORD${year_code}${String(last_number).padStart(4, "0")}`;
   });
-}
-
-function deriveYY(): string {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth(); // 0-indexed (0 = Jan, 4 = May)
-  
-  // Using May 1 - April 30 as FY per original spec
-  // If month is < 4 (Jan-Apr), we are in the FY that started the previous year
-  let fyStartYear = year;
-  if (month < 4) {
-    fyStartYear = year - 1;
-  }
-  
-  // Take last 2 digits of the FY start year. (E.g., FY starting May 2025 -> "25")
-  return String(fyStartYear).slice(-2);
 }

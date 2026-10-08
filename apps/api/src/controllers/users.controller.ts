@@ -2,16 +2,32 @@ import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { prisma } from "../utils/prisma";
+import { JWT_SECRET, JWT_EXPIRES_IN } from "../utils/config";
 
-const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret";
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "7d";
-
-import { createUserSchema, updateMeSchema } from "../utils/validators";
+import { createUserSchema, updateMeSchema, updateUserSchema, resetPasswordSchema } from "../utils/validators";
+import { sanitizeZodErrors } from "../utils/sanitize-errors";
 
 export const getUsers = async (req: Request, res: Response) => {
   try {
     const users = await prisma.user.findMany({
       select: { id: true, name: true, username: true, role: true, email: true, phone: true, photo_url: true, is_super_admin: true, created_at: true, is_active: true, last_login_at: true },
+    });
+    return res.status(200).json({ users });
+  } catch (err) {
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+/**
+ * Minimal roster of active production staff, for the operator's assignment picker.
+ * Deliberately narrower than getUsers (no contact details, no admin fields).
+ */
+export const getProductionStaff = async (_req: Request, res: Response) => {
+  try {
+    const users = await prisma.user.findMany({
+      where: { role: "PRODUCTION", is_active: true },
+      select: { id: true, name: true, username: true },
+      orderBy: { name: "asc" },
     });
     return res.status(200).json({ users });
   } catch (err) {
@@ -36,9 +52,16 @@ export const createUser = async (req: Request, res: Response) => {
   try {
     const parseResult = createUserSchema.safeParse(req.body);
     if (!parseResult.success) {
-      return res.status(400).json({ message: "Invalid input", errors: parseResult.error.errors });
+      return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parseResult.error) });
     }
     const { name, username, password, role } = parseResult.data;
+
+    const clash = await prisma.user.findFirst({
+      where: { username: { equals: username, mode: "insensitive" } },
+    });
+    if (clash) {
+      return res.status(400).json({ message: "Username already exists" });
+    }
 
     const hashedPassword = await bcrypt.hash(password, 12);
 
@@ -84,7 +107,7 @@ export const updateMe = async (req: Request, res: Response) => {
   try {
     const parseResult = updateMeSchema.safeParse(req.body);
     if (!parseResult.success) {
-      return res.status(400).json({ message: "Invalid input", errors: parseResult.error.errors });
+      return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parseResult.error) });
     }
     const { name, email, phone, photo_url, current_password, new_password } = parseResult.data;
     const userId = req.user!.id;
@@ -168,25 +191,64 @@ export const toggleUserStatus = async (req: Request, res: Response) => {
   }
 };
 
+/**
+ * Admin-initiated password reset for another account. The target user is not
+ * required to supply their current password; the super-admin gate on the route
+ * is the control. Self-service password change stays in updateMe.
+ */
+export const resetUserPassword = async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id as string, 10);
+    const parseResult = resetPasswordSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parseResult.error) });
+    }
+
+    const target = await prisma.user.findUnique({ where: { id }, select: { id: true, username: true } });
+    if (!target) return res.status(404).json({ message: "User not found" });
+
+    const hashed = await bcrypt.hash(parseResult.data.new_password, 12);
+    await prisma.user.update({ where: { id }, data: { password: hashed } });
+
+    return res.status(200).json({ message: `Password reset for ${target.username}.` });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
 export const updateUser = async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id as string, 10);
-    const { name, username, role } = req.body;
+    const parsed = updateUserSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parsed.error) });
+    }
+    const { name, username, role } = parsed.data;
 
-    if (!name || !username || !role) {
-      return res.status(400).json({ message: "Name, username, and role are required." });
+    // Only super admin can change usernames
+    const targetUser = await prisma.user.findUnique({ where: { id }, select: { username: true } });
+    if (!targetUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    if (username && username !== targetUser.username && !req.user!.is_super_admin) {
+      return res.status(403).json({ message: "Only the super administrator can change usernames." });
     }
 
-    const existingUser = await prisma.user.findUnique({ where: { username } });
-    if (existingUser && existingUser.id !== id) {
-      return res.status(400).json({ message: "Username already exists" });
+    if (username) {
+      const existingUser = await prisma.user.findFirst({
+        where: { username: { equals: username, mode: "insensitive" } },
+      });
+      if (existingUser && existingUser.id !== id) {
+        return res.status(400).json({ message: "Username already exists" });
+      }
     }
 
     const updatedUser = await prisma.user.update({
       where: { id },
       data: {
         name,
-        username,
+        ...(username ? { username } : {}),
         role: role as any,
       },
       select: { id: true, name: true, username: true, role: true, is_active: true },

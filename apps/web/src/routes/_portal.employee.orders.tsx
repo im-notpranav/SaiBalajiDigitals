@@ -65,16 +65,18 @@ function MyOrders() {
       />
 
       <div className="surface-panel mb-4 flex flex-wrap items-center gap-3 p-3">
-        <Tabs value={section} onValueChange={(v) => setSection(v as "active" | "completed")} className="w-[300px]">
+        <Tabs value={section} onValueChange={(v) => setSection(v as "active" | "completed")} className="w-full sm:w-[300px]">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="active">Active</TabsTrigger>
             <TabsTrigger value="completed">Completed</TabsTrigger>
           </TabsList>
         </Tabs>
-        
-        <div className="flex flex-1 items-center gap-2">
+
+        {/* Takes its own line on a phone: the select plus a 200px-minimum search box is
+            wider than the content column at 375px. */}
+        <div className="flex w-full min-w-0 flex-1 items-center gap-2 sm:w-auto">
           <Select value={searchField} onValueChange={(v: any) => setSearchField(v)}>
-            <SelectTrigger className="w-[140px]">
+            <SelectTrigger className="w-[120px] shrink-0 sm:w-[140px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -83,8 +85,8 @@ function MyOrders() {
               <SelectItem value="order_no">Order No</SelectItem>
             </SelectContent>
           </Select>
-          
-          <div className="relative flex-1 min-w-[200px]">
+
+          <div className="relative min-w-0 flex-1 sm:min-w-[200px]">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={q}
@@ -95,7 +97,7 @@ function MyOrders() {
           </div>
         </div>
 
-        <div className="ml-auto text-xs text-muted-foreground">
+        <div className="w-full text-xs text-muted-foreground sm:ml-auto sm:w-auto">
           {total} orders found
         </div>
       </div>
@@ -107,10 +109,12 @@ function MyOrders() {
           orders={orders} 
           action={(o) => (
             <div className="flex justify-end gap-2">
-              <Link to="/employee/orders/$id" params={{ id: String(o.id) }} className={buttonVariants({ size: "sm", variant: "ghost" })} onClick={() => console.log("VIEW CLICKED", o.id)}>
+              <Link to="/employee/orders/$id" params={{ id: String(o.id) }} className={buttonVariants({ size: "sm", variant: "ghost" })}>
                 View
               </Link>
-              {o.status === "Active" && (
+              {/* Header fields (store, location, PO) stay editable past billing, so the
+                  link follows the header rule, not the line-item one. */}
+              {["Active", "Installed", "BillingCompleted", "Pending"].includes(o.status) && (
                 <Link to="/employee/edit-order/$id" params={{ id: String(o.id) }} className={buttonVariants({ size: "sm", variant: "outline" })}>
                   <Edit className="mr-1 h-3.5 w-3.5" /> Edit
                 </Link>

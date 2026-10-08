@@ -1,0 +1,5 @@
+# Normalise line endings: LF in the repo and in every working tree.
+# Without this, core.autocrlf=true checks out CRLF on Windows while
+# prettier defaults to endOfLine=lf, producing a "Delete CR" lint error
+# on every line of the codebase.
+* text=auto eol=lf
