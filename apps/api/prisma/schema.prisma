@@ -14,6 +14,28 @@ enum Role {
   ACCOUNTS
   PRODUCTION
   PRODUCTION_MANAGER
+  /// Reviews, pays and closes payment requests.
+  COST_CONTROL_MANAGER
+  /// Field staff. They log in to see their own jobs and raise payment requests.
+  /// "Sub-Paster" / "Ast. Paster" in the old sheets is a HELPER.
+  PASTER
+  HELPER
+  DRIVER
+}
+
+/// What a code in the old work-allocation sheets stands for. Codes arrive from the
+/// spreadsheets before anyone has said what they are, hence UNKNOWN.
+enum CsmCodeKind {
+  CSM
+  TEAM
+  BRANCH
+  UNKNOWN
+}
+
+/// Local = Hyderabad city. Non-local work shows as "-N" on the allocation grid.
+enum AreaLocality {
+  LOCAL
+  NON_LOCAL
 }
 
 enum OrderStatus {
@@ -50,6 +72,8 @@ model User {
   updated_at    DateTime         @updatedAt
   last_login_at DateTime?
   is_active     Boolean          @default(true)
+  /// Company employee code (105–402 in the staff master). Optional: not everyone has one.
+  emp_code      String?          @unique
   orders        Order[]
   changeLogs    OrderChangeLog[]
   notifications Notification[]
@@ -61,6 +85,8 @@ model User {
   followUps       PaymentFollowUp[] @relation("FollowUpAuthor")
   installedStores OrderStore[]    @relation("StoreInstaller")
   invoicePayments Invoice[]       @relation("InvoicePaymentReceiver")
+  csmCodes        CsmCode[]
+  usualVehicles   Vehicle[]       @relation("VehicleUsualDriver")
 }
 
 model OrderSequence {
@@ -285,4 +311,48 @@ model Media {
   id         Int      @id @default(autoincrement())
   name       String   @unique
   created_at DateTime @default(now())
+}
+
+/// A code used to identify who a field job is for (600, 088, NSG, SBDV …). A code may
+/// belong to a CSM who is an app user, or to a team or branch with no login.
+model CsmCode {
+  id         Int         @id @default(autoincrement())
+  code       String      @unique
+  kind       CsmCodeKind @default(UNKNOWN)
+  /// What the code means when it is not a person, e.g. "Vizag branch".
+  label      String?
+  user_id    Int?
+  user       User?       @relation(fields: [user_id], references: [id], onDelete: SetNull)
+  is_active  Boolean     @default(true)
+  created_at DateTime    @default(now())
+  updated_at DateTime    @updatedAt
+
+  @@index([user_id])
+}
+
+/// Where field work happens. Locality drives the Local / Non-local split on the grid.
+model Area {
+  id                 Int          @id @default(autoincrement())
+  name               String       @unique
+  locality           AreaLocality
+  district           String?
+  /// Imported areas whose locality the business has not confirmed yet.
+  needs_confirmation Boolean      @default(false)
+  is_active          Boolean      @default(true)
+  created_at         DateTime     @default(now())
+  updated_at         DateTime     @updatedAt
+}
+
+model Vehicle {
+  id              Int      @id @default(autoincrement())
+  reg_no          String   @unique
+  type            String
+  usual_driver_id Int?
+  usualDriver     User?    @relation("VehicleUsualDriver", fields: [usual_driver_id], references: [id], onDelete: SetNull)
+  notes           String?
+  is_active       Boolean  @default(true)
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  @@index([usual_driver_id])
 }

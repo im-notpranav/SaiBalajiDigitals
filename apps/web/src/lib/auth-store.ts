@@ -3,9 +3,13 @@ import { authApi } from "../api/auth";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
 
-export type UserRole = "CSM" | "PRODUCTION" | "ACCOUNTS" | "ADMIN" | "OPERATION_MANAGER" | "PRODUCTION_MANAGER";
+export type UserRole = "CSM" | "PRODUCTION" | "ACCOUNTS" | "ADMIN" | "OPERATION_MANAGER" | "PRODUCTION_MANAGER" | "COST_CONTROL_MANAGER" | "PASTER" | "HELPER" | "DRIVER";
 
-/** Operation Manager sees everything an admin sees but may not change anything. */
+/** Pasters, Helpers and Drivers share one mobile-first portal. */
+export const FIELD_ROLES: UserRole[] = ["PASTER", "HELPER", "DRIVER"];
+
+/** Operation Manager sees everything an admin sees but may not change orders or billing.
+ *  The work-allocation pages (field staff, masters) are the exception: they write there. */
 export const isReadOnlyRole = (role?: UserRole | string) => role === "OPERATION_MANAGER";
 
 export interface AuthUser {
@@ -48,6 +52,10 @@ export const roleHome: Record<UserRole, string> = {
   // Operation Manager shares the admin portal, read-only.
   OPERATION_MANAGER: "/admin/dashboard",
   PRODUCTION_MANAGER: "/prod-manager/dashboard",
+  COST_CONTROL_MANAGER: "/cost-control/dashboard",
+  PASTER: "/field/dashboard",
+  HELPER: "/field/dashboard",
+  DRIVER: "/field/dashboard",
 };
 
 export const useAuth = () => {

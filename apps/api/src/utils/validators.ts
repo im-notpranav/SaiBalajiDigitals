@@ -193,7 +193,78 @@ export const roleEnum = z.enum([
   "ACCOUNTS",
   "PRODUCTION",
   "PRODUCTION_MANAGER",
+  "COST_CONTROL_MANAGER",
+  "PASTER",
+  "HELPER",
+  "DRIVER",
 ]);
+
+/** The roles an Operation Manager may hand out: field staff only. */
+export const fieldRoleEnum = z.enum(["PASTER", "HELPER", "DRIVER"]);
+
+/**
+ * An Indian mobile number, normalised to E.164 (+91XXXXXXXXXX) so WhatsApp can use it
+ * as-is. Accepts "98765 43210", "09876543210", "919876543210" and "+91 98765-43210".
+ */
+export const indianMobile = z
+  .string()
+  .trim()
+  .transform((v) => v.replace(/[\s-]/g, ""))
+  .transform((v) => v.replace(/^\+?91(?=\d{10}$)/, "").replace(/^0(?=\d{10}$)/, ""))
+  .refine((v) => /^[6-9]\d{9}$/.test(v), "Enter a 10-digit Indian mobile number")
+  .transform((v) => `+91${v}`);
+
+const empCode = z.string().trim().min(1).max(20);
+const username = z
+  .string()
+  .min(3)
+  .max(50)
+  .regex(/^[a-z0-9_]+$/, "Username must be lowercase letters, numbers, or underscores");
+
+export const createFieldStaffSchema = z.object({
+  name: z.string().trim().min(1).max(100),
+  username,
+  password: z.string().min(8),
+  role: fieldRoleEnum,
+  phone: indianMobile.optional().nullable(),
+  emp_code: empCode.optional().nullable(),
+});
+
+export const updateFieldStaffSchema = z.object({
+  name: z.string().trim().min(1).max(100).optional(),
+  role: fieldRoleEnum.optional(),
+  phone: indianMobile.optional().nullable(),
+  emp_code: empCode.optional().nullable(),
+});
+
+export const areaSchema = z.object({
+  name: z.string().trim().min(1).max(100),
+  locality: z.enum(["LOCAL", "NON_LOCAL"]),
+  district: z.string().trim().max(100).optional().nullable(),
+  needs_confirmation: z.boolean().optional(),
+  is_active: z.boolean().optional(),
+});
+
+export const vehicleSchema = z.object({
+  reg_no: z
+    .string()
+    .trim()
+    .min(1)
+    .max(20)
+    .transform((v) => v.toUpperCase().replace(/\s+/g, " ")),
+  type: z.string().trim().min(1).max(50),
+  usual_driver_id: z.number().int().positive().optional().nullable(),
+  notes: z.string().trim().max(500).optional().nullable(),
+  is_active: z.boolean().optional(),
+});
+
+export const csmCodeSchema = z.object({
+  code: z.string().trim().min(1).max(20).transform((v) => v.toUpperCase()),
+  kind: z.enum(["CSM", "TEAM", "BRANCH", "UNKNOWN"]),
+  label: z.string().trim().max(100).optional().nullable(),
+  user_id: z.number().int().positive().optional().nullable(),
+  is_active: z.boolean().optional(),
+});
 
 export const createUserSchema = z.object({
   name: z.string().min(1).max(100),

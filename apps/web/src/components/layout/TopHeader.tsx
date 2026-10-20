@@ -79,7 +79,8 @@ export function TopHeader() {
         <BrandLockup compact logoSize={30} className="hidden sm:flex" />
       </Link>
 
-      {user?.role !== "PRODUCTION" && (
+      {/* Order search: only roles whose portal has an orders list to land on. */}
+      {(user?.role === "ADMIN" || user?.role === "OPERATION_MANAGER" || user?.role === "ACCOUNTS" || user?.role === "CSM") && (
         <div className="relative hidden max-w-md flex-1 md:block">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input

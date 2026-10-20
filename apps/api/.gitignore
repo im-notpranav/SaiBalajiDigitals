@@ -1,2 +1,5 @@
 .env
 *.env.local
+
+# Generated login sheets from prisma/import-field-staff.ts. Never commit.
+prisma/private/

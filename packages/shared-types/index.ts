@@ -1,4 +1,4 @@
-export type UserRole = "ADMIN" | "OPERATION_MANAGER" | "CSM" | "ACCOUNTS" | "PRODUCTION" | "PRODUCTION_MANAGER";
+export type UserRole = "ADMIN" | "OPERATION_MANAGER" | "CSM" | "ACCOUNTS" | "PRODUCTION" | "PRODUCTION_MANAGER" | "COST_CONTROL_MANAGER" | "PASTER" | "HELPER" | "DRIVER";
 
 export type OrderStatus = "Active" | "Installed" | "Pending" | "BillingCompleted" | "PaymentReceived" | "Completed";
 

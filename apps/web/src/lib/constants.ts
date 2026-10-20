@@ -7,6 +7,10 @@ export const roleHome: Record<UserRole, string> = {
   PRODUCTION: "/production/dashboard",
   PRODUCTION_MANAGER: "/prod-manager/dashboard",
   ACCOUNTS: "/accountant/dashboard",
+  COST_CONTROL_MANAGER: "/cost-control/dashboard",
+  PASTER: "/field/dashboard",
+  HELPER: "/field/dashboard",
+  DRIVER: "/field/dashboard",
 };
 
 export const REMARK_TYPES: { value: RemarkType; label: string }[] = [
@@ -36,11 +40,15 @@ export const ORDER_STATUSES = ["Active", "Installed", "Pending", "BillingComplet
  */
 export const ROLES: { value: string; label: string; description: string }[] = [
   { value: "ADMIN", label: "Administrator", description: "Full access" },
-  { value: "OPERATION_MANAGER", label: "Operation Manager", description: "Views everything in the admin portal, cannot change anything" },
+  { value: "OPERATION_MANAGER", label: "Operation Manager", description: "Views the admin portal; manages field staff and allocation masters" },
   { value: "CSM", label: "Client Service Manager", description: "Creates and manages their own orders" },
   { value: "PRODUCTION_MANAGER", label: "Production Manager", description: "Assigns line items to production teams" },
   { value: "PRODUCTION", label: "Production Team", description: "Completes work assigned to them" },
   { value: "ACCOUNTS", label: "Accountant", description: "Billing and payments" },
+  { value: "COST_CONTROL_MANAGER", label: "Cost Control Manager", description: "Reviews, pays and closes payment requests" },
+  { value: "PASTER", label: "Paster", description: "Field staff: sees own jobs" },
+  { value: "HELPER", label: "Helper", description: "Field staff (Sub-Paster / Ast. Paster): sees own jobs" },
+  { value: "DRIVER", label: "Driver", description: "Field staff: sees own jobs and vehicle trips" },
 ];
 
 export const roleLabel = (value?: string | null) =>

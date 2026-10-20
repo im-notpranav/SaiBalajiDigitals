@@ -31,6 +31,7 @@ import {
 } from "../controllers/orders.controller";
 import { importTemplate, bulkImportOrders } from "../controllers/import.controller";
 import { authenticate, authorize, requireSuperAdmin , denyReadOnlyMutations } from "../middlewares/auth.middleware";
+import { OMS_ROLES } from "../utils/roles";
 
 const router = Router();
 
@@ -43,6 +44,9 @@ const emailExportLimiter = rateLimit({
 });
 
 router.use(authenticate);
+// Order data (amounts, clients, invoices) is for OMS roles only. Field staff and the Cost
+// Control Manager get the order details they need through their own portals.
+router.use(authorize(...OMS_ROLES));
 router.use(denyReadOnlyMutations);
 
 router.get("/export", authorize("CSM", "ADMIN", "OPERATION_MANAGER", "ACCOUNTS"), exportOrders);

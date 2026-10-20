@@ -1,0 +1,590 @@
+{
+  "_source": "SBD_Smart_Work_Allocation.xlsx (Areas, CSMs sheets), extracted 2026-10-20",
+  "areas": [
+    {
+      "name": "Abids",
+      "locality": "LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Addagutta",
+      "locality": "LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Adilabad",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Alwal",
+      "locality": "LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Ameerpet",
+      "locality": "LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Ananthapur",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Attapur",
+      "locality": "LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Aurangabad",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Bachupally",
+      "locality": "LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Bangalore",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Banjara Hills",
+      "locality": "LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Begumpet",
+      "locality": "LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Bellampally",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Bhainsa",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Bhupalpally",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Bodhan",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Boduppal",
+      "locality": "LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Chandrayangutta",
+      "locality": "LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Chennur",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Chittoor",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Dharmavaram",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Dhule",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Dilsukhnagar",
+      "locality": "LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Eluru",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Gachibowli",
+      "locality": "LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Gandhinagar",
+      "locality": "LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Ghatkesar",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": true
+    },
+    {
+      "name": "Godavarikhani",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Guntur",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Habsiguda",
+      "locality": "LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Hanmakonda",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Hayathnagar",
+      "locality": "LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Himayathnagar",
+      "locality": "LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Hitech City",
+      "locality": "LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Hydernagar",
+      "locality": "LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Jagtial",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Jammikunta",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Jangaon",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Jubilee Hills",
+      "locality": "LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Kadiri",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Kakinada",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Karimnagar",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Kazipet",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Kesamudram",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Khammam",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Kodad",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Kompally",
+      "locality": "LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Kondapur",
+      "locality": "LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Korutla",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Kothapet",
+      "locality": "LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Koti",
+      "locality": "LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Kukatpally",
+      "locality": "LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Kurnool",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "LB Nagar",
+      "locality": "LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Lunger House",
+      "locality": "LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Madanapalle",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Madhapur",
+      "locality": "LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Madhira",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Mahabubnagar",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Malakpet",
+      "locality": "LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Malkajgiri",
+      "locality": "LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Mallampet",
+      "locality": "LOCAL",
+      "needs_confirmation": true
+    },
+    {
+      "name": "Mancherial",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Manikonda",
+      "locality": "LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Medak",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Medchal",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": true
+    },
+    {
+      "name": "Mehdipatnam",
+      "locality": "LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Miryalaguda",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Miyapur",
+      "locality": "LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Musheerabad",
+      "locality": "LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Nagaram",
+      "locality": "LOCAL",
+      "needs_confirmation": true
+    },
+    {
+      "name": "Nagarkurnool",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Nagole",
+      "locality": "LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Nalgonda",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Nallagandla",
+      "locality": "LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Nandikotkur",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Narsingi",
+      "locality": "LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Nellore",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Nirmal",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Nizamabad",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Nizampet",
+      "locality": "LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Office / Workshop",
+      "locality": "LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Ongole",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Patancheru",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": true
+    },
+    {
+      "name": "Peddapalli",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Pocharam",
+      "locality": "LOCAL",
+      "needs_confirmation": true
+    },
+    {
+      "name": "Pragathinagar",
+      "locality": "LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Punjagutta",
+      "locality": "LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Puttaparthi",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Rajahmundry",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Rajendranagar",
+      "locality": "LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Sangareddy",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Santhosh Nagar",
+      "locality": "LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Sathupalli",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Secunderabad",
+      "locality": "LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Shadnagar",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Shalibanda",
+      "locality": "LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Shamshabad",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": true
+    },
+    {
+      "name": "Siddipet",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Srikalahasti",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Suryapet",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Tarnaka",
+      "locality": "LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Tilaknagar",
+      "locality": "LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Tirupati",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Tolichowki",
+      "locality": "LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Torrur",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Uppal",
+      "locality": "LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Vijayawada",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Vikrampuri",
+      "locality": "LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Vizag",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Vizianagaram",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Warangal",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    },
+    {
+      "name": "Zaheerabad",
+      "locality": "NON_LOCAL",
+      "needs_confirmation": false
+    }
+  ],
+  "csm_codes": [
+    "033",
+    "055",
+    "088",
+    "300",
+    "400",
+    "500",
+    "599",
+    "600",
+    "700",
+    "800",
+    "900",
+    "NSG",
+    "NNG",
+    "NMG",
+    "SBDB",
+    "SBDC",
+    "SBDG",
+    "SBDV"
+  ]
+}

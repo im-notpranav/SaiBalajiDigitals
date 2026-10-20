@@ -30,6 +30,8 @@ import {
   Settings,
   Boxes,
   Upload,
+  HardHat,
+  MapPinned,
 } from "lucide-react";
 import { type UserRole, useAuth } from "@/lib/auth-store";
 import { cn } from "@/lib/utils";
@@ -40,6 +42,12 @@ interface NavItem {
   label: string;
   icon: LucideIcon;
 }
+
+const FIELD_NAV: NavItem[] = [
+  { to: "/field/dashboard", label: "My Work", icon: ClipboardList },
+  { to: "/field/notifications", label: "Notifications", icon: Bell },
+  { to: "/profile", label: "Profile", icon: UserCircle },
+];
 
 const NAV: Record<UserRole, NavItem[]> = {
   CSM: [
@@ -70,10 +78,20 @@ const NAV: Record<UserRole, NavItem[]> = {
     { to: "/prod-manager/notifications", label: "Notifications", icon: Bell },
     { to: "/profile", label: "Profile", icon: UserCircle },
   ],
-  // Operation Manager shares the admin portal read-only (no Users / Settings /
-  // Bulk Import — those are mutation surfaces).
+  COST_CONTROL_MANAGER: [
+    { to: "/cost-control/dashboard", label: "Dashboard", icon: Wallet },
+    { to: "/cost-control/notifications", label: "Notifications", icon: Bell },
+    { to: "/profile", label: "Profile", icon: UserCircle },
+  ],
+  PASTER: FIELD_NAV,
+  HELPER: FIELD_NAV,
+  DRIVER: FIELD_NAV,
+  // Operation Manager shares the admin portal read-only for orders and billing (no Users /
+  // Settings / Bulk Import), but runs field staff and the allocation masters.
   OPERATION_MANAGER: [
     { to: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { to: "/admin/field-staff", label: "Field Staff", icon: HardHat },
+    { to: "/admin/masters", label: "Allocation Masters", icon: MapPinned },
     { to: "/admin/orders", label: "Orders", icon: Boxes },
     { to: "/admin/loss-report", label: "Loss Report", icon: FileBarChart2 },
     { to: "/admin/overdue", label: "Overdue Orders", icon: AlarmClock },
@@ -85,6 +103,8 @@ const NAV: Record<UserRole, NavItem[]> = {
   ADMIN: [
     { to: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { to: "/admin/users", label: "Users", icon: Users },
+    { to: "/admin/field-staff", label: "Field Staff", icon: HardHat },
+    { to: "/admin/masters", label: "Allocation Masters", icon: MapPinned },
     { to: "/admin/orders", label: "Orders", icon: Boxes },
     { to: "/admin/loss-report", label: "Loss Report", icon: FileBarChart2 },
     { to: "/admin/overdue", label: "Overdue Orders", icon: AlarmClock },
@@ -102,8 +122,12 @@ const roleLabels: Record<UserRole, string> = {
   PRODUCTION: "Production Team",
   ACCOUNTS: "Accountant Portal",
   ADMIN: "Administrator Portal",
-  OPERATION_MANAGER: "Operation Manager (view only)",
+  OPERATION_MANAGER: "Operation Manager",
   PRODUCTION_MANAGER: "Production Manager",
+  COST_CONTROL_MANAGER: "Cost Control",
+  PASTER: "Field Staff · Paster",
+  HELPER: "Field Staff · Helper",
+  DRIVER: "Field Staff · Driver",
 };
 
 /** The nav items this user actually gets. Bulk import is super-admin only. */

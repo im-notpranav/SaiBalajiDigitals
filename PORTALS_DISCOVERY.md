@@ -1,0 +1,489 @@
+# Discovery: Work Allocation Portal & Payment Request Portal
+
+Phase 1 deliverable for the three-portal brief: existing-system audit, workbook analysis, gap analysis, proposed design and open questions. **No code has been changed.**
+
+Labels used throughout:
+- **[Confirmed]**: read directly from the source code or the workbooks.
+- **[Proposed]**: my recommendation. Not built, and not final until the related question is answered.
+- **[Open]**: needs a business decision. These are numbered and listed in section 7.
+
+---
+
+## Decisions log
+
+| # | Question | Decision (2026-10-20) | Design consequence |
+|---|---|---|---|
+| 1 | How field staff access the system | **Everyone gets a login** | Pasters, Helpers and Drivers become `User` rows with new `Role` values `PASTER`, `HELPER`, `DRIVER` (Sub-Paster still open, #21). No separate `Employee` table. Field data (`emp_code`, field role, active flag) goes on `User` or a 1:1 `FieldProfile`. User creation must be opened up: Operation Manager may create and deactivate **field-role users only**, while other roles stay super-admin-only. A mobile-first portal is needed for these roles. |
+| 2 | Must jobs link to an order? | **Always required** | `WorkJob.order_id` is NOT NULL. **New issue:** creating an order today needs at least one store with at least one line item (`createOrderSchema`). Recces, rectifications and events (most of the historical log) would each need a full order first. See new question 2a. |
+| 3 | Who allocates | **Operation Manager writes allocation only** | Add an allow-list exception to `denyReadOnlyMutations` for the allocation, field-staff, leave and OT routes. OM stays read-only for orders and billing. |
+| 5 | What a payment request is | **Company pays the requester** (UPI, money out) | Vocabulary: *Paid / Disbursed*, never "Payment received". Kept apart from `Invoice` and order revenue in every report. |
+| 2a | Work with no billable order | **Stays outside the portal** | No service-order type. The portal allocates only order-linked jobs; recces and similar work keep their current handling. |
+| 6 / 7 | Eligibility window | **Confirmed.** "Building" = installation. Requests open once production is finished and close to *new* requests once billing starts. | Implemented as one pure function `paymentEligibility(order)` on top of `order-stage.ts`. |
+| 11 | Multiple requests per order | **Allowed, no cap.** Warn only. | Reviewers see the order's total requested and paid so far, with a warning when it passes the order value. Duplicate submissions are still blocked (idempotency key). |
+| 13 | What the "remarks" toggle means | It is a **"Bill details required?" Yes/No** choice made by the requester (CSM or Paster/Helper/Driver) after entering the request details. | Field renamed `bill_details_required`. **Yes** → bill/photo uploads are mandatory. **No** → no bill needed. |
+| 14 | Approval routing | **No bill → Admin approves, then Cost Control Manager. Bill → straight to Cost Control Manager.** | Two explicit routes in `payment-workflow.ts` (below). The route is fixed at submission and recorded on the request. |
+| 16 / 17 | Who marks paid and closes | **Cost Control Manager** | Only CCM can record payment (UTR/reference) and close. |
+| 31 | Notifications | **WhatsApp for the whole project**, via **AskEva** (the company's existing WhatsApp API provider) | WhatsApp becomes a notification channel next to in-app and email, covering existing OMS events as well as the new portals. See §6.3. |
+
+**Payment request routes (decided):**
+
+```
+Route A, bill_details_required = No:
+  SUBMITTED → ADMIN_REVIEW → (approve) → CCM_REVIEW → (approve) → PAYMENT_PENDING → PAID → CLOSED
+                     ↘ reject → REJECTED          ↘ reject → REJECTED
+
+Route B, bill_details_required = Yes:
+  SUBMITTED → CCM_REVIEW → (approve) → PAYMENT_PENDING → PAID → CLOSED
+                     ↘ reject → REJECTED
+  Closing requires the bill/photos to be attached.
+```
+
+Still open on this flow: whether Admin and CCM can **return a request for more information** (proposed: yes, back to the requester, who resubmits into the same stage), and whether a requester may cancel before review starts (proposed: yes).
+
+---
+
+## 0. Headline findings
+
+These change the design more than anything else in this document.
+
+1. **Neither workbook contains an order number.** [Confirmed] A job is identified by CSM code + free-text work description + area. Nothing ties a job to `ORD26xxxx`, so linking allocations to OMS orders is a **new rule**, not something the spreadsheets already do. Much of the logged work also doesn't look like a billed order: recces, rectifications, events, in-office printing.
+2. **The CSM codes are unresolved, even inside workbook 2.** [Confirmed] Codes `033 055 088 300 400 500 599 600 700 800 900 NSG NNG NMG SBDB SBDC SBDG SBDV` are listed with blank names. The workbook's own "STILL TO CONFIRM" section asks whether `088 / NSG / NNG / SBDx` are CSMs, branches or in-house teams. The OMS knows CSMs only as `User` rows with role `CSM`.
+3. **Workbook 2 is a redesign of workbook 1, not a peer.** [Confirmed] It imports workbook 1's grid (9–15 Oct → 180 Task Log rows), OT, leave, Work Details ("Old Work Details") and Master ("Staff Master (old)"). Workbook 1 has grid entries up to 23 Oct, so it is still the **live** sheet. Workbook 2 was never switched on: CSM names and phone numbers are blank, the web-app URL is empty, the Notification Log is empty, and all 180 rows are still `Assigned / Sent`.
+4. **Workbook 2 depends on a Google Apps Script that isn't in the file.** [Confirmed] The double-booking *block*, alerts, "My Work" links and scheduled summaries live in `Code.gs` / `MyWork.html`, which weren't provided. The xlsx only *flags* conflicts with a formula.
+5. **Operation Manager is view-only in the app today.** [Confirmed] `denyReadOnlyMutations` rejects every non-GET request from `OPERATION_MANAGER`. The brief makes this role assign work and register employees.
+6. **"Payment" already means money coming in.** [Confirmed] `OrderStatus.PaymentReceived`, `Invoice.amount_received` and `PaymentFollowUp` all track the **client paying the company**. A payment request paid to a UPI ID is money going **out** to the requester. The two need separate vocabulary (for example *Paid / Disbursed* rather than "Payment received"), or dashboards will mix them up.
+7. **There is no file-upload infrastructure.** [Confirmed] `User.photo_url` is a pasted URL, and the only binary upload is the super-admin xlsx import. The API runs on Render, whose disk is wiped on every deploy, so bill photos need object storage.
+8. **Field staff don't have app accounts.** [Confirmed] About 40 pasters, helpers and drivers exist only in the spreadsheets. Workbook 2 gives them a secret "My Work" link instead of a login.
+
+---
+
+## 1. Existing application [Confirmed]
+
+| Area | What exists |
+|---|---|
+| Repo | npm workspaces: `apps/api`, `apps/web`, `packages/shared-types` |
+| Backend | Express 4, Prisma 5, PostgreSQL (Neon), zod validators, JWT in an httpOnly cookie, helmet, express-rate-limit, nodemailer |
+| Frontend | React + Vite, TanStack Router file routes (`_portal.<role>.*`), shadcn/ui |
+| Hosting | Web on a Cloudflare Worker (static assets + `/api` proxy) → API on Render (`saibalajidigitals.onrender.com`) |
+| Migrations | Prisma migrations, **applied by hand on production** (not run on deploy) |
+| Roles (`Role` enum) | `ADMIN` (+ `is_super_admin` flag), `OPERATION_MANAGER` (read-only), `CSM`, `ACCOUNTS`, `PRODUCTION`, `PRODUCTION_MANAGER` |
+| AuthZ | `authenticate` re-reads the user from the DB on every request; `authorize(...roles)` per route; `requireSuperAdmin` for user create/edit/password reset; `denyReadOnlyMutations` for Operation Manager |
+| Users | Only the super admin can create users (`POST /api/users`) |
+
+**Order data model**
+
+- `Order`: `order_no` (unique, from `OrderSequence`), `client_name` (**free text**, not a foreign key), job-level PO, `status` (**derived**), creator.
+- `OrderStore`: one row per physical store. It carries its own `installed_at` / `installed_by`, PO and `invoice_id`.
+- `OrderItem`: media, size, qty, sft, rate, amount, loss remarks + confirmation, flags, `production_completed`.
+- `OrderItemAssignment`: links an item to a `PRODUCTION` user. An item counts as complete once every assignment on it is complete.
+- `Invoice`: one per group of stores, holding bill amount, billing date, amount received and when.
+- `PaymentFollowUp` (notes chasing the client), `OrderChangeLog`, `AuditLog` (DB triggers, attributed via `app.current_user_id`), `Notification` (in-app), and the `Client` / `Media` lookup lists.
+
+**Order lifecycle.** Status is derived in `utils/order-derive.ts`; stages come from `utils/order-stage.ts`.
+
+| Status | Meaning | Stage shown |
+|---|---|---|
+| `Active` | Production running, or produced but not every store installed | In production → **Awaiting installation** |
+| `Installed` | Every store installed, not every store invoiced | Awaiting billing |
+| `BillingCompleted` | Fully invoiced, unpaid | Awaiting payment |
+| `Pending` | Billed short or part-paid | Pending (billing / payment) |
+| `PaymentReceived` | Client paid in full | (closed) |
+| `Completed` | Admin closed / force-closed | (closed) |
+
+- Production completion is tracked per **item** (`production_completed_at`).
+- Installation is tracked per **store** (`installed_at`). The CSM or admin marks it, and only once that store's items are produced.
+- Billing completion is tracked per **invoice**.
+- These events are already distinct, as the brief requires.
+
+**Overdue today.** `GET /api/admin/overdue` counts **business days, excluding Sundays** in the current stage, with a default threshold of 5.
+
+---
+
+## 2. Workbook analysis [Confirmed]
+
+### 2.1 `Work Allocation Sheet.xlsx`: the current manual process (6 sheets)
+
+| Sheet | Purpose | Columns | Logic |
+|---|---|---|---|
+| **WAS** | Weekly person × day grid, 9–23 Oct 2026 | S.No, Person Name, Designation, one column per date | Only formula: `S.No = previous + 1`. No validation and no conditional formatting; colours are filled by hand. Three blocks: **Paster** (25), **Ast. Paster** (12), **Driver** (4). |
+| | | | A cell is free text: CSM code(s) like `600`, `088/NSG`, `700/599/400`. Suffixes: `-N` (Non-Local), `-CN`, `_N8`. Also `Leave` and `Servicing` (vehicle). Typos are common (`59/6009-N`, `'088`). |
+| | | | Footer notes (operational SOP): share the WAS picture at 9:30 am (Admin group), 3 pm (CSMs + Leaves group) and 7 pm (all); parcels dispatch at 6 pm; at 12 pm cross-check each CSM's daily sheet against the WAS. |
+| **Work Detailes** | Job log, 639 rows, 29 Jul – 8 Sep | Date, CSM Name, Work Details, Employees, Remarks, Status | Free text throughout. CSM is a **first name** (Bablu, Swathi, Ravikishore, Shiva, Naresh, Sunil, Praveen, Nagesh, Rahul), not a code. Employees look like `"A & B"`, with 126 distinct spellings, plus entries like "SBDV Team", "Sub Vender Gopi" and "Hold". Remarks is usually the completion date, sometimes a range ("24/08 To 31/08"). Status is `Completed` 618 or `Hold` 20, with inconsistent case and spacing. |
+| **OT - AS** | Overtime register, 522 rows | Date, Paster/Driver, Helper ("No" = none), Start, Close, CSM (code), Remarks | Times are typed inconsistently (fractions vs times). An unlabelled column holds OT rules: "Day Time 5 Hours", "Night Time 12 Hours", "Give Full Day OT", "Without Information". |
+| **Vehicle Routes** | Driver trips | Person, Auto Number, From, Return, Route, CSM Work | Header plus 4 driver names. **Never used.** |
+| **Leave Details** | Leave | Employee, From, To, Days, Remarks | 7 rows. Days is typed text ("37 Days"), not calculated. |
+| **Master** | Company-wide staff list, 99 rows | S.No, Code (105–402), Name, Designation | Paster 25, Ast. Paster 21, Operator 9, CSM 9, Production 7, Accountant 6, Administration 4, Designer 4, Driver 4, Purchase 3, Welder 3, Delivery 2, Marketing 1, Fabricator 1 |
+
+### 2.2 `SBD_Smart_Work_Allocation.xlsx`: proposed redesign (19 sheets, Google Sheets + Apps Script)
+
+Its stated principle: *enter each job once; the grid, dashboards and messages update themselves.*
+
+**Process it describes (Start Here sheet):**
+1. The CSM asks for people.
+2. The Ops Manager checks the Daily Board for free staff.
+3. The Ops Manager adds a Task Log row, picking an area, which sets Local/NL.
+4. A conflict (already busy or on leave) is rejected unless "Allow 2nd job = Yes".
+5. Setting Alert = Send messages the staff and the CSM(s).
+6. The grid updates itself.
+7. Staff tap Started / Completed on their My Work link, and the CSM is told.
+
+**Data-entry sheets:**
+
+| Sheet | Columns | Validation / logic |
+|---|---|---|
+| **Task Log**: the only place jobs are entered. One row = one job/team; 180 rows so far. | Job ID (`W0001`), Start Date, End Date (only if multi-day), Days*, CSM Code, CSM 2, CSM Name(s)*, Work Details, Area Name, Local/NL, Paster 1, Paster 2, Helper 1, Helper 2, Driver, Vehicle No, Route (From → To), Extra Tag, Allow 2nd job, Instructions/Remarks, Status, Alert, Alert Sent At, Completed On, ⚠ Check*, plus 7 helper columns* | **End ≥ Start** (custom rule, error text "End Date cannot be before Start Date"). Dropdowns: CSM codes (CSMs), people (Employees), Area (Areas), Local/NL, Vehicle, Extra Tag (`CN`, `N8`), Yes, **Status** `Assigned / Started / Completed / Hold / Cancelled`, **Alert** `Send / Sent / Don't send`. |
+| | | **⚠ Check** formula, per person in the row, skipped when Completed or Cancelled: end before start; area not in the master; **on leave in the date range** (unless Allow 2nd job); **already in another non-cancelled job overlapping the range** (unless Allow 2nd job); same person twice in the row. A non-empty check turns the row red. |
+| **OT Register** | Date, Paster/Driver, Helper, Start, Close, Hours*, CSM Code, CSM Name*, Work/Remarks, **Approved By** | `Hours = MOD(close − start, 1) × 24`, which handles OT past midnight. Approved By is new and empty in all 522 rows. |
+| **Leave** | Employee, From, To (blank = one day), Days*, Reason | Leave blocks new work and shows on the grid. |
+
+\* = calculated
+
+**Master sheets:**
+
+| Sheet | Contents |
+|---|---|
+| **Employees** (field team only, 40 rows) | Emp Code (only 20 filled), Name *as used daily* (the join key everywhere), Full Name, **Role ∈ {Paster, Helper, Driver}** (24 / 12 / 4), WhatsApp, Email, Telegram, Old spelling 1/2, Active? (Yes/No hides the person but keeps history), Link Code, My Work link. *"Ast. Paster" from workbook 1 became "Helper".* |
+| **CSMs** | 18 codes. Name, WhatsApp, Email, Telegram and link code are **all blank**. Headed "Claim Service Managers", while the OMS says "Client Service Manager". |
+| **Areas** | 113 areas: 52 Local (Hyderabad city), 61 NL. 7 are marked "please confirm" (Medchal, Shamshabad, Pocharam…). |
+| **Vehicles** | 4 placeholders `VEHICLE-1..4` with a usual driver. Today's driver, route, CSM and work are derived from the Task Log. |
+| **Settings** | Admin email, web-app URL, channels (Email ON, Telegram OFF, WhatsApp Cloud API OFF, WhatsApp click-links ON), schedule (evening plan 19:00, CSM summary 15:00, admin summary 09:00), notify CSM on status change ON, remind idle staff OFF |
+| **Lists** (hidden) | Dropdown sources: Status, Alert, Extra Tag, Role, Area Type |
+
+**Read-only views (all formulas):**
+
+| Sheet | Shows |
+|---|---|
+| **WAS** | 7-day grid starting yesterday. A cell is `Leave`, or each overlapping job as `CSM[/CSM2][-N][_tag]` joined by ` + `. Colours: free = green, leave = red, double-booked (`+`) = yellow, helper and driver rows tinted. Footer counts free pasters per day. |
+| **Daily Board** | For one date: job count, free pasters, helpers and drivers **with phone numbers**, who's on leave, who's busy, and every job that day |
+| **Find Work** | Filter by date range, employee, CSM, area contains, Local/NL, status → KPIs (jobs, people, person-days, NL jobs, completed, pending, on hold, vehicle trips), a people list and a job list |
+| **Employee Dashboard** | One person over a range: jobs, completed, pending, NL, OT count and hours, leave days, today's status, role on each job, and old history matched by old spellings |
+| **CSM Dashboard** | One CSM code over a date or range: pasters / helpers / drivers / vehicles with phones, status counts, job list |
+| **Vehicle Routes** | Jobs with a driver or vehicle in a range: trips, driver-days, NL trips, completed |
+
+**History and logs:**
+- **Old Work Details**: copy of workbook 1's Work Detailes.
+- **Staff Master (old)**: copy of workbook 1's Master.
+- **Notification Log**: Time, Job ID, To, Role, Channel, Result, Message, WhatsApp link. Empty.
+
+**Internal inconsistencies:**
+- Start Here says Local/NL fills itself from the Area, but the Task Log makes it a manual dropdown (presumably the missing script fills it).
+- Converted rows have Local/NL filled but no Area.
+
+### 2.3 Workbook comparison
+
+| Topic | Workbook 1 (live) | Workbook 2 (redesign) | Recommended source of truth |
+|---|---|---|---|
+| Job record | A grid cell per person per day, plus a separate free-text Work Details log | One Task Log row per job, multi-day by start/end; grid derived | **WB2 model** → a `WorkJob` table |
+| Team per job | Free-text "A & B" | Fixed slots: 2 Pasters, 2 Helpers, 1 Driver | WB2, but as a member list rather than fixed columns [Open #20] |
+| CSM identity | First names (log), codes (grid, OT) | Codes only, names unknown | **OMS `User` (role CSM)**, once codes are mapped [Open #4] |
+| Field roles | Paster / Ast. Paster / Driver | Paster / Helper / Driver | WB2 vocabulary; Sub-Paster status [Open #21] |
+| Staff master | 99 company-wide, codes 105–402 | 40 field staff, codes half-filled | WB2 Employees + WB1 codes merged |
+| Location | Embedded in work text | Area master + Local/NL | WB2 Areas |
+| Leave | 7 rows, typed day counts | Register, blocks allocation | WB2 |
+| Overtime | Inconsistent times, rules in a stray column | Hours calculated, Approved By | WB2 + OT rules [Open #26] |
+| Vehicles | Unused sheet | Master + daily derivation | WB2 (needs real plates) |
+| Status | Completed / Hold | Assigned / Started / Completed / Hold / Cancelled | WB2 |
+| Double-booking | None | Flagged by formula, blocked by script, override flag | WB2, **enforced in the backend** |
+| Staff self-service | None (WhatsApp photos of the grid) | My Work link: Started / Completed | WB2 idea, delivery method [Open #1] |
+| Notifications | Manual WhatsApp at 9:30 / 15:00 / 19:00 | Email / Telegram / WhatsApp, scheduled | In-app + email first; WhatsApp later [Open #31] |
+| Order link | None | None | **New**, see [Open #2] |
+| Payment / expenses | None | None | **Entirely new.** The workbooks give no guidance on payment requests. |
+
+**Spreadsheet behaviour worth reproducing:**
+- Single entry with derived views (grid, Daily Board, dashboards, Find Work).
+- Overlap and leave conflict checks with an explicit override.
+- Multi-day jobs.
+- Area → Local/NL, shown as `-N`.
+- Active/inactive staff that keep their history.
+- OT hours across midnight.
+- Phone numbers on the boards.
+- Status colours.
+
+**Spreadsheet behaviour to drop:** grid cell syntax, helper ⚙ columns, old-spelling matching (replace with a one-time data clean-up), fixed row limits, link codes acting as passwords.
+
+---
+
+## 3. Current app vs expanded scope (gap analysis)
+
+| Capability | Today | Gap |
+|---|---|---|
+| Orders, stores, items, invoices, derived status | ✅ | Keep. Only additive changes. |
+| Production assignment | ✅ items → `PRODUCTION` users | This is *factory* production. Field allocation is a separate concept and must not reuse `OrderItemAssignment`. |
+| Installation | ✅ per store, marked by CSM/Admin | Field staff do the installing, but the CSM marks it. Should a completed job mark the store installed? [Open #23] |
+| Field staff (Paster/Helper/Driver) | ❌ | New entity, plus access method [Open #1] |
+| Cost Control Manager | ❌ | New role |
+| Operation Manager writes | ❌ read-only by design | Scoped write access [Open #3] |
+| CSM codes | ❌ | Mapping table or a column on `User` [Open #4] |
+| Areas, vehicles, leave, OT | ❌ | New tables |
+| Work jobs + conflict rules + boards | ❌ | New module |
+| Payment requests, approval, history | ❌ | New module |
+| File uploads | ❌ | Object storage plus a new upload API |
+| Notifications | ✅ in-app + email | Add a WhatsApp channel (AskEva) for every event, old and new; phone numbers become required for users who receive them |
+| Audit | ✅ triggers + change log | Add triggers to the new tables, plus an explicit event table for payment requests |
+| Overdue | ✅ order stage, business days | New per-condition timers for payment requests |
+
+---
+
+## 4. Proposed end-to-end workflow [Proposed]
+
+```mermaid
+flowchart TD
+  A[CSM creates order<br/>OMS] --> B[Production Manager assigns items<br/>Production completes items]
+  B --> C{All items of a store produced}
+  C --> D[Ops/OM creates Work Job<br/>linked to order / stores<br/>picks staff, area, vehicle, dates]
+  D -->|conflict check: busy / on leave| D
+  D --> E[Staff notified → Started → Completed]
+  E --> F[CSM marks store installed<br/>existing flow]
+  C -. eligibility window opens .-> P1
+  P1[CSM or assigned employee raises<br/>Payment Request on order] --> P2[Attach bills / photos<br/>remarks if required]
+  P2 --> P3{Routing rule}
+  P3 --> P4[Review: Admin and/or CCM<br/>approve / reject / return for info]
+  P4 -->|approved| P5[Payment pending → Paid UPI ref]
+  P5 --> P6{Docs complete?}
+  P6 -->|yes| P7[Closed]
+  F --> G[Accounts invoices stores<br/>existing flow]
+  G -. eligibility window closes .-> P1
+  G --> H[Client pays → PaymentReceived<br/>Admin may close order]
+```
+
+Separation rules:
+- Closing a payment request never changes order status.
+- A work job completing never changes order status, unless #23 decides otherwise.
+- Billing never closes an open payment request. It only stops *new* ones.
+
+**Proposed eligibility window (mapped onto the existing model, [Open #6–#9]):**
+- **Opens** when production is complete, meaning stage "Awaiting installation" (`Active` with every assigned item produced) or status `Installed`.
+- **Closes** for *new* requests once billing starts (`BillingCompleted`, `Pending`, `PaymentReceived`, `Completed`, which matches the existing `isBillingStarted()` helper).
+- Orders with **no production assignment** need a rule.
+- "Building" does not exist in the app: is it a separate stage, or another word for installation?
+
+---
+
+## 5. Role-permission matrix [Proposed]
+
+✅ allowed · 👁 read · ⚪ own records only · ❌ denied · ❓ open question
+
+| Capability | Admin | Op. Manager | CSM | Cost Control Mgr | Accounts | Prod. Mgr | Paster / Helper / Driver |
+|---|---|---|---|---|---|---|---|
+| Existing order actions | ✅ | 👁 | ⚪ (as today) | 👁 order + client | as today | as today | ❌ |
+| Register / deactivate field staff | ✅ | ✅ ❓#3 | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Areas / vehicles masters | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Create / edit work jobs, assign staff | ✅ | ✅ ❓#3 | request only ❓#23 | ❌ | ❌ | ❌ | ❌ |
+| Override double-booking | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| View allocation boards / grid | ✅ | ✅ | 👁 own CSM code | ❌ | ❌ | 👁 ❓ | ⚪ own jobs |
+| Mark job Started / Completed | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ⚪ ❓#1 |
+| Leave register | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ⚪ view |
+| OT entry / approval | ✅ / ✅ | ✅ / ❓ | ❌ | ❌ | ❓ | ❌ | ⚪ view |
+| Raise payment request | ❓ | ❓ | ⚪ own orders | ❌ | ❌ | ❌ | ⚪ assigned orders ❓#22 |
+| Set "remarks required" | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Upload bills / photos | ✅ | ❌ | ⚪ | ✅ routed | ❌ | ❌ | ⚪ own request |
+| Approve / reject / return | ❓#13–15 | ❌ | ❌ | ❓#13–15 | ❌ | ❌ | ❌ |
+| Mark paid (UPI ref) | ❓ | ❌ | ❌ | ❓ | ❓#16 | ❌ | ❌ |
+| Close request | ❓#17 | ❌ | ❌ | ✅ ❓ | ❌ | ❌ | ❌ |
+| See UPI IDs / amounts | ✅ | 👁 ❓ | ⚪ | ✅ routed | ❓ | ❌ | ⚪ own |
+
+Enforcement: every cell is a backend check (`authorize` + row-level ownership in the controller), not just a hidden button. Operation Manager's blanket `denyReadOnlyMutations` would get an explicit allow-list for the work-allocation routes only, so it stays read-only for orders and billing.
+
+---
+
+## 6. Proposed data model & API [Proposed, pending batch-1 answers]
+
+### 6.1 Schema changes
+
+**Additive only.** Existing tables keep their columns, and every migration is hand-applied, following the existing practice.
+
+**Enum changes**
+- `Role` gains `COST_CONTROL_MANAGER`. Whether it also gains `FIELD_STAFF` or `PASTER` / `HELPER` / `DRIVER` depends on #1.
+- `FieldRole`: `PASTER`, `HELPER`, `DRIVER` (plus `SUB_PASTER`, depending on #21).
+- `WorkJobStatus`: `ASSIGNED`, `STARTED`, `COMPLETED`, `HOLD`, `CANCELLED`.
+- `PaymentRequestStatus` (decided routes): `SUBMITTED`, `ADMIN_REVIEW`, `CCM_REVIEW`, `INFO_REQUESTED` (if return-for-info is confirmed), `PAYMENT_PENDING`, `PAID`, `CLOSED`, `REJECTED`, `CANCELLED`.
+
+**Field staff and masters**
+
+| Table | Key fields | Notes |
+|---|---|---|
+| `Employee` | `emp_code?` unique, `display_name` unique, `full_name`, `field_role`, `phone`, `email?`, `is_active`, `user_id?` unique → `User` | Field staff without a login stay rows here. Those who need to log in link to a `User` [#1]. |
+| `CsmCode` | `code` unique, `user_id?` → `User`, `label`, `kind` (CSM / team / branch) | Resolves the 18 codes without guessing [#4] |
+| `Area` | `name` unique, `locality` (LOCAL / NON_LOCAL), `district?` | Seeded from the 113 areas |
+| `Vehicle` | `reg_no` unique, `type`, `usual_driver_id?`, `is_active` | |
+
+**Work allocation**
+
+`WorkJob`
+- **Identity:** `job_no` (`W0001`, unique); `order_id?` and `order_store_id?` depending on #2.
+- **Dates:** `start_date`, `end_date` (end ≥ start, enforced with a DB CHECK).
+- **Ownership:** `csm_code_id`, `csm2_code_id?`.
+- **Job details:** `work_details`, `area_id`, `locality` (snapshot), `vehicle_id?`, `route?`, `extra_tag?`, `instructions?`.
+- **Status:** `status`, `allow_double_booking`, `started_at?`, `completed_at?`, `cancelled_reason?`.
+- **Audit:** `created_by`, timestamps.
+
+`WorkJobMember`
+- Fields: `job_id`, `employee_id`, `slot_role`.
+- `start_date` and `end_date` are copied from the job.
+- Unique on `(job_id, employee_id)`.
+- A **Postgres exclusion constraint** (`btree_gist`) prevents overlapping date ranges per employee unless the job allows double booking or is cancelled. The conflict check then holds under concurrent requests, not only in the UI.
+
+`LeaveRecord`
+- Fields: `employee_id`, `from`, `to`, `reason`, `created_by`.
+- Creating a job checks it against leave; creating leave warns about overlapping jobs.
+
+`OvertimeEntry`
+- Fields: `work_date`, `employee_id`, `helper_id?`, `start_time`, `end_time`, `hours` (calculated, crosses midnight), `csm_code_id?`, `work_job_id?`, `remarks`, `approved_by?`, `approved_at?`.
+
+**Payment requests**
+
+`PaymentRequest`
+- **Identity:** `request_no` (`PR-2610-0001`, unique, separate from `order_no`).
+- **Links:** `order_id` (required), `order_store_id?`, `work_job_id?`.
+- **Requester:** `requested_by_user_id`, `payee_employee_id?`.
+- **Money:** `amount Decimal(10,2) > 0`, `upi_id` (validated format), `purpose / category?` [#12].
+- **Bill details:** `bill_details_required` (bool, chosen by the requester; fixes the route), `remarks?`. Closing a request whose flag is Yes requires at least one BILL attachment (checked in `payment-workflow.ts`).
+- **Workflow:** `status`, `route` (which review path applies).
+- **Payment:** `paid_amount?`, `paid_at?`, `payment_reference?` (UTR), `paid_by?`.
+- **Closure:** `closed_at?`, `closed_by?`.
+- **Duplicate prevention:** `idempotency_key` unique.
+- **Overdue timers**, one per condition: `approval_pending_since?`, `docs_pending_since?`, `payment_pending_since?`.
+
+Other payment tables:
+- `PaymentRequestEvent`: an append-only history row per action (`request_id`, `action`, `from_status`, `to_status`, `actor_id`, `actor_role`, `note`, `created_at`).
+- `PaymentAttachment`: `request_id`, `order_id` (copied for lookups), `kind` (BILL / PHOTO / RECEIPT), `storage_key`, `original_name`, `mime`, `size_bytes`, `sha256`, `uploaded_by`, `uploaded_at`, `deleted_at?` (soft delete only).
+
+**Rules in one place.** The payment state machine goes in `utils/payment-workflow.ts`, following the pattern of `order-derive.ts`. Every transition (who may do what, from which status, and what it requires) lives in one table, and every controller calls it. Thresholds (10 days, file limits, max photos) live in a small settings table rather than being hard-coded.
+
+**Uploads.**
+- Recommended storage: a private **Cloudflare R2** bucket (S3 API), since the web app already runs on Cloudflare.
+- The API checks type by magic bytes (not just the extension), size, and photo count per request.
+- Downloads use short-lived signed URLs.
+- Alternative: Postgres `bytea`. It's simpler but grows Neon storage. [#27–28]
+
+### 6.2 API outline (new routes, all behind `authenticate`)
+
+| Route | Purpose |
+|---|---|
+| `/api/employees` | CRUD for field staff, activate/deactivate, link to a user |
+| `/api/csm-codes`, `/api/areas`, `/api/vehicles` | Masters |
+| `/api/work-jobs` | CRUD with a conflict check that returns structured errors (busy / on leave) and an override flag |
+| `/api/work-jobs/board?date=` | Daily Board |
+| `/api/work-jobs/grid?from=&days=` | WAS grid |
+| `/api/work-jobs/availability` | Free staff |
+| `/api/work-jobs/:id/status` | Started / Completed |
+| `/api/leave`, `/api/overtime` (+ `/approve`) | Registers |
+| `/api/my/work` | Field staff: own jobs and status updates |
+| `/api/orders/:id/payment-eligibility` | Window open or closed, with the reason |
+| `/api/orders/search?q=` | Order picker for requests and jobs (order + client + stores + assigned staff) |
+| `/api/payment-requests` | List (filters, overdue flags) and create |
+| `/api/payment-requests/:id/{submit,approve,reject,return,mark-paid,close,cancel}` | Workflow actions, all routed through `payment-workflow.ts` |
+| `/api/payment-requests/:id/attachments` | Upload, list, view (signed URL), soft delete |
+
+New web routes:
+- `/_portal/ops/*`: allocation boards, jobs, staff, leave and OT.
+- `/_portal/payments/*`: requester views.
+- `/_portal/cost-control/*`: Cost Control Manager queue and dashboard.
+- A mobile-first `/my-work` page for field staff.
+
+---
+
+### 6.3 WhatsApp notifications via AskEva [Decided channel, design Proposed]
+
+**Design**
+- **One sending path for everything.** `notifications.service.ts` already writes in-app notifications. It gains a channel layer: in-app (as today), email (as today) and WhatsApp (new). Each event is defined once with its recipients and template, and every channel renders from that.
+- **Provider adapter.** All AskEva-specific code sits in `services/whatsapp/askeva.ts` behind a small `sendTemplate(to, templateName, params)` interface, so switching provider later doesn't touch business code.
+- **Never block the request.** Messages go into a `NotificationOutbox` table inside the same transaction as the business change. A background worker sends them, with retries and backoff. A WhatsApp outage can't fail an order save or an approval.
+- **Delivery log.** Each send stores provider message ID, status (queued / sent / delivered / read / failed), error and timestamps. If AskEva supports delivery webhooks, a `/api/webhooks/askeva` endpoint updates the status, verified by a shared secret. This replaces workbook 2's Notification Log.
+- **Recipients.** Every user who should get WhatsApp needs a phone number in E.164 format (for example `+919876543210`), validated on save, plus an opt-out flag per user.
+- **Templates.** WhatsApp only allows business-initiated messages through Meta-approved templates, so each event below needs an approved template in AskEva before go-live. I'll draft the template texts.
+
+**Events (first pass, to confirm)**
+
+| Area | Event | Recipients |
+|---|---|---|
+| OMS | Order created / installed / ready to bill / invoiced / payment received / closed | CSM, Accounts, Admin (matching today's in-app notifications) |
+| Work allocation | Job assigned / changed / cancelled | Assigned Pasters, Helpers, Driver; CSM |
+| Work allocation | Job started / completed / on hold | CSM, Operation Manager |
+| Work allocation | Daily summaries at 9:30 / 15:00 / 19:00 (workbook 1's manual routine) | Admin / OM; CSMs; all field staff with jobs tomorrow |
+| Payment requests | Submitted | Admin (route A) or CCM (route B) |
+| Payment requests | Admin approved → awaiting CCM | CCM, requester |
+| Payment requests | Rejected / returned / paid (with UTR) / closed | Requester (+ CSM of the order) |
+| Payment requests | Pending > 10 days | Current reviewer, Admin |
+
+**Needed from you or AskEva before this phase**
+1. AskEva API documentation (send-template endpoint, authentication, webhook format).
+2. An API key or token and the sender WhatsApp number. These go into the server environment only, never into the repo.
+3. Confirmation of who submits templates for Meta approval in AskEva (you, or me drafting them for you to submit).
+4. Phone numbers for all users who should receive messages.
+
+---
+
+## 7. Clarification questions (prioritised)
+
+**Batch 1: architecture-shaping.** #1, #2, #3 and #5 are answered (see the Decisions log, which overrides the field-staff design in §6.1). #4 and the new #2a are still open.
+1. How do Pasters, Helpers and Drivers access the system: full login, employee record with an optional login, or a secret link like workbook 2?
+2. Must every work job reference an OMS order (and store)? What about recces, rectifications and events?
+3. Operation Manager: write access to the allocation portal only, or a broader change? Or should the Production Manager do allocation?
+4. What is each CSM code (`033 … 900`, `NSG`, `NNG`, `NMG`, `SBDB/C/G/V`)? Which are CSMs who exist as app users, and which are branches or teams?
+5. Is a payment request money the company **pays out** to the requester's UPI (expense / advance / reimbursement)? Or something else?
+
+**Batch 2: order lifecycle & eligibility**
+
+6. Is "Building" a separate stage, or another word for installation?
+7. Does eligibility start at "every item produced" (whole order) or per store?
+8. Billing starting blocks *new* requests. May open requests continue after billing?
+9. Orders with no production assignment: eligible at all?
+10. Can an order be closed (`Completed`) while a payment request is open?
+
+**Batch 3: payment requests & approval**
+
+11. Multiple requests per order? Per requester? Any per-order cap (for example, total ≤ order amount)?
+12. Request types or categories (travel, material, labour, food, advance)? Do they route differently?
+13. Remarks required → which path? Remarks not required → which path? Does the CSM set this per request, or the reviewer?
+14. Admin then CCM in sequence, either one, or both in parallel?
+15. Can the CCM approve, reject and return for info? Can the Admin override the CCM?
+16. Who marks a request paid: CCM, Accounts or Admin? Is a UTR/reference mandatory?
+17. Who closes it, and what makes it closable (paid + bills + photos)?
+18. Can requests be edited or cancelled after submission? Up to what status?
+19. Amount limits per request, per role, or needing extra approval above a threshold?
+
+**Batch 4: work allocation**
+
+20. Team limits per job: is the WB2 limit (2 Pasters, 2 Helpers, 1 Driver) a hard rule?
+21. Is Sub-Paster the same as Helper ("Ast. Paster")? A separate role?
+22. Can employees raise requests only for orders they're assigned to?
+23. Can CSMs create jobs or only request them? Does job completion mark the store installed?
+24. Which employee fields are mandatory (code, phone)? Should all 99 Master staff be imported, or only the field team?
+25. What do `-CN`, `_N8` and the vehicle "Servicing" entry mean? Is "SBDV Team" or "Sub Vender Gopi" an employee, a team or a vendor?
+26. What are the OT rules (5 h day / 12 h night / full-day OT)? Who approves OT?
+
+**Batch 5: uploads, overdue, notifications**
+
+27. Maximum file size (proposal: 5 MB) and formats (proposal: JPG, PNG, WEBP, HEIC, PDF)?
+28. Are 2–3 photos mandatory, and is a bill mandatory? At submission or before closure?
+29. 10-day timer: calendar days, or business days excluding Sundays like the existing overdue report?
+30. Timer start per condition. Proposal: approval from submission or return; documents from submission; payment from approval. Should each be highlighted separately?
+31. Notifications: in-app + email enough for v1? Is WhatsApp (paid Cloud API) required?
+32. Should the 9:30 / 15:00 / 19:00 summaries be automated?
+33. Migrate workbook 1/2 history (639 jobs, 522 OT rows, 180 Task Log rows), or start clean?
+
+---
+
+## 8. Phased implementation & testing plan [Proposed]
+
+Each phase ships as its own branch and PR, with a hand-applied migration and a seed or import script where relevant.
+
+| Phase | Scope | Exit criteria |
+|---|---|---|
+| **A. Decisions** | Answer batches 1–3; freeze schema v1 | This document updated with answers |
+| **B. Roles & masters** | `COST_CONTROL_MANAGER`, field-staff entity, Operation Manager allow-list, CsmCode / Area / Vehicle tables, import from WB2 Employees + WB1 Master codes + Areas | Admin and Op. Manager can manage staff; existing role tests unchanged |
+| **C. Work jobs** | `WorkJob` + members, conflict rules + exclusion constraint, override, order link, Daily Board, grid, Find Work, Employee and CSM dashboards | Double-booking rejected under concurrent requests; grid matches WB2 output for the 9–15 Oct sample |
+| **D. Leave & OT** | Registers, leave blocking, OT hours + approval | Leave blocks allocation; OT across midnight is correct |
+| **E. Field-staff access** | Field roles `PASTER`/`HELPER`/`DRIVER` as logins; mobile-first `/my-work`: own jobs, Started / Completed, CSM notified | Staff see only their own jobs |
+| **F. Payment requests core** | Eligibility service, order picker, create / submit, `payment-workflow.ts`, history, CCM queue, mark paid, close | Every transition covered by tests, including unauthorised ones |
+| **G. Uploads** | R2 storage, validation, viewer, documentation-incomplete flags | Invalid type and size rejected server-side |
+| **G2. WhatsApp channel** | Outbox table + worker, AskEva adapter, delivery log/webhook, phone validation and opt-out, templates for OMS + allocation + payment events, scheduled daily summaries | Every listed event delivers a WhatsApp message in staging; a provider outage doesn't fail any business action |
+| **H. Overdue & dashboards** | Per-condition 10-day timers, red + bold highlighting, CCM / Admin dashboards | Highlight clears when the condition resolves |
+| **I. Integration & regression** | Full scenario list from brief §14 Phase 5, plus existing order, billing and closure regression | Order derivation unaffected by payment closure |
+
+**Testing approach:**
+- **Workflow and eligibility:** unit tests for `payment-workflow.ts` and the eligibility function, as pure functions in the style of `order-derive.ts`.
+- **Permissions:** API tests for the permission matrix.
+- **Conflict check:** a concurrency test for double-booking.
+- **End-to-end:** a smoke run in the browser of the full path, from order through production, job, request, approval, payment and close to invoicing.

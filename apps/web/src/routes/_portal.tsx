@@ -28,6 +28,8 @@ function PortalLayout() {
       accountant: ["ACCOUNTS"],
       admin: ["ADMIN", "OPERATION_MANAGER"],
       "prod-manager": ["PRODUCTION_MANAGER"],
+      "cost-control": ["COST_CONTROL_MANAGER"],
+      field: ["PASTER", "HELPER", "DRIVER"],
     };
     const allowedRoles = seg ? pathRoleMap[seg] : undefined;
 
