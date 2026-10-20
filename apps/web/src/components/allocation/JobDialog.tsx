@@ -42,12 +42,14 @@ import {
   fetchFieldStaff,
   fetchOrderOptions,
   fetchVehicles,
+  fetchLeave,
   fetchWorkJobs,
   formatJobDates,
   todayIST,
   updateWorkJob,
   type FieldRole,
   type JobConflict,
+  type LeaveClash,
   type OrderOption,
   type WorkJob,
   type WorkJobInput,
@@ -139,11 +141,13 @@ export function JobDialog({
     job ? formFromJob(job) : blankForm(defaultDate ?? todayIST(), defaultMemberIds),
   );
   const [conflicts, setConflicts] = useState<JobConflict[]>([]);
+  const [leaveConflicts, setLeaveConflicts] = useState<LeaveClash[]>([]);
 
   useEffect(() => {
     if (!open) return;
     setForm(job ? formFromJob(job) : blankForm(defaultDate ?? todayIST(), defaultMemberIds));
     setConflicts([]);
+    setLeaveConflicts([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only when the dialog opens
   }, [open, job, defaultDate]);
 
@@ -204,6 +208,19 @@ export function JobDialog({
     return map;
   }, [overlapData, job?.id]);
 
+  // Who is on leave over these dates. Leave is a hard stop, so they cannot be ticked.
+  const { data: leaveData } = useQuery({
+    queryKey: ["leave", "list", { from: form.start_date, to: end }],
+    queryFn: () => fetchLeave({ from: form.start_date, to: end }),
+    enabled: open && datesValid,
+  });
+  const onLeave = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const l of leaveData?.leave ?? [])
+      map.set(l.user.id, formatJobDates(l.from_date, l.to_date));
+    return map;
+  }, [leaveData]);
+
   const areas = (areaData?.areas ?? []).filter((a) => a.is_active || a.id === form.area_id);
   const area = areas.find((a) => a.id === form.area_id);
   const vehicles = (vehicleData?.vehicles ?? []).filter(
@@ -218,6 +235,7 @@ export function JobDialog({
   const chosen = staff.filter((s) => form.member_ids.includes(s.id));
   const roleCount = (r: FieldRole) => chosen.filter((s) => s.role === r).length;
   const clashing = chosen.filter((s) => busy.has(s.id));
+  const chosenOnLeave = chosen.filter((s) => onLeave.has(s.id));
 
   const save = useMutation({
     mutationFn: (allowOverride?: boolean) => {
@@ -249,9 +267,13 @@ export function JobDialog({
       onClose();
     },
     onError: (err: unknown) => {
-      const found = (err as { response?: { data?: { conflicts?: unknown } } })?.response?.data
-        ?.conflicts;
-      setConflicts(Array.isArray(found) ? found : []);
+      const data = (
+        err as { response?: { data?: { conflicts?: unknown; leave_conflicts?: unknown } } }
+      )?.response?.data;
+      setConflicts(Array.isArray(data?.conflicts) ? (data.conflicts as JobConflict[]) : []);
+      setLeaveConflicts(
+        Array.isArray(data?.leave_conflicts) ? (data.leave_conflicts as LeaveClash[]) : [],
+      );
       toast.error(apiErrorMessage(err, "Could not save the job"));
     },
   });
@@ -272,6 +294,7 @@ export function JobDialog({
     }
     set("member_ids", on ? [...form.member_ids, id] : form.member_ids.filter((m) => m !== id));
     setConflicts([]);
+    setLeaveConflicts([]);
   };
 
   return (
@@ -498,8 +521,16 @@ export function JobDialog({
               staff={staff}
               selected={form.member_ids}
               busy={busy}
+              onLeave={onLeave}
               onToggle={toggleMember}
             />
+            {chosenOnLeave.length > 0 && (
+              <p className="flex items-start gap-1.5 text-xs text-destructive">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                {chosenOnLeave.map((s) => `${s.name} (${onLeave.get(s.id)})`).join(", ")}{" "}
+                {chosenOnLeave.length === 1 ? "is" : "are"} on leave over these dates.
+              </p>
+            )}
             {clashing.length > 0 && !form.allow_double_booking && (
               <p className="flex items-start gap-1.5 text-xs text-amber-600">
                 <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
@@ -538,6 +569,23 @@ export function JobDialog({
               />
             </div>
           </section>
+
+          {leaveConflicts.length > 0 && (
+            <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm">
+              <div className="mb-2 flex items-center gap-2 font-medium text-destructive">
+                <AlertTriangle className="h-4 w-4" /> On leave
+              </div>
+              <ul className="grid gap-1">
+                {leaveConflicts.map((l) => (
+                  <li key={l.leave_id}>
+                    <span className="font-medium">{l.name}</span> is on leave{" "}
+                    {formatJobDates(l.from_date, l.to_date)}
+                    {l.reason ? ` (${l.reason})` : ""}. Take them off the team or change the dates.
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {conflicts.length > 0 && (
             <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm">
@@ -769,11 +817,13 @@ function TeamPicker({
   staff,
   selected,
   busy,
+  onLeave,
   onToggle,
 }: {
   staff: { id: number; name: string; role: FieldRole; emp_code: string | null }[];
   selected: number[];
   busy: Map<number, string[]>;
+  onLeave: Map<number, string>;
   onToggle: (id: number, role: FieldRole, on: boolean) => void;
 }) {
   const [q, setQ] = useState("");
@@ -796,11 +846,9 @@ function TeamPicker({
           const people = staff.filter(
             (s) => s.role === role && (selected.includes(s.id) || match(s)),
           );
-          // Free people first, then busy, so the obvious picks are on top.
-          people.sort(
-            (a, b) =>
-              Number(busy.has(a.id)) - Number(busy.has(b.id)) || a.name.localeCompare(b.name),
-          );
+          // Free people first, then busy, then on leave, so the obvious picks are on top.
+          const rank = (id: number) => (onLeave.has(id) ? 2 : busy.has(id) ? 1 : 0);
+          people.sort((a, b) => rank(a.id) - rank(b.id) || a.name.localeCompare(b.name));
           return (
             <div key={role} className="min-w-0">
               <div className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -812,22 +860,31 @@ function TeamPicker({
               {people.map((s) => {
                 const on = selected.includes(s.id);
                 const jobs = busy.get(s.id);
+                const leave = onLeave.get(s.id);
+                // Someone already on the team can still be taken off while on leave.
+                const locked = !!leave && !on;
                 return (
                   <label
                     key={s.id}
                     className={cn(
-                      "flex cursor-pointer items-start gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-muted/50",
+                      "flex items-start gap-2 rounded-lg px-2 py-1.5 text-sm",
+                      locked ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:bg-muted/50",
                       on && "bg-primary/5",
                     )}
                   >
                     <Checkbox
                       className="mt-0.5"
                       checked={on}
+                      disabled={locked}
                       onCheckedChange={(c) => onToggle(s.id, role, !!c)}
                     />
                     <span className="min-w-0">
                       <span className="block truncate font-medium">{s.name}</span>
-                      {jobs ? (
+                      {leave ? (
+                        <span className="block truncate text-xs text-destructive">
+                          On leave · {leave}
+                        </span>
+                      ) : jobs ? (
                         <span
                           className="block truncate text-xs text-amber-600"
                           title={jobs.join(", ")}

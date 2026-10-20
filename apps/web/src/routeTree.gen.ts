@@ -27,10 +27,12 @@ import { Route as PortalAdminFinancialYearRouteImport } from './routes/_portal.a
 import { Route as PortalAdminGridRouteImport } from './routes/_portal.admin.grid'
 import { Route as PortalAdminImportRouteImport } from './routes/_portal.admin.import'
 import { Route as PortalAdminJobsRouteImport } from './routes/_portal.admin.jobs'
+import { Route as PortalAdminLeaveRouteImport } from './routes/_portal.admin.leave'
 import { Route as PortalAdminLossReportRouteImport } from './routes/_portal.admin.loss-report'
 import { Route as PortalAdminMastersRouteImport } from './routes/_portal.admin.masters'
 import { Route as PortalAdminOrdersRouteImport } from './routes/_portal.admin.orders'
 import { Route as PortalAdminOverdueRouteImport } from './routes/_portal.admin.overdue'
+import { Route as PortalAdminOvertimeRouteImport } from './routes/_portal.admin.overtime'
 import { Route as PortalAdminReportsRouteImport } from './routes/_portal.admin.reports'
 import { Route as PortalAdminSettingsRouteImport } from './routes/_portal.admin.settings'
 import { Route as PortalAdminUsersRouteImport } from './routes/_portal.admin.users'
@@ -148,6 +150,11 @@ const PortalAdminJobsRoute = PortalAdminJobsRouteImport.update({
   path: '/admin/jobs',
   getParentRoute: () => PortalRoute,
 } as any)
+const PortalAdminLeaveRoute = PortalAdminLeaveRouteImport.update({
+  id: '/admin/leave',
+  path: '/admin/leave',
+  getParentRoute: () => PortalRoute,
+} as any)
 const PortalAdminLossReportRoute = PortalAdminLossReportRouteImport.update({
   id: '/admin/loss-report',
   path: '/admin/loss-report',
@@ -166,6 +173,11 @@ const PortalAdminOrdersRoute = PortalAdminOrdersRouteImport.update({
 const PortalAdminOverdueRoute = PortalAdminOverdueRouteImport.update({
   id: '/admin/overdue',
   path: '/admin/overdue',
+  getParentRoute: () => PortalRoute,
+} as any)
+const PortalAdminOvertimeRoute = PortalAdminOvertimeRouteImport.update({
+  id: '/admin/overtime',
+  path: '/admin/overtime',
   getParentRoute: () => PortalRoute,
 } as any)
 const PortalAdminReportsRoute = PortalAdminReportsRouteImport.update({
@@ -313,10 +325,12 @@ export interface FileRoutesByFullPath {
   '/admin/grid': typeof PortalAdminGridRoute
   '/admin/import': typeof PortalAdminImportRoute
   '/admin/jobs': typeof PortalAdminJobsRoute
+  '/admin/leave': typeof PortalAdminLeaveRoute
   '/admin/loss-report': typeof PortalAdminLossReportRoute
   '/admin/masters': typeof PortalAdminMastersRoute
   '/admin/orders': typeof PortalAdminOrdersRoute
   '/admin/overdue': typeof PortalAdminOverdueRoute
+  '/admin/overtime': typeof PortalAdminOvertimeRoute
   '/admin/reports': typeof PortalAdminReportsRoute
   '/admin/settings': typeof PortalAdminSettingsRoute
   '/admin/users': typeof PortalAdminUsersRoute
@@ -359,10 +373,12 @@ export interface FileRoutesByTo {
   '/admin/grid': typeof PortalAdminGridRoute
   '/admin/import': typeof PortalAdminImportRoute
   '/admin/jobs': typeof PortalAdminJobsRoute
+  '/admin/leave': typeof PortalAdminLeaveRoute
   '/admin/loss-report': typeof PortalAdminLossReportRoute
   '/admin/masters': typeof PortalAdminMastersRoute
   '/admin/orders': typeof PortalAdminOrdersRoute
   '/admin/overdue': typeof PortalAdminOverdueRoute
+  '/admin/overtime': typeof PortalAdminOvertimeRoute
   '/admin/reports': typeof PortalAdminReportsRoute
   '/admin/settings': typeof PortalAdminSettingsRoute
   '/admin/users': typeof PortalAdminUsersRoute
@@ -407,10 +423,12 @@ export interface FileRoutesById {
   '/_portal/admin/grid': typeof PortalAdminGridRoute
   '/_portal/admin/import': typeof PortalAdminImportRoute
   '/_portal/admin/jobs': typeof PortalAdminJobsRoute
+  '/_portal/admin/leave': typeof PortalAdminLeaveRoute
   '/_portal/admin/loss-report': typeof PortalAdminLossReportRoute
   '/_portal/admin/masters': typeof PortalAdminMastersRoute
   '/_portal/admin/orders': typeof PortalAdminOrdersRoute
   '/_portal/admin/overdue': typeof PortalAdminOverdueRoute
+  '/_portal/admin/overtime': typeof PortalAdminOvertimeRoute
   '/_portal/admin/reports': typeof PortalAdminReportsRoute
   '/_portal/admin/settings': typeof PortalAdminSettingsRoute
   '/_portal/admin/users': typeof PortalAdminUsersRoute
@@ -455,10 +473,12 @@ export interface FileRouteTypes {
     | '/admin/grid'
     | '/admin/import'
     | '/admin/jobs'
+    | '/admin/leave'
     | '/admin/loss-report'
     | '/admin/masters'
     | '/admin/orders'
     | '/admin/overdue'
+    | '/admin/overtime'
     | '/admin/reports'
     | '/admin/settings'
     | '/admin/users'
@@ -501,10 +521,12 @@ export interface FileRouteTypes {
     | '/admin/grid'
     | '/admin/import'
     | '/admin/jobs'
+    | '/admin/leave'
     | '/admin/loss-report'
     | '/admin/masters'
     | '/admin/orders'
     | '/admin/overdue'
+    | '/admin/overtime'
     | '/admin/reports'
     | '/admin/settings'
     | '/admin/users'
@@ -548,10 +570,12 @@ export interface FileRouteTypes {
     | '/_portal/admin/grid'
     | '/_portal/admin/import'
     | '/_portal/admin/jobs'
+    | '/_portal/admin/leave'
     | '/_portal/admin/loss-report'
     | '/_portal/admin/masters'
     | '/_portal/admin/orders'
     | '/_portal/admin/overdue'
+    | '/_portal/admin/overtime'
     | '/_portal/admin/reports'
     | '/_portal/admin/settings'
     | '/_portal/admin/users'
@@ -711,6 +735,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PortalAdminJobsRouteImport
       parentRoute: typeof PortalRoute
     }
+    '/_portal/admin/leave': {
+      id: '/_portal/admin/leave'
+      path: '/admin/leave'
+      fullPath: '/admin/leave'
+      preLoaderRoute: typeof PortalAdminLeaveRouteImport
+      parentRoute: typeof PortalRoute
+    }
     '/_portal/admin/loss-report': {
       id: '/_portal/admin/loss-report'
       path: '/admin/loss-report'
@@ -737,6 +768,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/overdue'
       fullPath: '/admin/overdue'
       preLoaderRoute: typeof PortalAdminOverdueRouteImport
+      parentRoute: typeof PortalRoute
+    }
+    '/_portal/admin/overtime': {
+      id: '/_portal/admin/overtime'
+      path: '/admin/overtime'
+      fullPath: '/admin/overtime'
+      preLoaderRoute: typeof PortalAdminOvertimeRouteImport
       parentRoute: typeof PortalRoute
     }
     '/_portal/admin/reports': {
@@ -919,10 +957,12 @@ interface PortalRouteChildren {
   PortalAdminGridRoute: typeof PortalAdminGridRoute
   PortalAdminImportRoute: typeof PortalAdminImportRoute
   PortalAdminJobsRoute: typeof PortalAdminJobsRoute
+  PortalAdminLeaveRoute: typeof PortalAdminLeaveRoute
   PortalAdminLossReportRoute: typeof PortalAdminLossReportRoute
   PortalAdminMastersRoute: typeof PortalAdminMastersRoute
   PortalAdminOrdersRoute: typeof PortalAdminOrdersRoute
   PortalAdminOverdueRoute: typeof PortalAdminOverdueRoute
+  PortalAdminOvertimeRoute: typeof PortalAdminOvertimeRoute
   PortalAdminReportsRoute: typeof PortalAdminReportsRoute
   PortalAdminSettingsRoute: typeof PortalAdminSettingsRoute
   PortalAdminUsersRoute: typeof PortalAdminUsersRoute
@@ -964,10 +1004,12 @@ const PortalRouteChildren: PortalRouteChildren = {
   PortalAdminGridRoute: PortalAdminGridRoute,
   PortalAdminImportRoute: PortalAdminImportRoute,
   PortalAdminJobsRoute: PortalAdminJobsRoute,
+  PortalAdminLeaveRoute: PortalAdminLeaveRoute,
   PortalAdminLossReportRoute: PortalAdminLossReportRoute,
   PortalAdminMastersRoute: PortalAdminMastersRoute,
   PortalAdminOrdersRoute: PortalAdminOrdersRoute,
   PortalAdminOverdueRoute: PortalAdminOverdueRoute,
+  PortalAdminOvertimeRoute: PortalAdminOvertimeRoute,
   PortalAdminReportsRoute: PortalAdminReportsRoute,
   PortalAdminSettingsRoute: PortalAdminSettingsRoute,
   PortalAdminUsersRoute: PortalAdminUsersRoute,

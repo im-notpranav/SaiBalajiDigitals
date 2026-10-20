@@ -7,7 +7,18 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { JobStatusBadge, LocalityTag } from "@/components/allocation/JobBits";
 import { useAuth } from "@/lib/auth-store";
 import { roleLabel } from "@/lib/constants";
-import { FIELD_ROLE_LABELS, fetchMyJobs, formatJobDates, type MyJob } from "@/api/allocation";
+import {
+  FIELD_ROLE_LABELS,
+  OT_STATUS_LABELS,
+  fetchMyJobs,
+  fetchMyLeave,
+  fetchMyOvertime,
+  formatJobDates,
+  formatMinutes,
+  type LeaveState,
+  type MyJob,
+  type OvertimeStatus,
+} from "@/api/allocation";
 
 export const Route = createFileRoute("/_portal/field/dashboard")({
   head: () => ({ meta: [{ title: "My Work — SB OMS" }] }),
@@ -72,7 +83,119 @@ function FieldDashboard() {
           {past.length > 0 && <JobGroup title="Last two weeks" jobs={past} muted />}
         </div>
       )}
+
+      <div className="mt-6 grid gap-6 md:grid-cols-2">
+        <MyLeave />
+        <MyOvertime />
+      </div>
     </>
+  );
+}
+
+const leaveStateLabel: Record<LeaveState, string> = {
+  CURRENT: "On leave now",
+  UPCOMING: "Upcoming",
+  PAST: "Taken",
+  CANCELLED: "Cancelled",
+};
+
+function MyLeave() {
+  const { data } = useQuery({ queryKey: ["my", "leave"], queryFn: fetchMyLeave });
+  const leave = data?.leave ?? [];
+  return (
+    <section>
+      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+        My leave
+      </h2>
+      <div className="surface-panel p-4">
+        {leave.length === 0 ? (
+          <div className="text-sm text-muted-foreground">No leave recorded.</div>
+        ) : (
+          <ul className="grid gap-2">
+            {leave.map((l) => (
+              <li key={l.id} className="flex items-start justify-between gap-2 text-sm">
+                <span>
+                  <span className="font-medium">{formatJobDates(l.from_date, l.to_date)}</span>
+                  <span className="text-muted-foreground">
+                    {" "}
+                    · {l.days} day{l.days === 1 ? "" : "s"}
+                  </span>
+                  {l.reason && (
+                    <span className="block text-xs text-muted-foreground">{l.reason}</span>
+                  )}
+                </span>
+                <span
+                  className={cn(
+                    "shrink-0 text-xs",
+                    l.state === "CURRENT" ? "text-destructive" : "text-muted-foreground",
+                  )}
+                >
+                  {leaveStateLabel[l.state]}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </section>
+  );
+}
+
+const otStyles: Record<OvertimeStatus, string> = {
+  PENDING: "text-warning-foreground",
+  APPROVED: "text-success",
+  REJECTED: "text-muted-foreground line-through",
+};
+
+function MyOvertime() {
+  const { data } = useQuery({ queryKey: ["my", "overtime"], queryFn: fetchMyOvertime });
+  const entries = data?.entries ?? [];
+  return (
+    <section>
+      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+        My overtime
+      </h2>
+      <div className="surface-panel p-4">
+        <div className="mb-3 flex gap-4 text-sm">
+          <div>
+            <div className="text-xs text-muted-foreground">Approved this month</div>
+            <div className="text-lg font-bold tabular-nums">
+              {formatMinutes(data?.month_approved_minutes ?? 0)}
+            </div>
+          </div>
+          <div>
+            <div className="text-xs text-muted-foreground">Waiting for approval</div>
+            <div className="text-lg font-bold tabular-nums">
+              {formatMinutes(data?.month_pending_minutes ?? 0)}
+            </div>
+          </div>
+        </div>
+        {entries.length === 0 ? (
+          <div className="text-sm text-muted-foreground">No overtime in the last two months.</div>
+        ) : (
+          <ul className="grid gap-2">
+            {entries.slice(0, 10).map((o) => (
+              <li key={o.id} className="flex items-start justify-between gap-2 text-sm">
+                <span>
+                  <span className="font-medium">{formatJobDates(o.work_date, o.work_date)}</span>{" "}
+                  <span className="font-mono text-xs">
+                    {o.start_time}–{o.end_time}
+                    {o.past_midnight ? " (+1)" : ""}
+                  </span>
+                  {o.job_no && <span className="text-xs text-muted-foreground"> · {o.job_no}</span>}
+                  {o.reject_reason && (
+                    <span className="block text-xs text-destructive">{o.reject_reason}</span>
+                  )}
+                </span>
+                <span className={cn("shrink-0 text-xs font-medium", otStyles[o.status])}>
+                  {o.duration} · {OT_STATUS_LABELS[o.status]}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </section>
   );
 }
 

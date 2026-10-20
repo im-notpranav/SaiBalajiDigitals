@@ -344,3 +344,52 @@ export const workJobStatusSchema = z
 
 export const dayQuery = dayString;
 
+/** Leave runs over whole days; to_date may be left out for one day. */
+export const leaveSchema = z
+  .object({
+    user_id: z.number().int().positive(),
+    from_date: dayString,
+    to_date: dayString.optional().nullable(),
+    reason: z.string().trim().max(300).optional().nullable(),
+    /** Save even though the person is already on jobs over these dates. */
+    acknowledge_jobs: z.boolean().default(false),
+  })
+  .refine((l) => !l.to_date || l.to_date >= l.from_date, { message: "To date cannot be before from date", path: ["to_date"] });
+
+export const leaveCancelSchema = z.object({
+  reason: z.string().trim().min(2, "Give a reason for cancelling").max(300),
+});
+
+/** "HH:MM", 24-hour. */
+const clockTime = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use HH:MM (24-hour)");
+
+const overtimeFields = {
+  work_date: dayString,
+  start_time: clockTime,
+  end_time: clockTime,
+  work_job_id: optionalId,
+  csm_code_id: optionalId,
+  remarks: z.string().trim().max(500).optional().nullable(),
+};
+const differentTimes = { message: "Start and close times cannot be the same", path: ["end_time"] };
+
+/** One form can log the same stretch for several people (e.g. a paster and a helper). */
+export const overtimeSchema = z
+  .object({
+    ...overtimeFields,
+    user_ids: z.array(z.number().int().positive()).min(1, "Pick at least one person").max(5),
+  })
+  .refine((o) => o.start_time !== o.end_time, differentTimes)
+  .refine((o) => new Set(o.user_ids).size === o.user_ids.length, { message: "The same person is listed twice", path: ["user_ids"] });
+
+export const overtimeUpdateSchema = z
+  .object({ ...overtimeFields, user_id: z.number().int().positive() })
+  .refine((o) => o.start_time !== o.end_time, differentTimes);
+
+export const overtimeDecisionSchema = z
+  .object({
+    ids: z.array(z.number().int().positive()).min(1).max(200),
+    status: z.enum(["APPROVED", "REJECTED"]),
+    reason: z.string().trim().max(300).optional().nullable(),
+  })
+  .refine((d) => d.status !== "REJECTED" || !!d.reason, { message: "Give a reason for rejecting", path: ["reason"] });

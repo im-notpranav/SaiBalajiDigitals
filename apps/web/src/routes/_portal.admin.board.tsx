@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   AlertTriangle,
+  CalendarOff,
   ChevronLeft,
   ChevronRight,
   HardHat,
@@ -97,7 +98,7 @@ function DailyBoardPage() {
         )}
       </div>
 
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <KpiCard
           label="Jobs running"
           value={data?.counts.jobs ?? "–"}
@@ -131,6 +132,13 @@ function DailyBoardPage() {
           icon={AlertTriangle}
           accent="warning"
           delay={0.16}
+        />
+        <KpiCard
+          label="On leave"
+          value={data?.counts.on_leave ?? "–"}
+          icon={CalendarOff}
+          accent="info"
+          delay={0.2}
         />
       </div>
 
@@ -248,6 +256,38 @@ function DailyBoardPage() {
                 </div>
               );
             })}
+          </div>
+
+          <h2 className="mb-3 mt-6 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            On leave
+          </h2>
+          <div className="surface-panel p-3">
+            {(data?.on_leave ?? []).length === 0 ? (
+              <div className="text-xs text-muted-foreground">Nobody is on leave.</div>
+            ) : (
+              <ul className="grid gap-2">
+                {data!.on_leave.map((p) => (
+                  <li key={p.id} className="text-sm">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium">{p.name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {formatJobDates(p.leave.from_date, p.leave.to_date)}
+                      </span>
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {FIELD_ROLE_LABELS[p.role]}
+                      {p.leave.reason ? ` · ${p.leave.reason}` : ""}
+                    </div>
+                    {p.jobs.length > 0 && (
+                      <div className="mt-0.5 flex items-start gap-1 text-xs text-destructive">
+                        <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+                        Still on {p.jobs.map((j) => j.job_no).join(", ")}
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </section>
       </div>

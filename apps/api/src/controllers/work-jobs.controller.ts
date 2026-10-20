@@ -14,8 +14,10 @@ import {
   dayKey,
   daysBetween,
   findConflicts,
+  findLeaveClashes,
   gridLabel,
   isOverlapViolation,
+  lockPeople,
   parseDay,
   teamLimitErrors,
   todayIST,
@@ -110,7 +112,12 @@ async function withAudit<T>(userId: number, fn: (tx: Prisma.TransactionClient) =
  * Check a create/edit payload against the database and turn it into the values to store.
  * Throws HttpError with a message a manager can act on.
  */
-async function resolveJobInput(tx: Prisma.TransactionClient, body: unknown, excludeJobId?: number) {
+async function resolveJobInput(
+  tx: Prisma.TransactionClient,
+  body: unknown,
+  current?: { id: number; start: string; end: string; memberIds: number[] },
+) {
+  const excludeJobId = current?.id;
   const parsed = workJobSchema.safeParse(body);
   if (!parsed.success) throw new HttpError(400, "Invalid input", { errors: sanitizeZodErrors(parsed.error) });
   const input = parsed.data;
@@ -158,6 +165,22 @@ async function resolveJobInput(tx: Prisma.TransactionClient, body: unknown, excl
   if (inactive.length) throw new HttpError(400, `${inactive.map((p) => p.name).join(", ")} is deactivated.`);
   const limitErrors = teamLimitErrors(people.map((p) => p.role));
   if (limitErrors.length) throw new HttpError(400, limitErrors.join(" "));
+
+  // Queue behind any other save touching these people (jobs, leave, overtime).
+  await lockPeople(tx, input.member_ids);
+
+  // Leave is a hard stop: "Allow 2nd job" does not override it. On an edit, people already
+  // on the job are re-checked only when the dates change, so a job can still be edited
+  // after leave was recorded over it on purpose.
+  const datesChanged = !current || current.start !== start || current.end !== end;
+  const leaveCheckIds = datesChanged ? input.member_ids : input.member_ids.filter((m) => !current!.memberIds.includes(m));
+  const onLeave = await findLeaveClashes(tx, { userIds: leaveCheckIds, start, end });
+  if (onLeave.length) {
+    const names = [...new Set(onLeave.map((l) => l.name))].join(", ");
+    throw new HttpError(409, `${names} ${onLeave.length === 1 ? "is" : "are"} on leave on these dates. Pick someone else or change the dates.`, {
+      leave_conflicts: onLeave,
+    });
+  }
 
   if (!input.allow_double_booking) {
     const conflicts = await findConflicts(tx, { userIds: input.member_ids, start, end, excludeJobId });
@@ -312,7 +335,12 @@ export const updateJob = async (req: Request, res: Response) => {
       if (!EDITABLE_STATUSES.includes(current.status)) {
         throw new HttpError(400, `A ${current.status.toLowerCase()} job cannot be edited.${current.status === "COMPLETED" ? " Reopen it first." : ""}`);
       }
-      const r = await resolveJobInput(tx, req.body, id);
+      const r = await resolveJobInput(tx, req.body, {
+        id,
+        start: dayKey(current.start_date),
+        end: dayKey(current.end_date),
+        memberIds: current.members.map((m) => m.user_id),
+      });
       const blocks = blocksCalendar({ status: current.status, allow_double_booking: r.data.allow_double_booking });
       const before = new Set(current.members.map((m) => m.user_id));
       const after = new Set(r.people.map((p) => p.id));
@@ -452,14 +480,16 @@ export const dailyBoard = async (req: Request, res: Response) => {
   try {
     const date = dayQuery.safeParse(req.query.date).success ? String(req.query.date) : todayIST();
     const day = parseDay(date);
-    const [staff, jobs] = await Promise.all([
+    const [staff, jobs, leave] = await Promise.all([
       prisma.user.findMany({ where: { role: { in: [...FIELD_ROLES] }, is_active: true }, select: staffSelect, orderBy: { name: "asc" } }),
       prisma.workJob.findMany({
         where: { status: { not: "CANCELLED" }, start_date: { lte: day }, end_date: { gte: day } },
         include: jobInclude,
         orderBy: { job_no: "asc" },
       }),
+      prisma.leaveRecord.findMany({ where: { cancelled_at: null, from_date: { lte: day }, to_date: { gte: day } } }),
     ]);
+    const leaveByUser = new Map(leave.map((l) => [l.user_id, { id: l.id, from_date: dayKey(l.from_date), to_date: dayKey(l.to_date), reason: l.reason }]));
     const jobsByUser = new Map<number, { job_id: number; job_no: string; label: string }[]>();
     for (const j of jobs) {
       for (const m of j.members) {
@@ -468,8 +498,8 @@ export const dailyBoard = async (req: Request, res: Response) => {
         jobsByUser.set(m.user_id, list);
       }
     }
-    const people = staff.map((s) => ({ ...s, jobs: jobsByUser.get(s.id) ?? [] }));
-    const free = (role: string) => people.filter((p) => p.role === role && p.jobs.length === 0);
+    const people = staff.map((s) => ({ ...s, jobs: jobsByUser.get(s.id) ?? [], leave: leaveByUser.get(s.id) ?? null }));
+    const free = (role: string) => people.filter((p) => p.role === role && p.jobs.length === 0 && !p.leave);
     return res.status(200).json({
       date,
       counts: {
@@ -479,9 +509,12 @@ export const dailyBoard = async (req: Request, res: Response) => {
         free_drivers: free("DRIVER").length,
         busy: people.filter((p) => p.jobs.length > 0).length,
         double_booked: people.filter((p) => p.jobs.length > 1).length,
+        on_leave: people.filter((p) => p.leave).length,
       },
       free: { PASTER: free("PASTER"), HELPER: free("HELPER"), DRIVER: free("DRIVER") },
       busy: people.filter((p) => p.jobs.length > 0),
+      // Everyone on leave; those also on a job that day were booked before the leave.
+      on_leave: people.filter((p) => p.leave),
       jobs: jobs.map(serializeJob),
     });
   } catch (err) {
@@ -497,13 +530,20 @@ export const weeklyGrid = async (req: Request, res: Response) => {
     const to = addDays(from, days - 1);
     const dates = Array.from({ length: days }, (_, i) => addDays(from, i));
 
-    const [staff, jobs] = await Promise.all([
+    const [staff, jobs, leave] = await Promise.all([
       prisma.user.findMany({ where: { role: { in: [...FIELD_ROLES] }, is_active: true }, select: staffSelect, orderBy: { name: "asc" } }),
       prisma.workJob.findMany({
         where: { status: { not: "CANCELLED" }, start_date: { lte: parseDay(to) }, end_date: { gte: parseDay(from) } },
         include: { csmCode: { select: { code: true } }, csm2Code: { select: { code: true } }, order: { select: { order_no: true } }, members: { select: { user_id: true } } },
       }),
+      prisma.leaveRecord.findMany({ where: { cancelled_at: null, from_date: { lte: parseDay(to) }, to_date: { gte: parseDay(from) } } }),
     ]);
+    const onLeave = new Set<string>(); // `${user}|${date}`
+    for (const l of leave) {
+      for (let d = dayKey(l.from_date) < from ? from : dayKey(l.from_date); d <= (dayKey(l.to_date) > to ? to : dayKey(l.to_date)); d = addDays(d, 1)) {
+        onLeave.add(`${l.user_id}|${d}`);
+      }
+    }
 
     type Cell = { job_id: number; job_no: string; label: string; status: WorkJobStatus };
     const cells = new Map<string, Cell[]>(); // `${user}|${date}`
@@ -523,8 +563,12 @@ export const weeklyGrid = async (req: Request, res: Response) => {
     const roleOrder = { PASTER: 0, HELPER: 1, DRIVER: 2 } as Record<string, number>;
     const rows = staff
       .sort((a, b) => roleOrder[a.role] - roleOrder[b.role] || a.name.localeCompare(b.name))
-      .map((s) => ({ ...s, days: dates.map((d) => cells.get(`${s.id}|${d}`) ?? []) }));
-    const freeCount = (role: string, i: number) => rows.filter((r) => r.role === role && r.days[i].length === 0).length;
+      .map((s) => ({
+        ...s,
+        days: dates.map((d) => cells.get(`${s.id}|${d}`) ?? []),
+        leave: dates.map((d) => onLeave.has(`${s.id}|${d}`)),
+      }));
+    const freeCount = (role: string, i: number) => rows.filter((r) => r.role === role && r.days[i].length === 0 && !r.leave[i]).length;
 
     return res.status(200).json({
       from,

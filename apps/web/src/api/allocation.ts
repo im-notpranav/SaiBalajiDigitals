@@ -249,17 +249,22 @@ export interface DailyBoard {
     free_drivers: number;
     busy: number;
     double_booked: number;
+    on_leave: number;
   };
   free: Record<FieldRole, StaffBrief[]>;
-  busy: (StaffBrief & { jobs: JobRef[] })[];
+  busy: (StaffBrief & { jobs: JobRef[]; leave: LeaveRef | null })[];
+  /** Everyone on leave that day; those with jobs too were booked before the leave. */
+  on_leave: (StaffBrief & { jobs: JobRef[]; leave: LeaveRef })[];
   jobs: WorkJob[];
 }
+
+type LeaveRef = { id: number; from_date: string; to_date: string; reason: string | null };
 
 export interface WeeklyGrid {
   from: string;
   to: string;
   dates: string[];
-  rows: (StaffBrief & { days: (JobRef & { status: WorkJobStatus })[][] })[];
+  rows: (StaffBrief & { days: (JobRef & { status: WorkJobStatus })[][]; leave: boolean[] })[];
   free: Record<FieldRole, number>[];
 }
 
@@ -330,4 +335,179 @@ export function formatJobDates(start: string, end: string): string {
   return start.slice(0, 7) === end.slice(0, 7)
     ? `${fmt(start, false)} – ${fmt(end)}`
     : `${fmt(start)} – ${fmt(end)}`;
+}
+
+// --- Leave -----------------------------------------------------------------
+
+export type LeaveState = "UPCOMING" | "CURRENT" | "PAST" | "CANCELLED";
+
+export interface LeaveRecord {
+  id: number;
+  user: {
+    id: number;
+    name: string;
+    role: FieldRole;
+    phone: string | null;
+    emp_code: string | null;
+  };
+  from_date: string;
+  to_date: string;
+  days: number;
+  reason: string | null;
+  state: LeaveState;
+  creator: { id: number; name: string } | null;
+  created_at: string;
+  cancelled_at: string | null;
+  canceller: { id: number; name: string } | null;
+  cancel_reason: string | null;
+}
+
+export interface LeaveInput {
+  user_id: number;
+  from_date: string;
+  to_date?: string | null;
+  reason?: string | null;
+  acknowledge_jobs?: boolean;
+}
+
+/** A job the person is already on, returned when leave would overlap it. */
+export interface LeaveJobClash {
+  job_id: number;
+  job_no: string;
+  work_details: string;
+  status: WorkJobStatus;
+  start_date: string;
+  end_date: string;
+}
+
+export interface LeaveClash {
+  user_id: number;
+  name: string;
+  leave_id: number;
+  from_date: string;
+  to_date: string;
+  reason: string | null;
+}
+
+export const fetchLeave = (filters: {
+  from?: string;
+  to?: string;
+  user_id?: string;
+  include_cancelled?: boolean;
+}) =>
+  apiFetch<{ from: string; to: string; leave: LeaveRecord[] }>(
+    `/leave${qs({ from: filters.from, to: filters.to, user_id: filters.user_id, include_cancelled: filters.include_cancelled ? "1" : undefined })}`,
+  );
+export const createLeave = (data: LeaveInput) =>
+  apiFetch<LeaveRecord>("/leave", { method: "POST", data });
+export const updateLeave = (id: number, data: LeaveInput) =>
+  apiFetch<LeaveRecord>(`/leave/${id}`, { method: "PUT", data });
+export const cancelLeave = (id: number, reason: string) =>
+  apiFetch<LeaveRecord>(`/leave/${id}/cancel`, { method: "PUT", data: { reason } });
+export const fetchMyLeave = () =>
+  apiFetch<{
+    today: string;
+    leave: Pick<LeaveRecord, "id" | "from_date" | "to_date" | "days" | "reason" | "state">[];
+  }>("/my/leave");
+
+// --- Overtime --------------------------------------------------------------
+
+export type OvertimeStatus = "PENDING" | "APPROVED" | "REJECTED";
+
+export const OT_STATUS_LABELS: Record<OvertimeStatus, string> = {
+  PENDING: "Pending",
+  APPROVED: "Approved",
+  REJECTED: "Rejected",
+};
+
+export interface OvertimeEntry {
+  id: number;
+  user: { id: number; name: string; role: FieldRole; emp_code: string | null };
+  work_date: string;
+  start_time: string;
+  end_time: string;
+  minutes: number;
+  hours: number;
+  duration: string;
+  past_midnight: boolean;
+  work_job: { id: number; job_no: string; work_details: string } | null;
+  csm_code: { id: number; code: string } | null;
+  remarks: string | null;
+  status: OvertimeStatus;
+  creator: { id: number; name: string } | null;
+  decider: { id: number; name: string } | null;
+  decided_at: string | null;
+  reject_reason: string | null;
+  created_at: string;
+}
+
+export interface OvertimeInput {
+  work_date: string;
+  start_time: string;
+  end_time: string;
+  work_job_id?: number | null;
+  csm_code_id?: number | null;
+  remarks?: string | null;
+}
+
+export interface MyOvertimeEntry {
+  id: number;
+  work_date: string;
+  start_time: string;
+  end_time: string;
+  minutes: number;
+  duration: string;
+  past_midnight: boolean;
+  job_no: string | null;
+  remarks: string | null;
+  status: OvertimeStatus;
+  reject_reason: string | null;
+}
+
+export const fetchOvertime = (filters: {
+  from?: string;
+  to?: string;
+  user_id?: string;
+  status?: string;
+}) =>
+  apiFetch<{
+    from: string;
+    to: string;
+    totals: { entries: number; pending: number; approved_minutes: number; pending_minutes: number };
+    entries: OvertimeEntry[];
+  }>(`/overtime${qs(filters)}`);
+export const createOvertime = (data: OvertimeInput & { user_ids: number[] }) =>
+  apiFetch<{ entries: OvertimeEntry[] }>("/overtime", { method: "POST", data });
+export const updateOvertime = (id: number, data: OvertimeInput & { user_id: number }) =>
+  apiFetch<OvertimeEntry>(`/overtime/${id}`, { method: "PUT", data });
+export const deleteOvertime = (id: number) =>
+  apiFetch<{ message: string }>(`/overtime/${id}`, { method: "DELETE" });
+export const decideOvertime = (ids: number[], status: "APPROVED" | "REJECTED", reason?: string) =>
+  apiFetch<{ entries: OvertimeEntry[] }>("/overtime/decision", {
+    method: "PUT",
+    data: { ids, status, reason },
+  });
+export const fetchMyOvertime = () =>
+  apiFetch<{
+    month: string;
+    month_approved_minutes: number;
+    month_pending_minutes: number;
+    entries: MyOvertimeEntry[];
+  }>("/my/overtime");
+
+/** Mirrors overtimeSpan in the API: a close at or before the start runs past midnight. */
+export function overtimeMinutes(start: string, end: string): number | null {
+  const m = (t: string) =>
+    /^([01]\d|2[0-3]):[0-5]\d$/.test(t) ? Number(t.slice(0, 2)) * 60 + Number(t.slice(3)) : null;
+  const s = m(start);
+  const e = m(end);
+  if (s === null || e === null || s === e) return null;
+  return e > s ? e - s : e - s + 1440;
+}
+
+/** 390 → "6h 30m". */
+export function formatMinutes(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const mm = minutes % 60;
+  return mm ? `${h}h ${mm}m` : `${h}h`;
 }

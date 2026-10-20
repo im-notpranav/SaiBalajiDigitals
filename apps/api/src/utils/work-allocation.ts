@@ -126,3 +126,91 @@ export async function findConflicts(
 /** Postgres raises 23P01 when the no-overlap exclusion constraint rejects a booking. */
 export const isOverlapViolation = (err: any): boolean =>
   /23P01|WorkJobMember_no_overlap|exclusion constraint/i.test(String(err?.message ?? "") + String(err?.meta?.code ?? ""));
+
+// ---------------------------------------------------------------------------
+// Leave
+// ---------------------------------------------------------------------------
+
+export interface LeaveClash {
+  user_id: number;
+  name: string;
+  leave_id: number;
+  from_date: string;
+  to_date: string;
+  reason: string | null;
+}
+
+/** People in `userIds` with live (not cancelled) leave overlapping [start, end]. */
+export async function findLeaveClashes(
+  tx: any,
+  opts: { userIds: number[]; start: string; end: string; excludeLeaveId?: number },
+): Promise<LeaveClash[]> {
+  if (opts.userIds.length === 0) return [];
+  const rows = await tx.leaveRecord.findMany({
+    where: {
+      user_id: { in: opts.userIds },
+      cancelled_at: null,
+      from_date: { lte: parseDay(opts.end) },
+      to_date: { gte: parseDay(opts.start) },
+      ...(opts.excludeLeaveId ? { id: { not: opts.excludeLeaveId } } : {}),
+    },
+    include: { user: { select: { name: true } } },
+    orderBy: { from_date: "asc" },
+  });
+  return rows.map((r: any) => ({
+    user_id: r.user_id,
+    name: r.user.name,
+    leave_id: r.id,
+    from_date: dayKey(r.from_date),
+    to_date: dayKey(r.to_date),
+    reason: r.reason,
+  }));
+}
+
+/**
+ * Serialise writes that book or free the same people (jobs, leave, overtime) until the
+ * transaction ends. Jobs-vs-jobs and leave-vs-leave also have exclusion constraints, but
+ * jobs-vs-leave spans two tables, so two managers saving at once must queue here. Ids
+ * are locked in order so two transactions can never deadlock on each other.
+ */
+const PERSON_LOCK_NS = 7301;
+export async function lockPeople(tx: any, userIds: number[]): Promise<void> {
+  for (const id of [...new Set(userIds)].sort((a, b) => a - b)) {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${PERSON_LOCK_NS}::int, ${id}::int)`;
+  }
+}
+
+export const isLeaveOverlapViolation = (err: any): boolean =>
+  /LeaveRecord_no_overlap/i.test(String(err?.message ?? "") + String(err?.meta?.message ?? ""));
+
+// ---------------------------------------------------------------------------
+// Overtime
+// ---------------------------------------------------------------------------
+
+const clockMinutes = (t: string): number => {
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + m;
+};
+
+/**
+ * Length of a stretch of overtime, and where it starts on one continuous minute line.
+ * A close time at or before the start means the work ran past midnight (the old sheet's
+ * MOD(close − start, 1) × 24).
+ */
+export function overtimeSpan(workDate: string, start: string, end: string) {
+  const s = clockMinutes(start);
+  const e = clockMinutes(end);
+  const minutes = e > s ? e - s : e - s + 1440;
+  const start_minute = Math.round(parseDay(workDate).getTime() / 60_000) + s;
+  return { minutes, start_minute, past_midnight: e <= s };
+}
+
+/** 390 → "6h 30m". */
+export const formatMinutes = (minutes: number): string => {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m ? `${h}h ${m}m` : `${h}h`;
+};
+
+export const isOvertimeOverlapViolation = (err: any): boolean =>
+  /OvertimeEntry_no_overlap/i.test(String(err?.message ?? "") + String(err?.meta?.message ?? ""));

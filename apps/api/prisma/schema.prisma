@@ -41,6 +41,13 @@ enum WorkJobStatus {
   CANCELLED
 }
 
+/// Overtime entries wait for an Admin's decision.
+enum OvertimeStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 /// Local = Hyderabad city. Non-local work shows as "-N" on the allocation grid.
 enum AreaLocality {
   LOCAL
@@ -98,6 +105,12 @@ model User {
   usualVehicles   Vehicle[]       @relation("VehicleUsualDriver")
   workJobsCreated WorkJob[]       @relation("WorkJobCreator")
   workJobSlots    WorkJobMember[]
+  leaveRecords    LeaveRecord[]   @relation("LeavePerson")
+  leaveEntered    LeaveRecord[]   @relation("LeaveCreator")
+  leaveCancelled  LeaveRecord[]   @relation("LeaveCanceller")
+  overtime        OvertimeEntry[] @relation("OvertimePerson")
+  overtimeEntered OvertimeEntry[] @relation("OvertimeCreator")
+  overtimeDecided OvertimeEntry[] @relation("OvertimeDecider")
 }
 
 model OrderSequence {
@@ -338,6 +351,7 @@ model CsmCode {
   user       User?       @relation(fields: [user_id], references: [id], onDelete: SetNull)
   jobs       WorkJob[]   @relation("WorkJobCsm")
   jobsAsCsm2 WorkJob[]   @relation("WorkJobCsm2")
+  overtime   OvertimeEntry[]
   is_active  Boolean     @default(true)
   created_at DateTime    @default(now())
   updated_at DateTime    @updatedAt
@@ -412,6 +426,7 @@ model WorkJob {
   creator              User?           @relation("WorkJobCreator", fields: [created_by], references: [id], onDelete: SetNull)
   members              WorkJobMember[]
   stores               WorkJobStore[]
+  overtime             OvertimeEntry[]
   created_at           DateTime        @default(now())
   updated_at           DateTime        @updatedAt
 
@@ -449,4 +464,64 @@ model WorkJobStore {
 
   @@id([job_id, order_store_id])
   @@index([order_store_id])
+}
+
+/// Leave register: a field-staff member is unavailable for whole days. Leave blocks
+/// allocation outright ("Allow 2nd job" does not override it). One person's live leave
+/// records never overlap (exclusion constraint in the migration).
+model LeaveRecord {
+  id            Int       @id @default(autoincrement())
+  user_id       Int
+  user          User      @relation("LeavePerson", fields: [user_id], references: [id], onDelete: Restrict)
+  from_date     DateTime  @db.Date
+  /// Same as from_date for one day.
+  to_date       DateTime  @db.Date
+  reason        String?
+  created_by    Int?
+  creator       User?     @relation("LeaveCreator", fields: [created_by], references: [id], onDelete: SetNull)
+  /// Cancelled leave is kept for history and no longer blocks anything.
+  cancelled_at  DateTime?
+  cancelled_by  Int?
+  canceller     User?     @relation("LeaveCanceller", fields: [cancelled_by], references: [id], onDelete: SetNull)
+  cancel_reason String?
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+
+  @@index([user_id, from_date])
+  @@index([from_date, to_date])
+}
+
+/// Overtime register: one row per person per stretch of extra work. Hours come from the
+/// start and close times; a close earlier than the start means the work ran past midnight.
+model OvertimeEntry {
+  id            Int            @id @default(autoincrement())
+  user_id       Int
+  user          User           @relation("OvertimePerson", fields: [user_id], references: [id], onDelete: Restrict)
+  /// The day the overtime started (India time).
+  work_date     DateTime       @db.Date
+  /// "HH:MM", 24-hour, India time.
+  start_time    String
+  end_time      String
+  minutes       Int
+  /// Minutes since 1970-01-01 00:00 India time at the start, so the database can stop
+  /// one person's entries overlapping, including across midnight.
+  start_minute  Int
+  work_job_id   Int?
+  workJob       WorkJob?       @relation(fields: [work_job_id], references: [id], onDelete: SetNull)
+  csm_code_id   Int?
+  csmCode       CsmCode?       @relation(fields: [csm_code_id], references: [id], onDelete: SetNull)
+  remarks       String?
+  status        OvertimeStatus @default(PENDING)
+  decided_by    Int?
+  decider       User?          @relation("OvertimeDecider", fields: [decided_by], references: [id], onDelete: SetNull)
+  decided_at    DateTime?
+  reject_reason String?
+  created_by    Int?
+  creator       User?          @relation("OvertimeCreator", fields: [created_by], references: [id], onDelete: SetNull)
+  created_at    DateTime       @default(now())
+  updated_at    DateTime       @updatedAt
+
+  @@index([user_id, work_date])
+  @@index([work_date])
+  @@index([status])
 }

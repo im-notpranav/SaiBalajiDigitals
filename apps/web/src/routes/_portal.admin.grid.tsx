@@ -190,11 +190,16 @@ function WeeklyGridPage() {
                             key={dates[i]}
                             className={cn(
                               "border-b border-l p-1 align-top",
-                              cell.length > 1 && "bg-destructive/10",
+                              (cell.length > 1 || (r.leave[i] && cell.length > 0)) &&
+                                "bg-destructive/10",
                               dates[i] === today && cell.length < 2 && "bg-primary/5",
                             )}
                           >
-                            {cell.length === 0 ? (
+                            {r.leave[i] && cell.length === 0 ? (
+                              <div className="flex h-8 items-center justify-center rounded-md border border-destructive/30 bg-destructive/10 text-[11px] font-semibold text-destructive">
+                                Leave
+                              </div>
+                            ) : cell.length === 0 ? (
                               <button
                                 type="button"
                                 aria-label={`New job for ${r.name} on ${dates[i]}`}
@@ -207,6 +212,11 @@ function WeeklyGridPage() {
                               </button>
                             ) : (
                               <div className="grid gap-1">
+                                {r.leave[i] && (
+                                  <div className="flex h-8 items-center justify-center rounded-md border border-destructive/30 bg-destructive/10 text-[11px] font-semibold text-destructive">
+                                    Leave
+                                  </div>
+                                )}
                                 {cell.map((c) => (
                                   <button
                                     key={c.job_id}
@@ -266,6 +276,9 @@ function WeeklyGridPage() {
       </div>
 
       <div className="mt-3 flex flex-wrap gap-3 text-xs text-muted-foreground">
+        <span className="flex items-center gap-1.5">
+          <span className="h-3 w-5 rounded border border-destructive/30 bg-destructive/10" /> Leave
+        </span>
         {(["ASSIGNED", "STARTED", "HOLD", "COMPLETED"] as const).map((s) => (
           <span key={s} className="flex items-center gap-1.5">
             <span className={cn("h-3 w-5 rounded border", cellStyles[s])} /> {JOB_STATUS_LABELS[s]}

@@ -56,6 +56,21 @@ Still open on this flow: whether Admin and CCM can **return a request for more i
 | Notifications | In-app now; WhatsApp joins in Phase G2. The team hears about assignment, removal and cancellation. The CSM hears about start, completion, hold and cancellation. |
 | Orders with jobs | Can no longer be deleted; the API explains that the jobs must go first. |
 
+**CSM codes (decided 2026-10-20):** codes such as `300` are the CSMs' employee codes (e.g. Bablu Goud = 300). They live in the database, not in config. Admin or Operation Manager links each one to its CSM under Allocation Masters → CSM codes. The letter codes (`NSG`, `NNG`, `NMG`, `SBDB`, `SBDC`, `SBDG`, `SBDV`) look like team or branch codes and can be marked as such there.
+
+**Phase D defaults (leave and overtime, built 2026-10-20; change any of these on request):**
+
+| Topic | Default used |
+|---|---|
+| Who records | Admin or Operation Manager records leave and logs overtime. Field staff see their own on My Work. |
+| Leave vs jobs | Leave is a **hard block**: nobody on leave can be put on a job, and "Allow 2nd job" does not override it. Recording leave over jobs someone is already on asks first; "save anyway" keeps them on the jobs and flags them on the Daily Board. Editing such a job keeps working unless its dates change. |
+| Leave records | Whole days, at most 120 per record; one person's live leave never overlaps (database constraint). Cancelling needs a reason and keeps the record for history. The person is told when leave is recorded, changed or cancelled. |
+| Board and grid | People on leave are left out of the free counts; the board lists them, and the grid shows a red "Leave" cell. |
+| Overtime entry | One entry per person; the form can log the same hours for up to 5 people at once. Hours come from start and close (24-hour); a close at or before the start runs past midnight (20:00–01:30 = 5h 30m). Same start and close is refused. |
+| Overtime rules | Actual clock hours only. The old sheet's rules ("Day 5 hours", "Night 12 hours", "Full day OT") are not applied yet (open question #26). |
+| Overtime checks | No overlapping overtime for one person (database constraint, including across midnight); none on a leave day; if linked to a job, the person must be on it, and the CSM code defaults to the job's. |
+| Approval | **Admin only** approves or rejects, singly or in bulk; rejecting needs a reason. Only pending entries can be edited or deleted. The person is told the decision. |
+
 Not in Phase C, still to come: a CSM's view of the jobs on their orders, Started / Completed buttons for field staff (Phase E), and checking the grid against the WB2 9–15 Oct sample once real jobs are entered.
 
 ---

@@ -57,6 +57,8 @@ import fieldStaffRoutes from "./routes/field-staff.routes";
 import mastersRoutes from "./routes/masters.routes";
 import workJobsRoutes from "./routes/work-jobs.routes";
 import myRoutes from "./routes/my.routes";
+import leaveRoutes from "./routes/leave.routes";
+import overtimeRoutes from "./routes/overtime.routes";
 import { initEmailService } from "./services/email.service";
 
 app.use("/api/auth", authRoutes);
@@ -70,6 +72,8 @@ app.use("/api/notifications", notificationsRoutes);
 app.use("/api/field-staff", fieldStaffRoutes);
 app.use("/api/masters", mastersRoutes);
 app.use("/api/work-jobs", workJobsRoutes);
+app.use("/api/leave", leaveRoutes);
+app.use("/api/overtime", overtimeRoutes);
 app.use("/api/my", myRoutes);
 
 app.listen(PORT, async () => {
