@@ -43,6 +43,7 @@ import {
   readDraft,
   type RequestDraft,
 } from "./PaymentBits";
+import { AttachmentsPanel } from "./AttachmentsPanel";
 
 /** One payment request: its details, the order's money, its history and the actions open to you. */
 
@@ -65,6 +66,8 @@ const EVENT_LABELS: Record<PaymentEvent["action"], string> = {
   CANCEL: "Cancelled",
   MARK_PAID: "Marked paid",
   CLOSE: "Closed",
+  ATTACH: "File added",
+  DETACH: "File removed",
 };
 
 /** Buttons in the order they read best; the first open one is the primary action. */
@@ -192,6 +195,8 @@ export function PaymentRequestSheet({
                 )}
               </dl>
 
+              <AttachmentsPanel request={r} attachments={data?.attachments ?? []} />
+
               {actions.length > 0 && (
                 <div className="flex flex-wrap gap-2">
                   {actions.map((a, i) => (
@@ -205,6 +210,9 @@ export function PaymentRequestSheet({
                             : "secondary"
                       }
                       className={cn(a === "REJECT" && "text-destructive")}
+                      // The API refuses this too; disabling it saves a pointless round trip.
+                      disabled={a === "CLOSE" && r.bill_missing}
+                      title={a === "CLOSE" && r.bill_missing ? "Attach the bill first" : undefined}
                       onClick={() => setAction(a)}
                     >
                       {ACTION_LABELS[a]}
@@ -226,9 +234,12 @@ export function PaymentRequestSheet({
                           · {e.actor?.name ?? "—"} · {formatWhen(e.created_at)}
                         </span>
                       </div>
-                      <div className="text-xs text-muted-foreground">
-                        → {PAYMENT_STATUS_LABELS[e.to_status]}
-                      </div>
+                      {/* File events leave the status where it was. */}
+                      {e.from_status !== e.to_status && (
+                        <div className="text-xs text-muted-foreground">
+                          → {PAYMENT_STATUS_LABELS[e.to_status]}
+                        </div>
+                      )}
                       {e.note && <div className="mt-0.5 text-muted-foreground">{e.note}</div>}
                     </li>
                   ))}

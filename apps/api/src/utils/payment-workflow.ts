@@ -105,6 +105,13 @@ export interface WorkflowRequest {
   route: PaymentRoute;
   requested_by: number;
   returned_from: PaymentRequestStatus | null;
+  bill_details_required: boolean;
+}
+
+/** Facts about a request that live outside its row, gathered by the caller when needed. */
+export interface TransitionContext {
+  /** Bills attached and not removed. */
+  billCount?: number;
 }
 
 export interface Actor {
@@ -124,6 +131,8 @@ interface Rule {
   noteRequired?: (r: WorkflowRequest, a: Actor) => boolean;
   /** Who may do it, for the error message. */
   who: string;
+  /** Why the action cannot happen yet, even though this actor may take it. */
+  blockedBy?: (r: WorkflowRequest, ctx: TransitionContext) => string | null;
 }
 
 const isStageReviewer = (r: WorkflowRequest, a: Actor) => STAGE_REVIEWER[r.status] === a.role;
@@ -133,7 +142,7 @@ const isRequester = (r: WorkflowRequest, a: Actor) => r.requested_by === a.id;
  * Every move a payment request can make: the one table the API consults. A rule passes
  * only when the request is in a `from` status and `allowed` holds for the actor.
  */
-export const PAYMENT_RULES: Record<Exclude<PaymentAction, "SUBMIT">, Rule> = {
+export const PAYMENT_RULES: Record<Exclude<PaymentAction, "SUBMIT" | "ATTACH" | "DETACH">, Rule> = {
   APPROVE: {
     from: ["ADMIN_REVIEW", "CCM_REVIEW"],
     allowed: isStageReviewer,
@@ -178,11 +187,15 @@ export const PAYMENT_RULES: Record<Exclude<PaymentAction, "SUBMIT">, Rule> = {
     who: "the Cost Control Manager",
   },
   CLOSE: {
-    // Phase G adds the bill check here: a bill-details request needs a BILL attachment.
     from: ["PAID"],
     allowed: (_r, a) => a.role === "COST_CONTROL_MANAGER",
     to: () => "CLOSED",
     who: "the Cost Control Manager",
+    // A request raised with bill details cannot close until a bill is attached.
+    blockedBy: (r, ctx) =>
+      r.bill_details_required && !ctx.billCount
+        ? "Attach the bill before closing: this request was raised with bill details."
+        : null,
   },
 };
 
@@ -200,7 +213,13 @@ export const STATUS_LABELS: Record<PaymentRequestStatus, string> = {
 };
 
 /** May this actor take this action on this request now? */
-export function checkTransition(r: WorkflowRequest, action: WorkflowAction, a: Actor, note?: string | null): Check {
+export function checkTransition(
+  r: WorkflowRequest,
+  action: WorkflowAction,
+  a: Actor,
+  note?: string | null,
+  ctx: TransitionContext = {},
+): Check {
   const rule = PAYMENT_RULES[action];
   if (!rule.from.includes(r.status)) {
     return { ok: false, status: 409, message: `This request is ${STATUS_LABELS[r.status].toLowerCase()}, so it cannot be ${pastTense(action)} now.` };
@@ -211,6 +230,8 @@ export function checkTransition(r: WorkflowRequest, action: WorkflowAction, a: A
   if (rule.noteRequired?.(r, a) && !note?.trim()) {
     return { ok: false, status: 400, message: "Give a reason." };
   }
+  const blocked = rule.blockedBy?.(r, ctx);
+  if (blocked) return { ok: false, status: 409, message: blocked };
   return { ok: true, to: rule.to(r, a) };
 }
 

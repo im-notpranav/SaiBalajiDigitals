@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronsUpDown, Loader2, Lock } from "lucide-react";
 import { toast } from "sonner";
@@ -35,7 +35,10 @@ import { apiErrorMessage } from "@/api/allocation";
 import {
   CATEGORY_LABELS,
   PAYMENT_STATUS_LABELS,
+  FILE_ACCEPT,
   createPaymentRequest,
+  uploadPaymentFile,
+  type AttachmentKind,
   fetchPaymentOrderOptions,
   type PaymentCategory,
   type PaymentOrderOption,
@@ -210,9 +213,13 @@ export function NewPaymentRequestDialog({
   const [bill, setBill] = useState<boolean | null>(null);
   const [key, setKey] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [files, setFiles] = useState<{ kind: AttachmentKind; file: File }[]>([]);
+  const [uploading, setUploading] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
+    setFiles([]);
+    setUploading(null);
     setOrder(null);
     setJobId(NONE);
     setDraft(draftFrom(null, lastUpi ?? ""));
@@ -224,9 +231,29 @@ export function NewPaymentRequestDialog({
 
   const save = useMutation({
     mutationFn: createPaymentRequest,
-    onSuccess: (res) => {
+    onSuccess: async (res) => {
+      // The request exists now; files go up one by one. One failing does not undo it:
+      // the requester can add it again from the request.
+      const failed: string[] = [];
+      for (const f of files) {
+        setUploading(f.file.name);
+        try {
+          await uploadPaymentFile(res.request.id, f.kind, f.file);
+        } catch (err) {
+          const why =
+            err instanceof Error && !("response" in err)
+              ? err.message
+              : apiErrorMessage(err, "could not be added");
+          failed.push(`${f.file.name}: ${why}`);
+        }
+      }
+      setUploading(null);
       toast.success(`${res.request.request_no} sent for review`);
       if (res.warning) toast.warning(res.warning);
+      if (failed.length)
+        toast.error(
+          `Some files were not added. Open the request to try again. ${failed.join("; ")}`,
+        );
       qc.invalidateQueries({ queryKey: ["payment-requests"] });
       onClose();
     },
@@ -330,6 +357,49 @@ export function NewPaymentRequestDialog({
             </div>
           </div>
 
+          <div className="grid gap-1.5">
+            <Label>Attach now (optional)</Label>
+            <div className="flex flex-wrap gap-2">
+              {bill && (
+                <FilePickButton
+                  label="Add bill"
+                  kind="BILL"
+                  onPick={(f) => setFiles((x) => [...x, ...f])}
+                />
+              )}
+              <FilePickButton
+                label="Add photos"
+                kind="PHOTO"
+                multiple
+                onPick={(f) => setFiles((x) => [...x, ...f])}
+              />
+            </div>
+            {files.length > 0 && (
+              <ul className="grid gap-1 text-xs">
+                {files.map((f, i) => (
+                  <li
+                    key={`${f.file.name}-${i}`}
+                    className="flex items-center justify-between gap-2 rounded-lg bg-muted/60 px-2 py-1"
+                  >
+                    <span className="truncate">
+                      {f.kind === "BILL" ? "Bill" : "Photo"} · {f.file.name}
+                    </span>
+                    <button
+                      type="button"
+                      className="text-muted-foreground hover:text-destructive"
+                      onClick={() => setFiles((x) => x.filter((_, j) => j !== i))}
+                    >
+                      Take out
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="text-xs text-muted-foreground">
+              Photos or PDF, up to 5 MB each. You can also add them later from the request.
+            </p>
+          </div>
+
           {error && (
             <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
               {error}
@@ -343,7 +413,7 @@ export function NewPaymentRequestDialog({
           </Button>
           <Button onClick={submit} disabled={save.isPending}>
             {save.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Send request
+            {uploading ? `Adding ${uploading}…` : "Send request"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -430,5 +500,38 @@ function PaymentOrderPicker({
         </Command>
       </PopoverContent>
     </Popover>
+  );
+}
+
+/** A button that opens the file picker and hands back the chosen files with their kind. */
+function FilePickButton({
+  label,
+  kind,
+  multiple,
+  onPick,
+}: {
+  label: string;
+  kind: AttachmentKind;
+  multiple?: boolean;
+  onPick: (files: { kind: AttachmentKind; file: File }[]) => void;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  return (
+    <>
+      <Button type="button" size="sm" variant="outline" onClick={() => ref.current?.click()}>
+        {label}
+      </Button>
+      <input
+        ref={ref}
+        type="file"
+        accept={FILE_ACCEPT}
+        multiple={multiple}
+        className="hidden"
+        onChange={(e) => {
+          onPick(Array.from(e.target.files ?? []).map((file) => ({ kind, file })));
+          e.target.value = "";
+        }}
+      />
+    </>
   );
 }

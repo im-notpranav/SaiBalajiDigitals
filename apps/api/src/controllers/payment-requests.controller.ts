@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
-import { Prisma, type PaymentRequestStatus, type Role } from "@prisma/client";
+import { createHash } from "node:crypto";
+import { Prisma, type PaymentAttachmentKind, type PaymentRequestStatus, type Role } from "@prisma/client";
 import { prisma } from "../utils/prisma";
 import {
   paymentMarkPaidSchema,
@@ -12,6 +13,7 @@ import { computeTotals } from "../utils/order-totals";
 import { todayIST } from "../utils/work-allocation";
 import {
   LIVE_PAYMENT_STATUSES,
+  OPEN_PAYMENT_STATUSES,
   STAGE_REVIEWER,
   STATUS_LABELS,
   availableActions,
@@ -23,6 +25,19 @@ import {
   routeFor,
   type WorkflowAction,
 } from "../utils/payment-workflow";
+import {
+  ATTACHMENT_KIND_LABELS,
+  MAX_FILES_PER_REQUEST,
+  MAX_FILE_BYTES,
+  MAX_FILE_LABEL,
+  attachKindsFor,
+  canRemoveFile,
+  cleanFileName,
+  contentDisposition,
+  currentStore,
+  detectFileType,
+  storeFor,
+} from "../utils/payment-files";
 
 /**
  * Payment requests: money the company pays out to a CSM or field staff member by UPI.
@@ -78,6 +93,8 @@ const requestInclude = {
   requester: { select: { id: true, name: true, role: true, phone: true, emp_code: true } },
   payer: { select: { id: true, name: true } },
   closer: { select: { id: true, name: true } },
+  // Only the kinds, for the counts and the "bill missing" flag; never the files themselves.
+  attachments: { where: { deleted_at: null }, select: { kind: true } },
 } satisfies Prisma.PaymentRequestInclude;
 
 type RequestRow = Prisma.PaymentRequestGetPayload<{ include: typeof requestInclude }>;
@@ -97,6 +114,8 @@ interface OrderMoney {
 }
 
 function serializeRequest(r: RequestRow, actor: Actor, money?: OrderMoney) {
+  const files: Record<PaymentAttachmentKind, number> = { BILL: 0, PHOTO: 0, RECEIPT: 0 };
+  for (const a of r.attachments) files[a.kind]++;
   return {
     id: r.id,
     request_no: r.request_no,
@@ -122,6 +141,10 @@ function serializeRequest(r: RequestRow, actor: Actor, money?: OrderMoney) {
     created_at: r.created_at,
     is_mine: r.requested_by === actor.id,
     actions: availableActions(r, actor),
+    attachment_counts: files,
+    /** Still open, raised with bill details, and no bill attached yet: it cannot close like this. */
+    bill_missing: r.bill_details_required && files.BILL === 0 && OPEN_PAYMENT_STATUSES.includes(r.status),
+    attach_kinds: attachKindsFor(r, actor),
     ...(money ? { order_money: money } : {}),
   };
 }
@@ -483,9 +506,15 @@ export const getRequest = async (req: Request, res: Response) => {
     });
     if (!r || !canSee(r, actor)) throw new HttpError(404, "Payment request not found");
 
+    const files = await prisma.paymentAttachment.findMany({
+      where: { request_id: r.id, deleted_at: null },
+      include: fileInclude,
+      orderBy: { id: "asc" },
+    });
     const money = isReviewerRole(actor.role) ? (await orderMoney(prisma, [r.order_id])).get(r.order_id) : undefined;
     return res.json({
       request: serializeRequest(r, actor, money),
+      attachments: files.map((f) => serializeFile(f, r, actor)),
       events: r.events.map((e) => ({
         id: e.id,
         action: e.action,
@@ -521,7 +550,12 @@ export const transition = (action: WorkflowAction) => async (req: Request, res: 
       const r = await tx.paymentRequest.findUnique({ where: { id }, include: requestInclude });
       if (!r || !canSee(r, actor)) throw new HttpError(404, "Payment request not found");
 
-      const check = checkTransition(r, action, actor, note);
+      // Closing a bill request needs a bill on file; counted inside the transaction.
+      const billCount =
+        action === "CLOSE"
+          ? await tx.paymentAttachment.count({ where: { request_id: id, kind: "BILL", deleted_at: null } })
+          : 0;
+      const check = checkTransition(r, action, actor, note, { billCount });
       if (!check.ok) throw new HttpError(check.status, check.message);
 
       const now = new Date();
@@ -599,3 +633,178 @@ export const transition = (action: WorkflowAction) => async (req: Request, res: 
 
 /** Only the note is read from a plain action's body; anything else sent is ignored. */
 const pickNote = (body: unknown) => ({ note: (body as { note?: unknown } | null)?.note ?? null });
+
+/* ------------------------------------------------------------------ attachments */
+
+const fileInclude = {
+  uploader: { select: { id: true, name: true } },
+} satisfies Prisma.PaymentAttachmentInclude;
+
+type FileRow = Prisma.PaymentAttachmentGetPayload<{ include: typeof fileInclude }>;
+
+function serializeFile(f: FileRow, r: { id: number; status: PaymentRequestStatus; requested_by: number }, actor: Actor) {
+  return {
+    id: f.id,
+    kind: f.kind,
+    name: f.original_name,
+    mime: f.mime,
+    size_bytes: f.size_bytes,
+    uploader: f.uploader,
+    uploaded_at: f.uploaded_at,
+    /** Relative to the API base. */
+    url: `/payment-requests/${r.id}/attachments/${f.id}`,
+    can_remove: canRemoveFile(r, f, actor),
+  };
+}
+
+const KINDS: PaymentAttachmentKind[] = ["BILL", "PHOTO", "RECEIPT"];
+
+/** Two uploads of the same file racing: the exclusion constraint keeps one. */
+const isDuplicateFile = (err: any) => String(err?.message ?? "").includes("PaymentAttachment_no_duplicate");
+
+/**
+ * POST /:id/attachments?kind=BILL&name=bill.pdf — the request body is the file itself.
+ * Its type is read from its bytes; anything but JPG, PNG, WEBP, HEIC or PDF is refused.
+ */
+export const uploadAttachment = async (req: Request, res: Response) => {
+  try {
+    const actor = req.user!;
+    const id = parseId(req.params.id);
+    const kind = String(req.query.kind ?? "") as PaymentAttachmentKind;
+    if (!KINDS.includes(kind)) throw new HttpError(400, "Say whether this is a bill, photo or receipt.");
+    const name = cleanFileName(req.query.name);
+
+    const data = Buffer.isBuffer(req.body) ? req.body : null;
+    if (!data || data.length === 0) throw new HttpError(400, "Choose a file to attach.");
+    if (data.length > MAX_FILE_BYTES) throw new HttpError(413, `Files can be up to ${MAX_FILE_LABEL}.`);
+    const mime = detectFileType(data);
+    if (!mime) throw new HttpError(415, "Only photos (JPG, PNG, WEBP, HEIC) and PDF files can be attached.");
+    const sha256 = createHash("sha256").update(data).digest("hex");
+
+    const created = await withAudit(actor.id, async (tx) => {
+      const r = await tx.paymentRequest.findUnique({
+        where: { id },
+        select: { id: true, order_id: true, status: true, requested_by: true },
+      });
+      if (!r || !canSee(r, actor)) throw new HttpError(404, "Payment request not found");
+
+      const kinds = attachKindsFor(r, actor);
+      if (kinds.length === 0) {
+        throw new HttpError(409, `This request is ${STATUS_LABELS[r.status].toLowerCase()}, so files can no longer be added.`);
+      }
+      if (!kinds.includes(kind)) {
+        throw new HttpError(403, `You cannot add a ${ATTACHMENT_KIND_LABELS[kind].toLowerCase()} to this request.`);
+      }
+
+      const live = await tx.paymentAttachment.findMany({
+        where: { request_id: id, deleted_at: null },
+        select: { sha256: true },
+      });
+      if (live.some((f) => f.sha256 === sha256)) throw new HttpError(409, "That file is already attached.");
+      if (live.length >= MAX_FILES_PER_REQUEST) {
+        throw new HttpError(409, `A request can hold up to ${MAX_FILES_PER_REQUEST} files. Remove one first.`);
+      }
+
+      const store = currentStore();
+      const row = await tx.paymentAttachment.create({
+        data: {
+          request_id: id,
+          order_id: r.order_id,
+          kind,
+          original_name: name,
+          mime,
+          size_bytes: data.length,
+          sha256,
+          storage: store.name,
+          uploaded_by: actor.id,
+        },
+      });
+      const key = await store.put(tx, row.id, data);
+      if (key) await tx.paymentAttachment.update({ where: { id: row.id }, data: { storage_key: key } });
+
+      await tx.paymentRequestEvent.create({
+        data: {
+          request_id: id,
+          action: "ATTACH",
+          from_status: r.status,
+          to_status: r.status,
+          actor_id: actor.id,
+          actor_role: actor.role as Role,
+          note: `${ATTACHMENT_KIND_LABELS[kind]}: ${name}`,
+        },
+      });
+      const file = await tx.paymentAttachment.findUniqueOrThrow({ where: { id: row.id }, include: fileInclude });
+      return { file, r };
+    });
+
+    return res.status(201).json({ attachment: serializeFile(created.file, created.r, actor) });
+  } catch (err) {
+    if (isDuplicateFile(err)) return res.status(409).json({ message: "That file is already attached." });
+    return sendError(res, err);
+  }
+};
+
+/** GET /:id/attachments/:fileId — the file, to anyone who can see the request. `?download=1` saves it. */
+export const downloadAttachment = async (req: Request, res: Response) => {
+  try {
+    const actor = req.user!;
+    const id = parseId(req.params.id);
+    const fileId = parseId(req.params.fileId);
+    const file = await prisma.paymentAttachment.findFirst({
+      where: { id: fileId, request_id: id, deleted_at: null },
+      include: { request: { select: { requested_by: true } } },
+    });
+    if (!file || !canSee(file.request, actor)) throw new HttpError(404, "File not found");
+
+    const data = await storeFor(file.storage).get(file);
+    if (!data) throw new HttpError(404, "File not found");
+
+    res.setHeader("Content-Type", file.mime);
+    res.setHeader("Content-Length", String(data.length));
+    res.setHeader("Content-Disposition", contentDisposition(file.original_name, req.query.download === "1"));
+    res.setHeader("Cache-Control", "private, max-age=300");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    return res.status(200).end(data);
+  } catch (err) {
+    return sendError(res, err);
+  }
+};
+
+/** DELETE /:id/attachments/:fileId — a soft delete; the file stays in the database and the history. */
+export const removeAttachment = async (req: Request, res: Response) => {
+  try {
+    const actor = req.user!;
+    const id = parseId(req.params.id);
+    const fileId = parseId(req.params.fileId);
+
+    await withAudit(actor.id, async (tx) => {
+      const file = await tx.paymentAttachment.findFirst({
+        where: { id: fileId, request_id: id, deleted_at: null },
+        include: { request: { select: { id: true, status: true, requested_by: true } } },
+      });
+      if (!file || !canSee(file.request, actor)) throw new HttpError(404, "File not found");
+      if (!canRemoveFile(file.request, file, actor)) {
+        throw new HttpError(403, "Only whoever added this file, or a reviewer, can remove it while the request is open.");
+      }
+      const { count } = await tx.paymentAttachment.updateMany({
+        where: { id: fileId, deleted_at: null },
+        data: { deleted_at: new Date(), deleted_by: actor.id },
+      });
+      if (count === 0) throw new HttpError(409, "That file was already removed.");
+      await tx.paymentRequestEvent.create({
+        data: {
+          request_id: id,
+          action: "DETACH",
+          from_status: file.request.status,
+          to_status: file.request.status,
+          actor_id: actor.id,
+          actor_role: actor.role as Role,
+          note: `${ATTACHMENT_KIND_LABELS[file.kind]}: ${file.original_name}`,
+        },
+      });
+    });
+    return res.json({ ok: true });
+  } catch (err) {
+    return sendError(res, err);
+  }
+};

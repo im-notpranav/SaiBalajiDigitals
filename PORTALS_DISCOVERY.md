@@ -106,6 +106,21 @@ Still open on this flow: whether Admin and CCM can **return a request for more i
 | Notified (in-app) | New and resubmitted requests → the reviewers for that stage; Admin approval → Cost Control and the requester; Cost Control approval, rejection, return, cancellation and payment → the requester; withdrawal → that stage's reviewers. WhatsApp follows in Phase G2. |
 | Overdue timers | Not yet (Phase H). Each request records when it entered its current status, and queues list the oldest first. |
 
+**Phase G defaults (bills, photos and receipts, built 2026-10-20; change any of these on request):**
+
+| Topic | Default used |
+|---|---|
+| Storage (#27) | Files are stored in Postgres (a separate blob table, so lists never load file bytes). The API runs on Render, whose disk is wiped on restart, and no R2 bucket or keys exist yet. Storage sits behind one interface, and each file records which store holds it, so Cloudflare R2 can take over new uploads once keys are provided without moving old files. |
+| Types and size (#27) | JPG, PNG, WEBP, HEIC photos and PDF, up to 5 MB each. The type is read from the file's first bytes, not its name: a renamed program is refused, and a JPEG named `.pdf` is stored as a JPEG. |
+| Phone photos | Large JPG, PNG and WEBP photos are scaled to 1600 px on the long side and saved as JPEG in the browser before upload. HEIC and PDF go as they are. |
+| Kinds | Bill, Photo, and Payment receipt (Cost Control only). |
+| Who adds | The requester adds bills and photos to their own request; the Admin can add bills and photos; Cost Control can add all three. Nothing is added once a request is closed, rejected or cancelled. Files can be attached while raising the request or later. |
+| Who removes | Whoever added the file, or the Admin or Cost Control, while the request is open. Removal is a soft delete: the file stays in the database and the history. |
+| Limits | Up to 10 live files per request. The same file cannot be attached twice to one request (enforced in the database, safe under double clicks). |
+| Mandatory (#28) | A request raised with bill details cannot be closed until a bill is attached (a receipt does not count). Photos are optional. A "Bill missing" flag shows on open requests in every list. |
+| Who sees | Anyone who can see the request can view and download its files; requests stay private to their requester, the Admin and Cost Control. |
+| History | Adding and removing a file are recorded in the request's history and the audit log. |
+
 Not in Phase C, still to come: a CSM's view of the jobs on their orders, Started / Completed buttons for field staff (Phase E), and checking the grid against the WB2 9–15 Oct sample once real jobs are entered.
 
 ---

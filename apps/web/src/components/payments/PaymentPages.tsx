@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Plus, Search, Wallet } from "lucide-react";
+import { AlertTriangle, Paperclip, Plus, Search, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,7 @@ import {
   formatWhen,
   nextStepFor,
   roleLabel,
+  type PaymentRequest,
   type PaymentStatus,
 } from "@/api/payments";
 import { NewPaymentRequestDialog, PaymentStatusBadge } from "./PaymentBits";
@@ -126,7 +127,10 @@ export function MyPaymentRequests({ crumbs }: { crumbs: Crumbs }) {
                 <span className="font-mono">{r.order.order_no}</span> · {r.order.client_name} ·{" "}
                 {formatWhen(r.created_at)}
               </div>
-              <div className="text-xs font-medium text-muted-foreground">{nextStepFor(r)}</div>
+              <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-muted-foreground">
+                {nextStepFor(r)}
+                {r.bill_missing && <BillMissing />}
+              </div>
             </button>
           ))}
         </div>
@@ -339,7 +343,16 @@ export function PaymentReviewQueue({
                     )}
                   </TableCell>
                   <TableCell className="text-sm">
-                    {r.bill_details_required ? "Yes" : "No"}
+                    <div>{r.bill_details_required ? "Yes" : "No"}</div>
+                    {r.bill_missing ? (
+                      <BillMissing />
+                    ) : (
+                      fileCount(r) > 0 && (
+                        <div className="flex items-center gap-1 whitespace-nowrap text-xs text-muted-foreground">
+                          <Paperclip className="h-3 w-3" /> {fileCount(r)}
+                        </div>
+                      )
+                    )}
                   </TableCell>
                   <TableCell>
                     <PaymentStatusBadge status={r.status} />
@@ -356,5 +369,17 @@ export function PaymentReviewQueue({
 
       <PaymentRequestSheet requestId={openId} onClose={() => setOpenId(null)} />
     </>
+  );
+}
+
+const fileCount = (r: PaymentRequest) =>
+  r.attachment_counts.BILL + r.attachment_counts.PHOTO + r.attachment_counts.RECEIPT;
+
+/** A bill request with no bill on file: it cannot be closed until one is attached. */
+function BillMissing() {
+  return (
+    <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-warning/15 px-2 py-0.5 text-[11px] font-medium text-warning-foreground">
+      <AlertTriangle className="h-3 w-3" /> Bill missing
+    </span>
   );
 }

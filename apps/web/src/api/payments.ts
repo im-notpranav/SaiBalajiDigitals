@@ -1,4 +1,4 @@
-import { apiFetch } from "./client";
+import { apiClient, apiFetch } from "./client";
 
 /** Client for payment requests: money the company pays out to a requester by UPI. */
 
@@ -83,13 +83,40 @@ export interface PaymentRequest {
   created_at: string;
   is_mine: boolean;
   actions: PaymentActionName[];
+  /** Live files on the request, by kind. */
+  attachment_counts: Record<AttachmentKind, number>;
+  /** Raised with bill details but no bill attached: it cannot be closed yet. */
+  bill_missing: boolean;
+  /** The kinds of file you may add now. */
+  attach_kinds: AttachmentKind[];
   /** Reviewers only. */
   order_money?: OrderMoney;
 }
 
+export type AttachmentKind = "BILL" | "PHOTO" | "RECEIPT";
+
+export const ATTACHMENT_KIND_LABELS: Record<AttachmentKind, string> = {
+  BILL: "Bill",
+  PHOTO: "Photo",
+  RECEIPT: "Payment receipt",
+};
+
+export interface PaymentAttachment {
+  id: number;
+  kind: AttachmentKind;
+  name: string;
+  mime: string;
+  size_bytes: number;
+  uploader: { id: number; name: string } | null;
+  uploaded_at: string;
+  /** Relative to the API base; see fileUrl(). */
+  url: string;
+  can_remove: boolean;
+}
+
 export interface PaymentEvent {
   id: number;
-  action: "SUBMIT" | PaymentActionName;
+  action: "SUBMIT" | "ATTACH" | "DETACH" | PaymentActionName;
   from_status: PaymentStatus | null;
   to_status: PaymentStatus;
   actor: { id: number; name: string } | null;
@@ -119,7 +146,9 @@ export const fetchPaymentRequests = (
 ) => apiFetch<PaymentList>("/payment-requests", { params });
 
 export const fetchPaymentRequest = (id: number) =>
-  apiFetch<{ request: PaymentRequest; events: PaymentEvent[] }>(`/payment-requests/${id}`);
+  apiFetch<{ request: PaymentRequest; attachments: PaymentAttachment[]; events: PaymentEvent[] }>(
+    `/payment-requests/${id}`,
+  );
 
 export const fetchPaymentOrderOptions = (q: string) =>
   apiFetch<{ orders: PaymentOrderOption[] }>("/payment-requests/order-options", { params: { q } });
@@ -215,3 +244,65 @@ const ROLE_LABELS: Record<string, string> = {
 /** A requester's role as people say it. */
 export const roleLabel = (role: string) =>
   ROLE_LABELS[role] ?? role.replace(/_/g, " ").toLowerCase();
+
+/* ------------------------------------------------------------------ files */
+
+export const MAX_FILE_BYTES = 5 * 1024 * 1024;
+export const FILE_ACCEPT =
+  "image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif,application/pdf";
+
+/** The full address of a file, for an <img> or a link; the session cookie authorises it. */
+export const fileUrl = (path: string, download = false) =>
+  `${apiClient.defaults.baseURL ?? "/api"}${path}${download ? "?download=1" : ""}`;
+
+/**
+ * Phone photos are often 3–8 MB. Large JPEG, PNG and WEBP images are scaled to 1600 px on
+ * the long side and re-saved as JPEG before upload, so they stay well under the limit and
+ * small in the database. PDFs, HEIC (most browsers cannot draw it) and small images go as they are.
+ */
+export async function prepareUpload(file: File): Promise<{ data: Blob; name: string }> {
+  const asIs = { data: file as Blob, name: file.name };
+  if (!/^image\/(jpeg|png|webp)$/.test(file.type) || file.size < 700_000) return asIs;
+  try {
+    const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+    const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return asIs;
+    ctx.fillStyle = "#fff"; // PNG transparency would turn black in a JPEG
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, "image/jpeg", 0.82),
+    );
+    if (!blob || blob.size >= file.size) return asIs;
+    return { data: blob, name: file.name.replace(/\.[^.]+$/, "") + ".jpg" };
+  } catch {
+    return asIs;
+  }
+}
+
+/** Upload one file to a request. The body is the file itself. */
+export async function uploadPaymentFile(requestId: number, kind: AttachmentKind, file: File) {
+  const { data, name } = await prepareUpload(file);
+  if (data.size > MAX_FILE_BYTES) throw new Error(`${file.name} is over 5 MB.`);
+  return apiFetch<{ attachment: PaymentAttachment }>(`/payment-requests/${requestId}/attachments`, {
+    method: "POST",
+    params: { kind, name },
+    data,
+    headers: { "Content-Type": data.type || "application/octet-stream" },
+  });
+}
+
+export const removePaymentFile = (requestId: number, fileId: number) =>
+  apiFetch<{ ok: true }>(`/payment-requests/${requestId}/attachments/${fileId}`, {
+    method: "DELETE",
+  });
+
+export const formatBytes = (n: number) =>
+  n < 1024 * 1024
+    ? `${Math.max(1, Math.round(n / 1024))} KB`
+    : `${(n / 1024 / 1024).toFixed(1)} MB`;
