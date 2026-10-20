@@ -11,13 +11,13 @@ import {
   Check,
   AlertCircle,
 } from "lucide-react";
-import { useAuth, roleHome } from "@/lib/auth-store";
+import { useAuth, postLoginPath } from "@/lib/auth-store";
 
 type FieldState = "idle" | "error" | "success";
 
 const easeOutExpo = [0.16, 1, 0.3, 1] as const;
 
-export default function LoginPage() {
+export default function LoginPage({ redirect }: { redirect?: string }) {
   const navigate = useNavigate();
   const { login } = useAuth();
   const [username, setUsername] = useState("");
@@ -55,7 +55,7 @@ export default function LoginPage() {
       setSubmitting(true);
       const user = await login(username, password);
       setSuccess(true);
-      setTimeout(() => navigate({ to: roleHome[user.role] }), 500);
+      setTimeout(() => navigate({ to: postLoginPath(user, redirect) }), 500);
     } catch (err) {
       setSubmitting(false);
       setFormError(err instanceof Error ? err.message : "Sign in failed");

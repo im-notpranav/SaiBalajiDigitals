@@ -79,6 +79,16 @@ export const useAuth = () => {
     user: store.user,
     login: store.login,
     logout: store.logout,
-    isLoading,
+    // Still loading until /auth/me has answered *and* the store has caught up with it,
+    // so guards never see a signed-in user as null for the render in between.
+    isLoading: isLoading || (!!data && data !== store.user),
   };
 };
+
+/** Where to send a user after sign-in: the page they were sent away from, if it is a
+ *  same-site path, otherwise their role's home. The portal guard still bounces a path
+ *  that belongs to another role. */
+export const postLoginPath = (user: AuthUser, redirect?: string) =>
+  redirect && redirect.startsWith("/") && !redirect.startsWith("//") && !redirect.startsWith("/login")
+    ? redirect
+    : roleHome[user.role];

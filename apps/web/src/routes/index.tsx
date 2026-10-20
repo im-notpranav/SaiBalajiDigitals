@@ -6,8 +6,8 @@ export const Route = createFileRoute("/")({
 });
 
 function RedirectHome() {
-  const { user } = useAuth();
-  if (typeof window !== "undefined") {
+  const { user, isLoading } = useAuth();
+  if (typeof window !== "undefined" && !isLoading) {
     if (user) {
       window.location.replace(roleHome[user.role]);
     } else {

@@ -10,13 +10,22 @@ export const Route = createFileRoute("/_portal")({
 });
 
 function PortalLayout() {
-  const { user } = useAuth();
+  const { user, isLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
+    // On a reload the store starts empty; wait for /auth/me before deciding.
+    if (isLoading) return;
     if (!user) {
-      navigate({ to: "/login", replace: true });
+      // The layout stays mounted while /login loads and sees that location too;
+      // don't wrap the redirect inside another one.
+      if (location.pathname === "/login") return;
+      navigate({
+        to: "/login",
+        search: { redirect: location.href },
+        replace: true,
+      });
       return;
     }
     // enforce role prefix — a path section may be shared by more than one role
@@ -36,7 +45,7 @@ function PortalLayout() {
     if (allowedRoles && !allowedRoles.includes(user.role)) {
       navigate({ to: roleHome[user.role], replace: true });
     }
-  }, [user, location.pathname, navigate]);
+  }, [user, isLoading, location.pathname, location.href, navigate]);
 
   if (!user) return null;
 
