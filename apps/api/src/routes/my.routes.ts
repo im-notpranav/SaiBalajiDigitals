@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { myJobs } from "../controllers/work-jobs.controller";
+import { myJobs, myJobStatus } from "../controllers/work-jobs.controller";
 import { myLeave } from "../controllers/leave.controller";
 import { myOvertime } from "../controllers/overtime.controller";
 import { authenticate, authorize } from "../middlewares/auth.middleware";
@@ -12,6 +12,7 @@ router.use(authenticate);
 router.use(authorize(...FIELD_ROLES));
 
 router.get("/work-jobs", myJobs);
+router.put("/work-jobs/:id/status", myJobStatus);
 router.get("/leave", myLeave);
 router.get("/overtime", myOvertime);
 

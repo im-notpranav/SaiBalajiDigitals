@@ -104,6 +104,8 @@ model User {
   csmCodes        CsmCode[]
   usualVehicles   Vehicle[]       @relation("VehicleUsualDriver")
   workJobsCreated WorkJob[]       @relation("WorkJobCreator")
+  workJobsStarted WorkJob[]       @relation("WorkJobStarter")
+  workJobsCompleted WorkJob[]     @relation("WorkJobCompleter")
   workJobSlots    WorkJobMember[]
   leaveRecords    LeaveRecord[]   @relation("LeavePerson")
   leaveEntered    LeaveRecord[]   @relation("LeaveCreator")
@@ -419,7 +421,14 @@ model WorkJob {
   allow_double_booking Boolean         @default(false)
   status               WorkJobStatus   @default(ASSIGNED)
   started_at           DateTime?
+  /// Who marked it started / completed: a team member from My Work, or a manager.
+  started_by           Int?
+  starter              User?           @relation("WorkJobStarter", fields: [started_by], references: [id], onDelete: SetNull)
   completed_at         DateTime?
+  completed_by         Int?
+  completer            User?           @relation("WorkJobCompleter", fields: [completed_by], references: [id], onDelete: SetNull)
+  /// Optional note left when the job was marked completed.
+  completion_note      String?
   cancelled_at         DateTime?
   cancel_reason        String?
   created_by           Int?

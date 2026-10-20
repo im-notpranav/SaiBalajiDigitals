@@ -208,6 +208,19 @@ function JobsPage() {
                   </TableCell>
                   <TableCell>
                     <JobStatusMenu job={j} />
+                    {j.status === "COMPLETED" && j.completed_by && (
+                      <div
+                        className="mt-1 max-w-[10rem] truncate text-xs text-muted-foreground"
+                        title={j.completion_note ?? undefined}
+                      >
+                        Done by {j.completed_by.name}
+                      </div>
+                    )}
+                    {j.status === "STARTED" && j.started_by && (
+                      <div className="mt-1 max-w-[10rem] truncate text-xs text-muted-foreground">
+                        Started by {j.started_by.name}
+                      </div>
+                    )}
                     {j.cancel_reason && (
                       <div
                         className="mt-1 max-w-[10rem] truncate text-xs text-muted-foreground"

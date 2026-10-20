@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import type { Prisma, WorkJobStatus } from "@prisma/client";
 import { prisma } from "../utils/prisma";
-import { workJobSchema, workJobStatusSchema, dayQuery } from "../utils/validators";
+import { workJobSchema, workJobStatusSchema, myJobStatusSchema, dayQuery } from "../utils/validators";
 import { sanitizeZodErrors } from "../utils/sanitize-errors";
 import { FIELD_ROLES, isFieldRole } from "../utils/roles";
 import { notifyUser } from "../services/notifications.service";
@@ -45,6 +45,8 @@ const jobInclude = {
   csmCode: { select: { id: true, code: true, kind: true, label: true, user: { select: { id: true, name: true } } } },
   csm2Code: { select: { id: true, code: true, kind: true, label: true, user: { select: { id: true, name: true } } } },
   creator: { select: { id: true, name: true } },
+  starter: { select: { id: true, name: true } },
+  completer: { select: { id: true, name: true } },
   members: {
     include: { user: { select: { id: true, name: true, phone: true, role: true } } },
     orderBy: [{ slot_role: "asc" as const }, { id: "asc" as const }],
@@ -78,7 +80,10 @@ export function serializeJob(job: JobRow) {
     members: job.members.map((m) => ({ user_id: m.user_id, name: m.user.name, phone: m.user.phone, slot_role: m.slot_role })),
     stores: job.stores.map((s) => s.orderStore).sort((a, b) => a.s_no - b.s_no),
     started_at: job.started_at,
+    started_by: job.starter,
     completed_at: job.completed_at,
+    completed_by: job.completer,
+    completion_note: job.completion_note,
     cancelled_at: job.cancelled_at,
     cancel_reason: job.cancel_reason,
     created_at: job.created_at,
@@ -391,10 +396,21 @@ export const setJobStatus = async (req: Request, res: Response) => {
         throw new HttpError(400, `A job that is ${current.status.toLowerCase()} cannot be moved to ${status.toLowerCase()}.`);
       }
       const now = new Date();
-      const data: Prisma.WorkJobUpdateInput = { status };
-      if (status === "STARTED" && !current.started_at) data.started_at = now;
-      if (status === "COMPLETED") data.completed_at = now;
-      if (current.status === "COMPLETED") data.completed_at = null; // reopened
+      const data: Prisma.WorkJobUncheckedUpdateInput = { status };
+      if (status === "STARTED" && !current.started_at) {
+        data.started_at = now;
+        data.started_by = req.user!.id;
+      }
+      if (status === "COMPLETED") {
+        data.completed_at = now;
+        data.completed_by = req.user!.id;
+      }
+      if (current.status === "COMPLETED") {
+        // Reopened: the earlier completion no longer stands.
+        data.completed_at = null;
+        data.completed_by = null;
+        data.completion_note = null;
+      }
       if (status === "CANCELLED") {
         data.cancelled_at = now;
         data.cancel_reason = reason ?? null;
@@ -611,6 +627,53 @@ export const myJobs = async (req: Request, res: Response) => {
         };
       }),
     });
+  } catch (err) {
+    return sendError(res, err);
+  }
+};
+
+/**
+ * A Paster / Helper / Driver marks their own job started (from its start date on) or
+ * completed (once started). Anything else — hold, cancel, reopen — stays with managers.
+ * Someone not on the job gets a 404, so job ids cannot be probed.
+ */
+export const myJobStatus = async (req: Request, res: Response) => {
+  try {
+    const id = parseId(req.params.id);
+    const parsed = myJobStatusSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parsed.error) });
+    const { status, note } = parsed.data;
+    const me = req.user!.id;
+
+    const job = await withAudit(me, async (tx) => {
+      const current = await tx.workJob.findFirst({ where: { id, members: { some: { user_id: me } } } });
+      if (!current) throw new HttpError(404, "Job not found");
+      const now = new Date();
+      if (status === "STARTED") {
+        if (current.status !== "ASSIGNED") throw new HttpError(400, `This job is ${current.status.toLowerCase()}, so it cannot be started.`);
+        if (dayKey(current.start_date) > todayIST()) {
+          throw new HttpError(400, `This job starts on ${dayKey(current.start_date)}. You can mark it started from that day.`);
+        }
+        return tx.workJob.update({ where: { id }, data: { status, started_at: current.started_at ?? now, started_by: me }, include: jobInclude });
+      }
+      if (current.status !== "STARTED") {
+        throw new HttpError(400, current.status === "ASSIGNED" ? "Mark the job started first." : `This job is ${current.status.toLowerCase()}, so it cannot be completed.`);
+      }
+      return tx.workJob.update({
+        where: { id },
+        data: { status, completed_at: now, completed_by: me, completion_note: note || null },
+        include: jobInclude,
+      });
+    });
+
+    // The CSM and whoever assigned the job hear about it; the order link is for them.
+    const who = job.members.find((m) => m.user_id === me)?.user.name ?? "A team member";
+    const title = `${job.job_no} ${status === "STARTED" ? "started" : "completed"} by ${who}`;
+    const body = `${jobSummary(job)}${status === "COMPLETED" && note ? ` — "${note}"` : ""}`;
+    const tell = [...new Set([csmUserOf(job), job.created_by].filter((u): u is number => !!u && u !== me))];
+    await Promise.all(tell.map((u) => notifyUser(u, title, body, status === "COMPLETED" ? "success" : "info", job.order.id).catch(() => {})));
+
+    return res.status(200).json(serializeJob(job));
   } catch (err) {
     return sendError(res, err);
   }

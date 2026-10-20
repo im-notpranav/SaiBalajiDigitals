@@ -1,20 +1,46 @@
 import { createFileRoute } from "@tanstack/react-router";
-import type { ReactNode } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { CalendarDays, ClipboardList, MapPin, Phone, Store, Truck, Users } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  CalendarDays,
+  CheckCircle2,
+  ClipboardList,
+  Loader2,
+  MapPin,
+  Phone,
+  PlayCircle,
+  Store,
+  Truck,
+  Users,
+} from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { JobStatusBadge, LocalityTag } from "@/components/allocation/JobBits";
 import { useAuth } from "@/lib/auth-store";
 import { roleLabel } from "@/lib/constants";
 import {
   FIELD_ROLE_LABELS,
   OT_STATUS_LABELS,
+  apiErrorMessage,
   fetchMyJobs,
   fetchMyLeave,
   fetchMyOvertime,
   formatJobDates,
   formatMinutes,
+  setMyJobStatus,
+  todayIST,
   type LeaveState,
   type MyJob,
   type OvertimeStatus,
@@ -27,7 +53,7 @@ export const Route = createFileRoute("/_portal/field/dashboard")({
 
 /**
  * Home for Pasters, Helpers and Drivers, built for a phone: today's work first, then what
- * is coming up, then the last two weeks. Started / Completed buttons arrive in Phase E.
+ * is coming up, then the last two weeks. Each job card has its own Start / Complete button.
  */
 function FieldDashboard() {
   const { user } = useAuth();
@@ -315,7 +341,139 @@ function JobCard({ job, highlight, muted }: { job: MyJob; highlight?: boolean; m
           )}
         </div>
       )}
+
+      <JobActions job={job} />
     </article>
+  );
+}
+
+const fmtTime = (iso: string) =>
+  new Date(iso).toLocaleString("en-IN", {
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "Asia/Kolkata",
+  });
+
+/**
+ * Start / complete buttons for the person's own job. Starting opens on the job's first
+ * day; completing needs the job started. Hold, cancel and reopen stay with managers.
+ */
+function JobActions({ job }: { job: MyJob }) {
+  const qc = useQueryClient();
+  const [completing, setCompleting] = useState(false);
+  const [note, setNote] = useState("");
+  const today = todayIST();
+
+  const mutation = useMutation({
+    mutationFn: (v: { status: "STARTED" | "COMPLETED"; note?: string }) =>
+      setMyJobStatus(job.id, v.status, v.note),
+    onSuccess: (saved) => {
+      toast.success(
+        saved.status === "STARTED" ? `${saved.job_no} started` : `${saved.job_no} marked completed`,
+      );
+      setCompleting(false);
+      setNote("");
+      qc.invalidateQueries({ queryKey: ["my", "work-jobs"] });
+    },
+    onError: (err) => toast.error(apiErrorMessage(err, "Could not update the job")),
+  });
+
+  return (
+    <div className="grid gap-2 border-t pt-3">
+      {job.started_at && (
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <PlayCircle className="h-3.5 w-3.5" /> Started {fmtTime(job.started_at)}
+          {job.started_by ? ` by ${job.started_by.name}` : ""}
+        </div>
+      )}
+      {job.completed_at && (
+        <div className="flex items-start gap-1.5 text-xs text-success">
+          <CheckCircle2 className="mt-px h-3.5 w-3.5 shrink-0" />
+          <span>
+            Completed {fmtTime(job.completed_at)}
+            {job.completed_by ? ` by ${job.completed_by.name}` : ""}
+            {job.completion_note && (
+              <span className="block text-muted-foreground">“{job.completion_note}”</span>
+            )}
+          </span>
+        </div>
+      )}
+
+      {job.status === "ASSIGNED" &&
+        (job.start_date <= today ? (
+          <Button
+            className="h-11 w-full rounded-xl text-base"
+            disabled={mutation.isPending}
+            onClick={() => mutation.mutate({ status: "STARTED" })}
+          >
+            {mutation.isPending ? (
+              <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+            ) : (
+              <PlayCircle className="mr-2 h-5 w-5" />
+            )}
+            Start job
+          </Button>
+        ) : (
+          <div className="text-xs text-muted-foreground">
+            You can start this job from {formatJobDates(job.start_date, job.start_date)}.
+          </div>
+        ))}
+
+      {job.status === "STARTED" && (
+        <Button
+          className="h-11 w-full rounded-xl bg-success text-base text-white hover:bg-success/90"
+          onClick={() => setCompleting(true)}
+        >
+          <CheckCircle2 className="mr-2 h-5 w-5" /> Mark completed
+        </Button>
+      )}
+
+      {job.status === "HOLD" && (
+        <div className="text-xs text-warning-foreground">
+          On hold. Wait for the Operations Manager before carrying on.
+        </div>
+      )}
+
+      <Dialog open={completing} onOpenChange={setCompleting}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Mark {job.job_no} completed?</DialogTitle>
+            <DialogDescription>
+              The CSM and the Operations Manager are told straight away.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2">
+            <Label htmlFor={`done-note-${job.id}`}>
+              Note <span className="font-normal text-muted-foreground">(optional)</span>
+            </Label>
+            <Textarea
+              id={`done-note-${job.id}`}
+              rows={3}
+              maxLength={500}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="e.g. All boards fixed; one store asked for a revisit"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCompleting(false)}>
+              Not yet
+            </Button>
+            <Button
+              disabled={mutation.isPending}
+              onClick={() =>
+                mutation.mutate({ status: "COMPLETED", note: note.trim() || undefined })
+              }
+            >
+              {mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Mark completed
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }
 

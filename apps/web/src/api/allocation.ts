@@ -186,7 +186,10 @@ export interface WorkJob {
   members: { user_id: number; name: string; phone: string | null; slot_role: FieldRole }[];
   stores: JobStore[];
   started_at: string | null;
+  started_by: { id: number; name: string } | null;
   completed_at: string | null;
+  completed_by: { id: number; name: string } | null;
+  completion_note: string | null;
   cancelled_at: string | null;
   cancel_reason: string | null;
   created_at: string;
@@ -311,6 +314,9 @@ export const fetchDailyBoard = (date?: string) =>
 export const fetchWeeklyGrid = (from?: string, days = 7) =>
   apiFetch<WeeklyGrid>(`/work-jobs/grid${qs({ from, days: String(days) })}`);
 export const fetchMyJobs = () => apiFetch<{ today: string; jobs: MyJob[] }>("/my/work-jobs");
+/** Field staff: mark their own job started, or completed with an optional note. */
+export const setMyJobStatus = (id: number, status: "STARTED" | "COMPLETED", note?: string) =>
+  apiFetch<WorkJob>(`/my/work-jobs/${id}/status`, { method: "PUT", data: { status, note } });
 
 /** Today in India as YYYY-MM-DD, matching the API's todayIST(). */
 export function todayIST(): string {
@@ -323,12 +329,14 @@ export function addDays(day: string, n: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-/** "21 Oct" or "21 – 23 Oct" for a job's dates. */
+/** "21 Oct" or "21 – 23 Oct" for a job's dates; the year is added outside the current year. */
 export function formatJobDates(start: string, end: string): string {
+  const thisYear = todayIST().slice(0, 4);
   const fmt = (d: string, month = true) =>
     new Date(`${d}T00:00:00Z`).toLocaleDateString("en-IN", {
       day: "numeric",
       month: month ? "short" : undefined,
+      year: month && d.slice(0, 4) !== thisYear ? "numeric" : undefined,
       timeZone: "UTC",
     });
   if (start === end) return fmt(start);

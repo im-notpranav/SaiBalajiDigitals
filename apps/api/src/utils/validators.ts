@@ -393,3 +393,9 @@ export const overtimeDecisionSchema = z
     reason: z.string().trim().max(300).optional().nullable(),
   })
   .refine((d) => d.status !== "REJECTED" || !!d.reason, { message: "Give a reason for rejecting", path: ["reason"] });
+
+/** What field staff may do to their own job from My Work. */
+export const myJobStatusSchema = z.object({
+  status: z.enum(["STARTED", "COMPLETED"]),
+  note: z.string().trim().max(500).optional().nullable(),
+});

@@ -71,6 +71,18 @@ Still open on this flow: whether Admin and CCM can **return a request for more i
 | Overtime checks | No overlapping overtime for one person (database constraint, including across midnight); none on a leave day; if linked to a job, the person must be on it, and the CSM code defaults to the job's. |
 | Approval | **Admin only** approves or rejects, singly or in bulk; rejecting needs a reason. Only pending entries can be edited or deleted. The person is told the decision. |
 
+**Phase E defaults (field staff start / complete, built 2026-10-20; change any of these on request):**
+
+| Topic | Default used |
+|---|---|
+| Who | Anyone on the job's team (Paster, Helper or Driver) can mark it started or completed from My Work. Someone not on the job gets "not found". |
+| Start | Only an Assigned job, and only from its start date (India time). |
+| Complete | Only a Started job, with an optional note (up to 500 characters). |
+| Not for field staff | Hold, cancel and reopen stay with Admin and Operation Manager. |
+| Recorded | Who started and who completed the job, with the times and note; a manager reopening a completed job clears the completion. Every change is in the audit log under the person who made it. |
+| Notified | The CSM and whoever assigned the job (not the person who tapped the button). WhatsApp follows in Phase G2. |
+| Photos / proof | Not yet: uploads arrive in Phase G. |
+
 Not in Phase C, still to come: a CSM's view of the jobs on their orders, Started / Completed buttons for field staff (Phase E), and checking the grid against the WB2 9–15 Oct sample once real jobs are entered.
 
 ---
