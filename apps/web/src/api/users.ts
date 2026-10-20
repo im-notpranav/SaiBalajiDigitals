@@ -35,6 +35,7 @@ export async function updateMe(data: {
   name?: string;
   email?: string | null;
   phone?: string | null;
+  whatsapp_opt_out?: boolean;
   photo_url?: string | null;
   current_password?: string;
   new_password?: string;
@@ -62,7 +63,10 @@ export async function resetUserPassword(id: number, new_password: string) {
   });
 }
 
-export async function updateUser(id: number, data: { name: string; username: string; role: string }) {
+export async function updateUser(
+  id: number,
+  data: { name: string; username: string; role: string; phone?: string | null; whatsapp_opt_out?: boolean },
+) {
   const res = await apiFetch<AuthUser>(`/users/${id}`, {
     method: "PUT",
     data,

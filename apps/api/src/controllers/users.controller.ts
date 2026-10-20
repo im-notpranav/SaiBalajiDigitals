@@ -10,7 +10,7 @@ import { sanitizeZodErrors } from "../utils/sanitize-errors";
 export const getUsers = async (req: Request, res: Response) => {
   try {
     const users = await prisma.user.findMany({
-      select: { id: true, name: true, username: true, role: true, email: true, phone: true, photo_url: true, is_super_admin: true, created_at: true, is_active: true, last_login_at: true },
+      select: { id: true, name: true, username: true, role: true, email: true, phone: true, whatsapp_opt_out: true, photo_url: true, is_super_admin: true, created_at: true, is_active: true, last_login_at: true },
     });
     return res.status(200).json({ users });
   } catch (err) {
@@ -113,13 +113,14 @@ export const updateMe = async (req: Request, res: Response) => {
     if (!parseResult.success) {
       return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parseResult.error) });
     }
-    const { name, email, phone, photo_url, current_password, new_password } = parseResult.data;
+    const { name, email, phone, whatsapp_opt_out, photo_url, current_password, new_password } = parseResult.data;
     const userId = req.user!.id;
 
     const updateData: any = {};
     if (name) updateData.name = name;
     if (email !== undefined) updateData.email = email;
     if (phone !== undefined) updateData.phone = phone;
+    if (whatsapp_opt_out !== undefined) updateData.whatsapp_opt_out = whatsapp_opt_out;
     if (photo_url !== undefined) updateData.photo_url = photo_url;
 
     if (new_password) {
@@ -140,7 +141,7 @@ export const updateMe = async (req: Request, res: Response) => {
     const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: updateData,
-      select: { id: true, name: true, username: true, role: true, email: true, phone: true, photo_url: true, is_super_admin: true },
+      select: { id: true, name: true, username: true, role: true, email: true, phone: true, whatsapp_opt_out: true, photo_url: true, is_super_admin: true },
     });
 
     const payload = {
@@ -228,7 +229,7 @@ export const updateUser = async (req: Request, res: Response) => {
     if (!parsed.success) {
       return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parsed.error) });
     }
-    const { name, username, role } = parsed.data;
+    const { name, username, role, phone, whatsapp_opt_out } = parsed.data;
 
     // Only super admin can change usernames
     const targetUser = await prisma.user.findUnique({ where: { id }, select: { username: true } });
@@ -254,8 +255,10 @@ export const updateUser = async (req: Request, res: Response) => {
         name,
         ...(username ? { username } : {}),
         role: role as any,
+        ...(phone !== undefined ? { phone } : {}),
+        ...(whatsapp_opt_out !== undefined ? { whatsapp_opt_out } : {}),
       },
-      select: { id: true, name: true, username: true, role: true, is_active: true },
+      select: { id: true, name: true, username: true, role: true, is_active: true, phone: true, whatsapp_opt_out: true },
     });
 
     return res.status(200).json(updatedUser);

@@ -8,6 +8,7 @@ import { generateOrderId } from "../utils/order-sequence";
 import { recomputeOrderStatus, rollupOrder, storeLabelOf, storeLocationOf } from "../utils/order-derive";
 
 import { notifyRole, notifyUser } from "../services/notifications.service";
+import { queueWhatsAppAfter } from "../services/whatsapp/outbox";
 
 import {
   sendOrderCreatedEmail,
@@ -1024,6 +1025,12 @@ const invoiceCreatedNotices = async (
     isMatch ? "success" : "warning",
     order.id
   );
+  await queueWhatsAppAfter(
+    "ORDER_UPDATE",
+    [order.created_by],
+    [order.order_no, order.client_name, `invoice ${invoice.invoice_no} raised for ₹${invoice.bill_amount}`],
+    { type: "order", id: order.id },
+  );
   const creatorUser = await prisma.user.findUnique({ where: { id: order.created_by }, select: { email: true } });
   if (creatorUser?.email) {
     sendStatusTransitionEmail(
@@ -1274,6 +1281,18 @@ export const recordInvoicePayment = async (req: Request, res: Response) => {
           : `Part payment of ${amount_received} received against ${billed} on invoice ${invoice.invoice_no}.`,
         isFull ? "success" : "warning",
         order.id
+      );
+      await queueWhatsAppAfter(
+        "ORDER_UPDATE",
+        [order.created_by],
+        [
+          order.order_no,
+          order.client_name,
+          isFull
+            ? `full payment of ${amount_received} received on invoice ${invoice.invoice_no}`
+            : `part payment of ${amount_received} of ${billed} received on invoice ${invoice.invoice_no}`,
+        ],
+        { type: "order", id: order.id },
       );
 
       const creatorUser = await prisma.user.findUnique({ where: { id: order.created_by }, select: { email: true } });
@@ -1899,6 +1918,12 @@ export const completeOrderItem = async (req: Request, res: Response) => {
           `All items are produced. Confirm installation to send it for billing.`,
           "success",
           order.id
+        );
+        await queueWhatsAppAfter(
+          "ORDER_UPDATE",
+          [order.created_by],
+          [order.order_no, order.client_name, "all items are produced, please confirm installation to send it for billing"],
+          { type: "order", id: order.id },
         );
 
         const creatorUser = await prisma.user.findUnique({ where: { id: order.created_by }, select: { email: true } });

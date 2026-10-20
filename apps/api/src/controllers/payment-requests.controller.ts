@@ -2,6 +2,8 @@ import { Request, Response } from "express";
 import { createHash } from "node:crypto";
 import { Prisma, type PaymentAttachmentKind, type PaymentRequestStatus, type Role } from "@prisma/client";
 import { prisma } from "../utils/prisma";
+import { queueWhatsApp, queueWhatsAppRole } from "../services/whatsapp/outbox";
+import type { WaEvent } from "../services/whatsapp/templates";
 import {
   paymentMarkPaidSchema,
   paymentNoteSchema,
@@ -229,41 +231,65 @@ async function notifyAfter(
   const amount = formatRupees(Number(r.amount));
   const about = `${no}: ${amount} for ${r.requester.name}, order ${r.order.order_no}.`;
   const kind = kindFor[action] ?? "info";
-  const toRequester = async (title: string, body: string) => {
+  const ref = { type: "payment_request" as const, id: r.id };
+  // In-app and WhatsApp go out together, in this transaction: no change, no message.
+  const toRequester = async (title: string, body: string, wa: [WaEvent, unknown[]]) => {
     if (r.requested_by === actor.id) return;
     await tx.notification.create({ data: { user_id: r.requested_by, title, body, kind } });
+    await queueWhatsApp(tx, wa[0], [r.requested_by], wa[1], ref);
   };
+  const toReviewers = async (role: Role | undefined, title: string, body: string, wa: [WaEvent, unknown[]], k = "info") => {
+    await notifyRole(tx, role, title, body, k);
+    await queueWhatsAppRole(tx, wa[0], role, wa[1], ref, actor.id);
+  };
+  const who = [no, amount, r.requester.name, r.order.order_no];
 
   switch (action) {
     case "APPROVE":
       if (to === "CCM_REVIEW") {
-        await notifyRole(tx, "COST_CONTROL_MANAGER", "Payment request to review", `${about} Approved by the Admin.`);
-        await toRequester("Payment request approved by Admin", `${no} is now with Cost Control for review.`);
+        await toReviewers("COST_CONTROL_MANAGER", "Payment request to review", `${about} Approved by the Admin.`, [
+          "PAYMENT_TO_REVIEW",
+          [...who, "Approved by the Admin"],
+        ]);
+        await toRequester("Payment request approved by Admin", `${no} is now with Cost Control for review.`, [
+          "PAYMENT_UPDATE",
+          [no, amount, "approved by the Admin", "It is now with Cost Control for review"],
+        ]);
       } else {
-        await toRequester("Payment request approved", `${no}: ${amount} will be paid to ${r.upi_id}.`);
+        await toRequester("Payment request approved", `${no}: ${amount} will be paid to ${r.upi_id}.`, [
+          "PAYMENT_UPDATE",
+          [no, amount, "approved", `It will be paid to ${r.upi_id}`],
+        ]);
       }
       break;
     case "REJECT":
-      await toRequester("Payment request rejected", `${no}: ${note}`);
+      await toRequester("Payment request rejected", `${no}: ${note}`, ["PAYMENT_UPDATE", [no, amount, "rejected", note]]);
       break;
     case "RETURN":
-      await toRequester("Payment request returned", `${no} needs more information: ${note}`);
+      await toRequester("Payment request returned", `${no} needs more information: ${note}`, [
+        "PAYMENT_UPDATE",
+        [no, amount, "returned for more information", note],
+      ]);
       break;
     case "RESUBMIT":
-      await notifyRole(tx, STAGE_REVIEWER[to], "Payment request resubmitted", about);
+      await toReviewers(STAGE_REVIEWER[to], "Payment request resubmitted", about, [
+        "PAYMENT_TO_REVIEW",
+        [...who, "Resubmitted with the information asked for"],
+      ]);
       break;
     case "CANCEL":
       if (r.requested_by === actor.id) {
         const stage = r.status === "INFO_REQUESTED" ? r.returned_from : r.status;
-        await notifyRole(tx, stage ? STAGE_REVIEWER[stage] : undefined, "Payment request withdrawn", about, "info");
+        await toReviewers(stage ? STAGE_REVIEWER[stage] : undefined, "Payment request withdrawn", about, ["PAYMENT_WITHDRAWN", who]);
       } else {
-        await toRequester("Payment request cancelled", `${no}: ${note}`);
+        await toRequester("Payment request cancelled", `${no}: ${note}`, ["PAYMENT_UPDATE", [no, amount, "cancelled", note]]);
       }
       break;
     case "MARK_PAID":
       await toRequester(
         "Payment sent",
         `${no}: ${formatRupees(paid!.amount)} paid to ${r.upi_id}. Reference ${paid!.reference}.`,
+        ["PAYMENT_PAID", [formatRupees(paid!.amount), r.upi_id, no, paid!.reference]],
       );
       break;
     case "CLOSE":
@@ -392,6 +418,14 @@ export const createRequest = async (req: Request, res: Response) => {
         STAGE_REVIEWER[status],
         "New payment request",
         `${request_no}: ${formatRupees(body.amount)} for ${row.requester.name}, order ${order.order_no}.`,
+      );
+      await queueWhatsAppRole(
+        tx,
+        "PAYMENT_TO_REVIEW",
+        STAGE_REVIEWER[status],
+        [request_no, formatRupees(body.amount), row.requester.name, order.order_no, body.bill_details_required ? "New request with bill details" : "New request without bill details"],
+        { type: "payment_request", id: row.id },
+        actor.id,
       );
       return row;
     });

@@ -17,6 +17,8 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { apiErrorMessage } from "@/api/allocation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { fetchUsers, createUser, toggleUserStatus, updateUser, resetUserPassword } from "@/api/users";
 import { toast } from "sonner";
@@ -62,17 +64,21 @@ function UsersPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: (data: any) => updateUser(data.id, { name: data.name, username: data.username, role: data.role }),
+    mutationFn: (data: any) =>
+      updateUser(data.id, {
+        name: data.name,
+        username: data.username,
+        role: data.role,
+        phone: (data.phone ?? "").trim(),
+        whatsapp_opt_out: !!data.whatsapp_opt_out,
+      }),
     onSuccess: () => {
       toast.success("User updated successfully");
       setIsEditDialogOpen(false);
       setEditUser(null);
       queryClient.invalidateQueries({ queryKey: ["users"] });
     },
-    onError: (err: any) => {
-      const data = err?.response?.data;
-      toast.error(data?.message || "Failed to update user");
-    }
+    onError: (err: any) => toast.error(apiErrorMessage(err, "Failed to update user")),
   });
 
   const resetPwMutation = useMutation({
@@ -186,6 +192,28 @@ function UsersPage() {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="grid gap-2">
+                <Label>Mobile number</Label>
+                <Input
+                  type="tel"
+                  inputMode="tel"
+                  value={editUser.phone ?? ""}
+                  onChange={(e) => setEditUser({ ...editUser, phone: e.target.value })}
+                  placeholder="10-digit mobile, e.g. 98765 43210"
+                />
+                <p className="text-xs text-muted-foreground">Used for WhatsApp notifications. Leave blank if they have none.</p>
+              </div>
+              <div className="flex items-center justify-between gap-3 rounded-xl border px-3 py-2">
+                <div>
+                  <div className="text-sm font-medium">WhatsApp messages</div>
+                  <div className="text-xs text-muted-foreground">In-app notifications arrive either way.</div>
+                </div>
+                <Switch
+                  checked={!editUser.whatsapp_opt_out}
+                  onCheckedChange={(on) => setEditUser({ ...editUser, whatsapp_opt_out: !on })}
+                  aria-label="WhatsApp messages"
+                />
+              </div>
             </div>
           )}
           <DialogFooter>
@@ -265,7 +293,12 @@ function UsersPage() {
                       </Avatar>
                       <div>
                         <div className="font-semibold">{u.name}</div>
-                        <div className="text-xs text-muted-foreground">{u.username}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {u.username}
+                          {" · "}
+                          {u.phone ? u.phone : <span className="text-warning">no phone</span>}
+                          {u.whatsapp_opt_out && " · WhatsApp off"}
+                        </div>
                       </div>
                     </div>
                   </TableCell>

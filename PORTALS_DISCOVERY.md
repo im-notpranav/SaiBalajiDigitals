@@ -53,7 +53,7 @@ Still open on this flow: whether Admin and CCM can **return a request for more i
 | CSM code | Defaults to the code linked to whoever raised the order; a second code is optional. |
 | Grid label | `<CSM code or order no>[/<2nd code>]`, then `-N_<tag>` for non-local or `-<tag>` for local (e.g. `RK/SK-N_CN`, `RK-CN`, plain `RK-N` with no tag). Local / non-local is copied from the area when the job is saved. |
 | What field staff see | Their own jobs only, from two weeks back: order no and client name (no amounts or order status), work, dates, area and route, stores, team with phone numbers, vehicle, instructions, and the CSM's name and phone. |
-| Notifications | In-app now; WhatsApp joins in Phase G2. The team hears about assignment, removal and cancellation. The CSM hears about start, completion, hold and cancellation. |
+| Notifications | In-app now; WhatsApp mirrors these from Phase G2 (log-only until AskEva is live). The team hears about assignment, removal and cancellation. The CSM hears about start, completion, hold and cancellation. |
 | Orders with jobs | Can no longer be deleted; the API explains that the jobs must go first. |
 
 **CSM codes (decided 2026-10-20):** codes such as `300` are the CSMs' employee codes (e.g. Bablu Goud = 300). They live in the database, not in config. Admin or Operation Manager links each one to its CSM under Allocation Masters → CSM codes. The letter codes (`NSG`, `NNG`, `NMG`, `SBDB`, `SBDC`, `SBDG`, `SBDV`) look like team or branch codes and can be marked as such there.
@@ -80,7 +80,7 @@ Still open on this flow: whether Admin and CCM can **return a request for more i
 | Complete | Only a Started job, with an optional note (up to 500 characters). |
 | Not for field staff | Hold, cancel and reopen stay with Admin and Operation Manager. |
 | Recorded | Who started and who completed the job, with the times and note; a manager reopening a completed job clears the completion. Every change is in the audit log under the person who made it. |
-| Notified | The CSM and whoever assigned the job (not the person who tapped the button). WhatsApp follows in Phase G2. |
+| Notified | The CSM and whoever assigned the job (not the person who tapped the button). WhatsApp mirrors it from Phase G2. |
 | Photos / proof | Not yet: uploads arrive in Phase G. |
 
 **Phase F defaults (payment requests core, built 2026-10-20; change any of these on request):**
@@ -103,7 +103,7 @@ Still open on this flow: whether Admin and CCM can **return a request for more i
 | Concurrency | Every action checks the status it was read in, so two reviewers acting at once cannot both succeed. |
 | History | Every step is an append-only event (who, role, from → to, note); the database refuses edits to it. Request rows are also in the audit log. |
 | Orders and users | An order with payment requests cannot be deleted; a user with payment or work history cannot be deleted (deactivate instead). Closing a request never changes the order. |
-| Notified (in-app) | New and resubmitted requests → the reviewers for that stage; Admin approval → Cost Control and the requester; Cost Control approval, rejection, return, cancellation and payment → the requester; withdrawal → that stage's reviewers. WhatsApp follows in Phase G2. |
+| Notified (in-app) | New and resubmitted requests → the reviewers for that stage; Admin approval → Cost Control and the requester; Cost Control approval, rejection, return, cancellation and payment → the requester; withdrawal → that stage's reviewers. WhatsApp mirrors these from Phase G2. |
 | Overdue timers | Not yet (Phase H). Each request records when it entered its current status, and queues list the oldest first. |
 
 **Phase G defaults (bills, photos and receipts, built 2026-10-20; change any of these on request):**
@@ -120,6 +120,22 @@ Still open on this flow: whether Admin and CCM can **return a request for more i
 | Mandatory (#28) | A request raised with bill details cannot be closed until a bill is attached (a receipt does not count). Photos are optional. A "Bill missing" flag shows on open requests in every list. |
 | Who sees | Anyone who can see the request can view and download its files; requests stay private to their requester, the Admin and Cost Control. |
 | History | Adding and removing a file are recorded in the request's history and the audit log. |
+
+**Phase G2 defaults (WhatsApp via AskEva, built 2026-10-20 in log-only mode; change any of these on request):**
+
+| Topic | Default used |
+|---|---|
+| Switched off for now | `WHATSAPP_MODE=log` (the default) records every message and prints it to the server log, but sends nothing. Setting `WHATSAPP_MODE=live` sends only when `ASKEVA_TOKEN` is also set. Admin → WhatsApp shows which mode is on. |
+| AskEva API | AskEva's own API pages are offline (404). The adapter follows a published AskEva client: `POST https://backend.askeva.io/v1/message/send-message?token=…` with Meta's template body. All AskEva-specific code is in one file (`services/whatsapp/askeva.ts`). To confirm with AskEva before going live: the token placement, the reply format (the message id), the status-webhook format and signing, and rate limits. |
+| Never blocks work | Payment messages are written in the same transaction as the change (no change, no message). Job and order messages are written straight after the change, and a WhatsApp problem there is logged, never shown to the user. A background sender (every 10 s, 20 at a time) delivers them. |
+| Retries | AskEva busy or down (timeout, 429, 5xx): retried after 1, 5, 15 and 60 minutes, then marked Failed. Refused (other 4xx, e.g. template not approved, bad number): Failed at once with AskEva's reason. Admin can "Send again" from the log. |
+| Events covered | Field staff: job assigned, removed, cancelled. CSM: team assigned, job started, on hold, completed, cancelled; the job's creator also hears about start/complete by field staff. Payments: new or resubmitted request → that stage's reviewers; Admin approval → Cost Control and the requester; approved / rejected / returned / cancelled / paid (with reference) → the requester; withdrawn → the reviewers. Orders (to whoever raised the order): production complete, invoice raised, payment received. These mirror the in-app notifications. Not yet: leave and overtime messages, daily summaries and "pending > 10 days" (Phase H). |
+| Templates | 9 Utility templates in English (`sbd_job_assigned`, `sbd_job_removed`, `sbd_job_cancelled`, `sbd_job_update`, `sbd_payment_to_review`, `sbd_payment_withdrawn`, `sbd_payment_update`, `sbd_payment_paid`, `sbd_order_update`). Exact text with copy buttons is on Admin → WhatsApp → Templates, ready to submit in AskEva. Every one starts "Hi {{1}}" (first name) and ends with fixed words, as Meta requires. |
+| Phone numbers | Users have one mobile number, saved as +91XXXXXXXXXX. 10 digits, or with 0, 91 or +91 in front, are accepted. The Admin (super admin) sets it on Users, field staff on Field Staff, and anyone on their own Profile. People without a valid number still get in-app notifications; their WhatsApp messages are logged as "Not sent: No phone number", and "Send again" after adding the number delivers them. |
+| Opt-out | A "WhatsApp messages" switch on each profile (and on the Admin's user editor). Replying STOP / UNSUBSCRIBE on WhatsApp turns it off; START turns it back on. Messages to someone opted out are logged as "Not sent: Opted out". |
+| Delivery reports | `GET/POST /api/webhooks/askeva`. The handshake uses `ASKEVA_WEBHOOK_SECRET` as the verify token; every report must carry `?key=<same secret>`. Reports can only move a message forward (Sent → Delivered → Read; Failed only from Sent/Delivered). Without the secret the webhook answers 503 and messages stop at Sent. |
+| Who sees the log | Admin only (Admin → WhatsApp): delivery log with status filters and search, the template texts, and who has no number. The Operation Manager sees a notice. |
+| Privacy | The AskEva token never appears in the log or errors; the server log shows numbers masked (+91…3210). |
 
 Not in Phase C, still to come: a CSM's view of the jobs on their orders, Started / Completed buttons for field staff (Phase E), and checking the grid against the WB2 9–15 Oct sample once real jobs are entered.
 

@@ -33,6 +33,11 @@ app.use(
 app.use(express.json({ limit: "1mb" }));
 app.use(cookieParser());
 
+// AskEva's delivery reports arrive in bursts from a few addresses, so the webhook sits ahead
+// of the per-IP limiter. It needs no login; a shared secret guards it instead.
+import whatsappRoutes, { webhookRouter } from "./routes/whatsapp.routes";
+app.use("/api/webhooks", webhookRouter);
+
 // Global rate limit: 200 requests per minute per IP (generous for 50-60 employees)
 app.use(
   rateLimit({
@@ -61,6 +66,7 @@ import leaveRoutes from "./routes/leave.routes";
 import overtimeRoutes from "./routes/overtime.routes";
 import paymentRequestsRoutes from "./routes/payment-requests.routes";
 import { initEmailService } from "./services/email.service";
+import { startWhatsAppSender } from "./services/whatsapp/outbox";
 
 app.use("/api/auth", authRoutes);
 app.use("/api/orders", ordersRoutes);
@@ -77,8 +83,10 @@ app.use("/api/leave", leaveRoutes);
 app.use("/api/overtime", overtimeRoutes);
 app.use("/api/payment-requests", paymentRequestsRoutes);
 app.use("/api/my", myRoutes);
+app.use("/api/whatsapp", whatsappRoutes);
 
 app.listen(PORT, async () => {
   console.log(`Server listening on port ${PORT}`);
   await initEmailService();
+  startWhatsAppSender();
 });

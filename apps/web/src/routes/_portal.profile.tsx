@@ -6,6 +6,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { apiErrorMessage } from "@/api/allocation";
 import { useAuth } from "@/lib/auth-store";
 import { updateMe } from "@/api/users";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -22,6 +24,7 @@ function ProfilePage() {
   const [name, setName] = useState(user?.name || "");
   const [email, setEmail] = useState(user?.email || "");
   const [phone, setPhone] = useState(user?.phone || "");
+  const [whatsapp, setWhatsapp] = useState(!user?.whatsapp_opt_out);
   const [photoUrl, setPhotoUrl] = useState(user?.photo_url || "");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -35,15 +38,17 @@ function ProfilePage() {
       queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
     },
     onError: (err: any) => {
-      toast.error("Failed to update profile", { description: err.message });
+      toast.error("Failed to update profile", { description: apiErrorMessage(err, err.message) });
     }
   });
 
   const handleSave = () => {
     const payload: any = {};
     if (name && name !== user?.name) payload.name = name;
-    if (email !== user?.email) payload.email = email;
-    if (phone !== user?.phone) payload.phone = phone;
+    // Blank means "no email": sent as null, since the API only accepts a real address.
+    if (email !== (user?.email || "")) payload.email = email.trim() || null;
+    if (phone !== (user?.phone || "")) payload.phone = phone.trim();
+    if (whatsapp === !!user?.whatsapp_opt_out) payload.whatsapp_opt_out = !whatsapp;
     if (photoUrl !== user?.photo_url) payload.photo_url = photoUrl;
     if (newPassword) {
       if (!currentPassword) {
@@ -98,8 +103,17 @@ function ProfilePage() {
               <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email address" />
             </div>
             <div className="space-y-2">
-              <Label>Phone Number</Label>
-              <Input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone number" />
+              <Label>Mobile Number</Label>
+              <Input type="tel" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="10-digit mobile number" />
+            </div>
+            <div className="sm:col-span-2 flex items-center justify-between gap-3 rounded-xl border px-3 py-2">
+              <div>
+                <div className="text-sm font-medium">WhatsApp messages</div>
+                <div className="text-xs text-muted-foreground">
+                  Job, payment and order updates on WhatsApp at this number. In-app notifications arrive either way.
+                </div>
+              </div>
+              <Switch checked={whatsapp} onCheckedChange={setWhatsapp} aria-label="WhatsApp messages" />
             </div>
             <div className="sm:col-span-2 space-y-2">
               <Label>Photo URL</Label>

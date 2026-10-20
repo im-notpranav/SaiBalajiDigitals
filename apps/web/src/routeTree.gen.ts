@@ -37,6 +37,7 @@ import { Route as PortalAdminPaymentsRouteImport } from './routes/_portal.admin.
 import { Route as PortalAdminReportsRouteImport } from './routes/_portal.admin.reports'
 import { Route as PortalAdminSettingsRouteImport } from './routes/_portal.admin.settings'
 import { Route as PortalAdminUsersRouteImport } from './routes/_portal.admin.users'
+import { Route as PortalAdminWhatsappRouteImport } from './routes/_portal.admin.whatsapp'
 import { Route as PortalCostControlDashboardRouteImport } from './routes/_portal.cost-control.dashboard'
 import { Route as PortalCostControlNotificationsRouteImport } from './routes/_portal.cost-control.notifications'
 import { Route as PortalEmployeeDashboardRouteImport } from './routes/_portal.employee.dashboard'
@@ -203,6 +204,11 @@ const PortalAdminUsersRoute = PortalAdminUsersRouteImport.update({
   path: '/admin/users',
   getParentRoute: () => PortalRoute,
 } as any)
+const PortalAdminWhatsappRoute = PortalAdminWhatsappRouteImport.update({
+  id: '/admin/whatsapp',
+  path: '/admin/whatsapp',
+  getParentRoute: () => PortalRoute,
+} as any)
 const PortalCostControlDashboardRoute =
   PortalCostControlDashboardRouteImport.update({
     id: '/cost-control/dashboard',
@@ -353,6 +359,7 @@ export interface FileRoutesByFullPath {
   '/admin/reports': typeof PortalAdminReportsRoute
   '/admin/settings': typeof PortalAdminSettingsRoute
   '/admin/users': typeof PortalAdminUsersRoute
+  '/admin/whatsapp': typeof PortalAdminWhatsappRoute
   '/cost-control/dashboard': typeof PortalCostControlDashboardRoute
   '/cost-control/notifications': typeof PortalCostControlNotificationsRoute
   '/employee/dashboard': typeof PortalEmployeeDashboardRoute
@@ -404,6 +411,7 @@ export interface FileRoutesByTo {
   '/admin/reports': typeof PortalAdminReportsRoute
   '/admin/settings': typeof PortalAdminSettingsRoute
   '/admin/users': typeof PortalAdminUsersRoute
+  '/admin/whatsapp': typeof PortalAdminWhatsappRoute
   '/cost-control/dashboard': typeof PortalCostControlDashboardRoute
   '/cost-control/notifications': typeof PortalCostControlNotificationsRoute
   '/employee/dashboard': typeof PortalEmployeeDashboardRoute
@@ -457,6 +465,7 @@ export interface FileRoutesById {
   '/_portal/admin/reports': typeof PortalAdminReportsRoute
   '/_portal/admin/settings': typeof PortalAdminSettingsRoute
   '/_portal/admin/users': typeof PortalAdminUsersRoute
+  '/_portal/admin/whatsapp': typeof PortalAdminWhatsappRoute
   '/_portal/cost-control/dashboard': typeof PortalCostControlDashboardRoute
   '/_portal/cost-control/notifications': typeof PortalCostControlNotificationsRoute
   '/_portal/employee/dashboard': typeof PortalEmployeeDashboardRoute
@@ -510,6 +519,7 @@ export interface FileRouteTypes {
     | '/admin/reports'
     | '/admin/settings'
     | '/admin/users'
+    | '/admin/whatsapp'
     | '/cost-control/dashboard'
     | '/cost-control/notifications'
     | '/employee/dashboard'
@@ -561,6 +571,7 @@ export interface FileRouteTypes {
     | '/admin/reports'
     | '/admin/settings'
     | '/admin/users'
+    | '/admin/whatsapp'
     | '/cost-control/dashboard'
     | '/cost-control/notifications'
     | '/employee/dashboard'
@@ -613,6 +624,7 @@ export interface FileRouteTypes {
     | '/_portal/admin/reports'
     | '/_portal/admin/settings'
     | '/_portal/admin/users'
+    | '/_portal/admin/whatsapp'
     | '/_portal/cost-control/dashboard'
     | '/_portal/cost-control/notifications'
     | '/_portal/employee/dashboard'
@@ -841,6 +853,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PortalAdminUsersRouteImport
       parentRoute: typeof PortalRoute
     }
+    '/_portal/admin/whatsapp': {
+      id: '/_portal/admin/whatsapp'
+      path: '/admin/whatsapp'
+      fullPath: '/admin/whatsapp'
+      preLoaderRoute: typeof PortalAdminWhatsappRouteImport
+      parentRoute: typeof PortalRoute
+    }
     '/_portal/cost-control/dashboard': {
       id: '/_portal/cost-control/dashboard'
       path: '/cost-control/dashboard'
@@ -1024,6 +1043,7 @@ interface PortalRouteChildren {
   PortalAdminReportsRoute: typeof PortalAdminReportsRoute
   PortalAdminSettingsRoute: typeof PortalAdminSettingsRoute
   PortalAdminUsersRoute: typeof PortalAdminUsersRoute
+  PortalAdminWhatsappRoute: typeof PortalAdminWhatsappRoute
   PortalCostControlDashboardRoute: typeof PortalCostControlDashboardRoute
   PortalCostControlNotificationsRoute: typeof PortalCostControlNotificationsRoute
   PortalEmployeeDashboardRoute: typeof PortalEmployeeDashboardRoute
@@ -1074,6 +1094,7 @@ const PortalRouteChildren: PortalRouteChildren = {
   PortalAdminReportsRoute: PortalAdminReportsRoute,
   PortalAdminSettingsRoute: PortalAdminSettingsRoute,
   PortalAdminUsersRoute: PortalAdminUsersRoute,
+  PortalAdminWhatsappRoute: PortalAdminWhatsappRoute,
   PortalCostControlDashboardRoute: PortalCostControlDashboardRoute,
   PortalCostControlNotificationsRoute: PortalCostControlNotificationsRoute,
   PortalEmployeeDashboardRoute: PortalEmployeeDashboardRoute,

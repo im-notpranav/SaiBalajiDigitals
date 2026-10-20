@@ -5,6 +5,7 @@ import { workJobSchema, workJobStatusSchema, myJobStatusSchema, dayQuery } from 
 import { sanitizeZodErrors } from "../utils/sanitize-errors";
 import { FIELD_ROLES, isFieldRole } from "../utils/roles";
 import { notifyUser } from "../services/notifications.service";
+import { queueWhatsAppAfter } from "../services/whatsapp/outbox";
 import {
   EDITABLE_STATUSES,
   MAX_JOB_DAYS,
@@ -221,11 +222,21 @@ async function resolveJobInput(
 }
 
 /** Plain-language summary for notifications: "W00012 · Big C Kurnool board fixing · Kurnool · 21–23 Oct". */
-function jobSummary(job: { job_no: string; work_details: string; area: { name: string }; start_date: Date; end_date: Date }) {
-  const fmt = (d: Date) => d.toLocaleDateString("en-IN", { day: "numeric", month: "short", timeZone: "UTC" });
-  const when = dayKey(job.start_date) === dayKey(job.end_date) ? fmt(job.start_date) : `${fmt(job.start_date)} – ${fmt(job.end_date)}`;
-  return `${job.job_no} · ${job.work_details} · ${job.area.name} · ${when}`;
+function jobSummary(job: JobBrief) {
+  return `${job.job_no} · ${job.work_details} · ${job.area.name} · ${jobWhen(job)}`;
 }
+
+type JobBrief = { id: number; job_no: string; work_details: string; area: { name: string }; start_date: Date; end_date: Date };
+
+/** "21 Oct" or "21 Oct – 23 Oct". */
+function jobWhen(job: Pick<JobBrief, "start_date" | "end_date">) {
+  const fmt = (d: Date) => d.toLocaleDateString("en-IN", { day: "numeric", month: "short", timeZone: "UTC" });
+  return dayKey(job.start_date) === dayKey(job.end_date) ? fmt(job.start_date) : `${fmt(job.start_date)} – ${fmt(job.end_date)}`;
+}
+
+/** Job number, work, area and dates: the shared variables of the field-staff WhatsApp templates. */
+const jobVars = (job: JobBrief) => [job.job_no, job.work_details, job.area.name, jobWhen(job)];
+const jobRef = (job: JobBrief) => ({ type: "work_job" as const, id: job.id });
 
 /** Tell field staff about their jobs (no order link: they have no order page to open). */
 async function notifyPeople(userIds: number[], title: string, body: string, kind = "info") {
@@ -321,9 +332,17 @@ export const createJob = async (req: Request, res: Response) => {
     });
 
     await notifyPeople(job.members.map((m) => m.user_id), `New job ${job.job_no}`, jobSummary(job));
+    await queueWhatsAppAfter("JOB_ASSIGNED", job.members.map((m) => m.user_id), jobVars(job), jobRef(job));
     const csm = csmUserOf(job);
     if (csm) {
-      await notifyUser(csm, `Team assigned for ${job.order.order_no}`, `${jobSummary(job)} — ${job.members.map((m) => m.user.name).join(", ")}`, "info", job.order.id).catch(() => {});
+      const team = job.members.map((m) => m.user.name).join(", ");
+      await notifyUser(csm, `Team assigned for ${job.order.order_no}`, `${jobSummary(job)} — ${team}`, "info", job.order.id).catch(() => {});
+      await queueWhatsAppAfter(
+        "JOB_UPDATE",
+        [csm],
+        [job.job_no, job.order.order_no, job.work_details, "assigned", `${job.area.name}, ${jobWhen(job)}. Team: ${team || "none yet"}`],
+        jobRef(job),
+      );
     }
     return res.status(201).json(serializeJob(job));
   } catch (err) {
@@ -370,8 +389,14 @@ export const updateJob = async (req: Request, res: Response) => {
       return { job, added, removed };
     });
 
-    if (added.length) await notifyPeople(added, `New job ${job.job_no}`, jobSummary(job));
-    if (removed.length) await notifyPeople(removed, `Removed from job ${job.job_no}`, `You are no longer on ${jobSummary(job)}.`, "warning");
+    if (added.length) {
+      await notifyPeople(added, `New job ${job.job_no}`, jobSummary(job));
+      await queueWhatsAppAfter("JOB_ASSIGNED", added, jobVars(job), jobRef(job));
+    }
+    if (removed.length) {
+      await notifyPeople(removed, `Removed from job ${job.job_no}`, `You are no longer on ${jobSummary(job)}.`, "warning");
+      await queueWhatsAppAfter("JOB_REMOVED", removed, jobVars(job), jobRef(job));
+    }
     return res.status(200).json(serializeJob(job));
   } catch (err) {
     return sendError(res, err);
@@ -435,10 +460,17 @@ export const setJobStatus = async (req: Request, res: Response) => {
 
     if (status === "CANCELLED") {
       await notifyPeople(job.members.map((m) => m.user_id), `Job ${job.job_no} cancelled`, `${jobSummary(job)}. Reason: ${reason}`, "warning");
+      await queueWhatsAppAfter("JOB_CANCELLED", job.members.map((m) => m.user_id), [...jobVars(job), reason], jobRef(job));
     }
     const csm = csmUserOf(job);
     if (csm && (status === "COMPLETED" || status === "HOLD" || status === "CANCELLED" || (status === "STARTED" && from === "ASSIGNED"))) {
       await notifyUser(csm, `${job.job_no} ${status.toLowerCase()}`, jobSummary(job), status === "COMPLETED" ? "success" : "info", job.order.id).catch(() => {});
+      await queueWhatsAppAfter(
+        "JOB_UPDATE",
+        [csm],
+        [job.job_no, job.order.order_no, job.work_details, status === "HOLD" ? "on hold" : status.toLowerCase(), reason || `${job.area.name}, ${jobWhen(job)}`],
+        jobRef(job),
+      );
     }
     return res.status(200).json(serializeJob(job));
   } catch (err) {
@@ -672,6 +704,12 @@ export const myJobStatus = async (req: Request, res: Response) => {
     const body = `${jobSummary(job)}${status === "COMPLETED" && note ? ` — "${note}"` : ""}`;
     const tell = [...new Set([csmUserOf(job), job.created_by].filter((u): u is number => !!u && u !== me))];
     await Promise.all(tell.map((u) => notifyUser(u, title, body, status === "COMPLETED" ? "success" : "info", job.order.id).catch(() => {})));
+    await queueWhatsAppAfter(
+      "JOB_UPDATE",
+      tell,
+      [job.job_no, job.order.order_no, job.work_details, status === "STARTED" ? "started" : "completed", `Marked by ${who}${status === "COMPLETED" && note ? `: ${note}` : ""}`],
+      jobRef(job),
+    );
 
     return res.status(200).json(serializeJob(job));
   } catch (err) {

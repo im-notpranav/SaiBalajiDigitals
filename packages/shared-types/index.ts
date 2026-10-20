@@ -32,6 +32,8 @@ export interface AuthUser {
   role: UserRole;
   email?: string | null;
   phone?: string | null;
+  /** Turned off WhatsApp messages (in-app notifications still arrive). */
+  whatsapp_opt_out?: boolean;
   photo_url?: string | null;
   is_super_admin?: boolean;
   is_active?: boolean;

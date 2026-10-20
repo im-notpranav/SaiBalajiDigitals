@@ -58,6 +58,7 @@ export const login = async (req: Request, res: Response) => {
         role: user.role,
         email: user.email,
         phone: user.phone,
+        whatsapp_opt_out: user.whatsapp_opt_out,
         photo_url: user.photo_url,
         is_super_admin: user.is_super_admin,
       }
@@ -84,6 +85,7 @@ export const getMe = async (req: Request, res: Response) => {
         role: true,
         email: true,
         phone: true,
+        whatsapp_opt_out: true,
         photo_url: true,
         is_super_admin: true,
       }

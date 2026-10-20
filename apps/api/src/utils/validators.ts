@@ -214,6 +214,9 @@ export const indianMobile = z
   .refine((v) => /^[6-9]\d{9}$/.test(v), "Enter a 10-digit Indian mobile number")
   .transform((v) => `+91${v}`);
 
+/** A mobile number on a user form: blank clears it, anything else must be a valid Indian mobile. */
+const userMobile = z.union([z.literal("").transform(() => null), indianMobile]).optional().nullable();
+
 const empCode = z.string().trim().min(1).max(20);
 const username = z
   .string()
@@ -285,6 +288,8 @@ export const updateUserSchema = z.object({
     .max(50)
     .regex(/^[a-z0-9_]+$/, "Username must be lowercase letters, numbers, or underscores"),
   role: roleEnum,
+  phone: userMobile,
+  whatsapp_opt_out: z.boolean().optional(),
 });
 
 /** Admin-initiated password reset for another account. */
@@ -295,7 +300,8 @@ export const resetPasswordSchema = z.object({
 export const updateMeSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   email: z.string().email().optional().nullable(),
-  phone: z.string().min(10).max(20).optional().nullable(),
+  phone: userMobile,
+  whatsapp_opt_out: z.boolean().optional(),
   photo_url: z.string().url().or(z.literal("")).optional().nullable(),
   current_password: z.string().optional(),
   new_password: z.string().min(8).optional(),

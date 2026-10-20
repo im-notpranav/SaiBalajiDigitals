@@ -47,3 +47,18 @@ export const SMTP_PASS = process.env.SMTP_PASS || "";
 if (!SMTP_HOST) {
   console.warn("⚠️  SMTP_HOST is not set — email notifications will not be sent.");
 }
+
+// ─── WhatsApp via AskEva (log-only until switched on) ───────────────────────
+
+/** "live" sends through AskEva; anything else writes messages to the log only. */
+export const WHATSAPP_MODE: "live" | "log" = process.env.WHATSAPP_MODE === "live" ? "live" : "log";
+export const ASKEVA_SEND_URL = optional("ASKEVA_SEND_URL", "https://backend.askeva.io/v1/message/send-message");
+export const ASKEVA_TOKEN = process.env.ASKEVA_TOKEN || "";
+/** Shared secret for the delivery-report webhook (verify token and ?key= on the URL). */
+export const ASKEVA_WEBHOOK_SECRET = process.env.ASKEVA_WEBHOOK_SECRET || "";
+/** Live only when asked for and a token is present; otherwise nothing leaves the server. */
+export const WHATSAPP_LIVE = WHATSAPP_MODE === "live" && !!ASKEVA_TOKEN;
+
+if (WHATSAPP_MODE === "live" && !ASKEVA_TOKEN) {
+  console.warn("⚠️  WHATSAPP_MODE=live but ASKEVA_TOKEN is not set — WhatsApp messages will only be logged.");
+}
