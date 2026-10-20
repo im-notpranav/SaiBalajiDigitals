@@ -305,3 +305,42 @@ export const loginSchema = z.object({
   username: z.string().min(1),
   password: z.string().min(1),
 });
+
+/** A calendar day as "YYYY-MM-DD" that really exists (no 2026-02-30). */
+const dayString = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD")
+  .refine((v) => !Number.isNaN(Date.parse(`${v}T00:00:00Z`)) && new Date(`${v}T00:00:00Z`).toISOString().startsWith(v), "Not a real date");
+
+const optionalId = z.number().int().positive().optional().nullable();
+
+export const workJobSchema = z
+  .object({
+    order_id: z.number().int().positive(),
+    store_ids: z.array(z.number().int().positive()).max(50).default([]),
+    start_date: dayString,
+    end_date: dayString.optional().nullable(),
+    csm_code_id: optionalId,
+    csm2_code_id: optionalId,
+    work_details: z.string().trim().min(3).max(500),
+    area_id: z.number().int().positive(),
+    vehicle_id: optionalId,
+    route: z.string().trim().max(200).optional().nullable(),
+    extra_tag: z.string().trim().max(20).optional().nullable(),
+    instructions: z.string().trim().max(1000).optional().nullable(),
+    allow_double_booking: z.boolean().default(false),
+    member_ids: z.array(z.number().int().positive()).min(1, "Pick at least one person").max(5),
+  })
+  .refine((j) => !j.end_date || j.end_date >= j.start_date, { message: "End date cannot be before start date", path: ["end_date"] })
+  .refine((j) => !j.csm2_code_id || j.csm2_code_id !== j.csm_code_id, { message: "CSM 2 must differ from the first CSM", path: ["csm2_code_id"] })
+  .refine((j) => new Set(j.member_ids).size === j.member_ids.length, { message: "The same person is listed twice", path: ["member_ids"] });
+
+export const workJobStatusSchema = z
+  .object({
+    status: z.enum(["ASSIGNED", "STARTED", "COMPLETED", "HOLD", "CANCELLED"]),
+    reason: z.string().trim().max(300).optional().nullable(),
+  })
+  .refine((v) => v.status !== "CANCELLED" || !!v.reason, { message: "Give a reason for cancelling", path: ["reason"] });
+
+export const dayQuery = dayString;
+

@@ -32,6 +32,9 @@ import {
   Upload,
   HardHat,
   MapPinned,
+  CalendarRange,
+  LayoutGrid,
+  Truck,
 } from "lucide-react";
 import { type UserRole, useAuth } from "@/lib/auth-store";
 import { cn } from "@/lib/utils";
@@ -90,6 +93,9 @@ const NAV: Record<UserRole, NavItem[]> = {
   // Settings / Bulk Import), but runs field staff and the allocation masters.
   OPERATION_MANAGER: [
     { to: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { to: "/admin/jobs", label: "Field Jobs", icon: Truck },
+    { to: "/admin/board", label: "Daily Board", icon: LayoutGrid },
+    { to: "/admin/grid", label: "Weekly Grid", icon: CalendarRange },
     { to: "/admin/field-staff", label: "Field Staff", icon: HardHat },
     { to: "/admin/masters", label: "Allocation Masters", icon: MapPinned },
     { to: "/admin/orders", label: "Orders", icon: Boxes },
@@ -103,6 +109,9 @@ const NAV: Record<UserRole, NavItem[]> = {
   ADMIN: [
     { to: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { to: "/admin/users", label: "Users", icon: Users },
+    { to: "/admin/jobs", label: "Field Jobs", icon: Truck },
+    { to: "/admin/board", label: "Daily Board", icon: LayoutGrid },
+    { to: "/admin/grid", label: "Weekly Grid", icon: CalendarRange },
     { to: "/admin/field-staff", label: "Field Staff", icon: HardHat },
     { to: "/admin/masters", label: "Allocation Masters", icon: MapPinned },
     { to: "/admin/orders", label: "Orders", icon: Boxes },
@@ -183,7 +192,8 @@ function SidebarBody({
           short screen without pushing the sign-out block off the bottom. */}
       <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto p-3">
         {items.map((item, i) => {
-          const active = location.pathname === item.to || location.pathname.startsWith(item.to + "/");
+          const active =
+            location.pathname === item.to || location.pathname.startsWith(item.to + "/");
           const Icon = item.icon;
           return (
             <motion.div

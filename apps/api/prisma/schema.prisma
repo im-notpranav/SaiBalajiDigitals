@@ -32,6 +32,15 @@ enum CsmCodeKind {
   UNKNOWN
 }
 
+/// Field-job lifecycle. COMPLETED and CANCELLED are final.
+enum WorkJobStatus {
+  ASSIGNED
+  STARTED
+  COMPLETED
+  HOLD
+  CANCELLED
+}
+
 /// Local = Hyderabad city. Non-local work shows as "-N" on the allocation grid.
 enum AreaLocality {
   LOCAL
@@ -87,6 +96,8 @@ model User {
   invoicePayments Invoice[]       @relation("InvoicePaymentReceiver")
   csmCodes        CsmCode[]
   usualVehicles   Vehicle[]       @relation("VehicleUsualDriver")
+  workJobsCreated WorkJob[]       @relation("WorkJobCreator")
+  workJobSlots    WorkJobMember[]
 }
 
 model OrderSequence {
@@ -119,6 +130,7 @@ model Order {
   changeLogs             OrderChangeLog[]
   notifications          Notification[]        @relation("OrderNotifications")
   followUps              PaymentFollowUp[]
+  workJobs               WorkJob[]
   created_at             DateTime              @default(now())
   updated_at             DateTime              @updatedAt
 
@@ -188,6 +200,7 @@ model OrderStore {
   invoice_id   Int?
   invoice      Invoice?    @relation(fields: [invoice_id], references: [id], onDelete: SetNull)
   items        OrderItem[]
+  workJobs     WorkJobStore[]
   created_at   DateTime    @default(now())
   updated_at   DateTime    @updatedAt
 
@@ -323,6 +336,8 @@ model CsmCode {
   label      String?
   user_id    Int?
   user       User?       @relation(fields: [user_id], references: [id], onDelete: SetNull)
+  jobs       WorkJob[]   @relation("WorkJobCsm")
+  jobsAsCsm2 WorkJob[]   @relation("WorkJobCsm2")
   is_active  Boolean     @default(true)
   created_at DateTime    @default(now())
   updated_at DateTime    @updatedAt
@@ -339,6 +354,7 @@ model Area {
   /// Imported areas whose locality the business has not confirmed yet.
   needs_confirmation Boolean      @default(false)
   is_active          Boolean      @default(true)
+  workJobs           WorkJob[]
   created_at         DateTime     @default(now())
   updated_at         DateTime     @updatedAt
 }
@@ -351,8 +367,86 @@ model Vehicle {
   usualDriver     User?    @relation("VehicleUsualDriver", fields: [usual_driver_id], references: [id], onDelete: SetNull)
   notes           String?
   is_active       Boolean  @default(true)
+  workJobs        WorkJob[]
   created_at      DateTime @default(now())
   updated_at      DateTime @updatedAt
 
   @@index([usual_driver_id])
+}
+
+/// One field job: a team sent to work on an order over one or more days. Replaces a row
+/// of the old "Task Log" sheet; the weekly grid and the daily board are derived from these.
+model WorkJob {
+  id                   Int             @id @default(autoincrement())
+  /// W00001, W00002 … from the work_job_no_seq sequence (see the migration).
+  job_no               String          @unique @default(dbgenerated("('W'::text || lpad((nextval('work_job_no_seq'::regclass))::text, 5, '0'::text))"))
+  order_id             Int
+  order                Order           @relation(fields: [order_id], references: [id], onDelete: Restrict)
+  start_date           DateTime        @db.Date
+  /// Same as start_date for a one-day job.
+  end_date             DateTime        @db.Date
+  csm_code_id          Int?
+  csmCode              CsmCode?        @relation("WorkJobCsm", fields: [csm_code_id], references: [id], onDelete: SetNull)
+  /// Work shared with a second CSM on the same day.
+  csm2_code_id         Int?
+  csm2Code             CsmCode?        @relation("WorkJobCsm2", fields: [csm2_code_id], references: [id], onDelete: SetNull)
+  work_details         String
+  area_id              Int
+  area                 Area            @relation(fields: [area_id], references: [id], onDelete: Restrict)
+  /// Copied from the area when the job is saved, so re-classifying an area later does
+  /// not rewrite history.
+  locality             AreaLocality
+  vehicle_id           Int?
+  vehicle              Vehicle?        @relation(fields: [vehicle_id], references: [id], onDelete: SetNull)
+  route                String?
+  extra_tag            String?
+  instructions         String?
+  /// "Allow 2nd job": lets this job overlap other work for the same people.
+  allow_double_booking Boolean         @default(false)
+  status               WorkJobStatus   @default(ASSIGNED)
+  started_at           DateTime?
+  completed_at         DateTime?
+  cancelled_at         DateTime?
+  cancel_reason        String?
+  created_by           Int?
+  creator              User?           @relation("WorkJobCreator", fields: [created_by], references: [id], onDelete: SetNull)
+  members              WorkJobMember[]
+  stores               WorkJobStore[]
+  created_at           DateTime        @default(now())
+  updated_at           DateTime        @updatedAt
+
+  @@index([order_id])
+  @@index([start_date, end_date])
+  @@index([status])
+}
+
+/// A person on a job. The job's dates are copied here so the database itself can refuse
+/// to book one person on two overlapping jobs (exclusion constraint in the migration).
+model WorkJobMember {
+  id              Int      @id @default(autoincrement())
+  job_id          Int
+  job             WorkJob  @relation(fields: [job_id], references: [id], onDelete: Cascade)
+  user_id         Int
+  user            User     @relation(fields: [user_id], references: [id], onDelete: Restrict)
+  /// PASTER, HELPER or DRIVER: the person's role when they were put on the job.
+  slot_role       Role
+  start_date      DateTime @db.Date
+  end_date        DateTime @db.Date
+  /// False when the job is cancelled or allows double booking. Only rows with this set
+  /// take part in the no-overlap constraint.
+  blocks_calendar Boolean  @default(true)
+
+  @@unique([job_id, user_id])
+  @@index([user_id, start_date])
+}
+
+/// The stores of the order a job covers. Optional: a job may cover the whole order.
+model WorkJobStore {
+  job_id         Int
+  job            WorkJob    @relation(fields: [job_id], references: [id], onDelete: Cascade)
+  order_store_id Int
+  orderStore     OrderStore @relation(fields: [order_store_id], references: [id], onDelete: Cascade)
+
+  @@id([job_id, order_store_id])
+  @@index([order_store_id])
 }

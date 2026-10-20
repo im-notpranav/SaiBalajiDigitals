@@ -963,7 +963,13 @@ export const deleteOrder = async (req: Request, res: Response) => {
       await tx.order.delete({ where: { id } });
     });
     return res.status(200).json(serializeDecimals({ message: "Order deleted" }));
-  } catch (err) {
+  } catch (err: any) {
+    // Field jobs keep their order (WorkJob.order_id is ON DELETE RESTRICT) so job history
+    // is never silently lost with it.
+    // ON DELETE RESTRICT surfaces as Postgres 23001 (an unknown-request error), not P2003.
+    if (err?.code === "P2003" || String(err?.message ?? "").includes("WorkJob_order_id_fkey")) {
+      return res.status(400).json({ message: "This order has field jobs in the work-allocation portal. Cancel or move those jobs before deleting the order." });
+    }
     return res.status(500).json({ message: "Internal server error" });
   }
 };

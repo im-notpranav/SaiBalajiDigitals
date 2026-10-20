@@ -55,6 +55,8 @@ import adminRoutes from "./routes/admin.routes";
 import notificationsRoutes from "./routes/notifications.routes";
 import fieldStaffRoutes from "./routes/field-staff.routes";
 import mastersRoutes from "./routes/masters.routes";
+import workJobsRoutes from "./routes/work-jobs.routes";
+import myRoutes from "./routes/my.routes";
 import { initEmailService } from "./services/email.service";
 
 app.use("/api/auth", authRoutes);
@@ -67,6 +69,8 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/notifications", notificationsRoutes);
 app.use("/api/field-staff", fieldStaffRoutes);
 app.use("/api/masters", mastersRoutes);
+app.use("/api/work-jobs", workJobsRoutes);
+app.use("/api/my", myRoutes);
 
 app.listen(PORT, async () => {
   console.log(`Server listening on port ${PORT}`);

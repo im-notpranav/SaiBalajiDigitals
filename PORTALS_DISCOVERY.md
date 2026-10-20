@@ -40,6 +40,24 @@ Route B, bill_details_required = Yes:
 
 Still open on this flow: whether Admin and CCM can **return a request for more information** (proposed: yes, back to the requester, who resubmits into the same stage), and whether a requester may cancel before review starts (proposed: yes).
 
+**Phase C defaults (work jobs, built 2026-10-20; change any of these on request):**
+
+| Topic | Default used |
+|---|---|
+| Job number | `W` + 5 digits from a database sequence (`W00001`). |
+| Team size | Up to 2 Pasters, 2 Helpers and 1 Driver per job; at least one person. |
+| Length | Whole days, start to end inclusive, at most 62 days. |
+| Double-booking | Refused when anyone on the team already has a job on an overlapping day. Enforced twice: a readable 409 from the API, and a Postgres exclusion constraint so two managers saving at once cannot both win. |
+| "Allow 2nd job" | A job with this ticked **does not block anyone's calendar** at all, so it never clashes with other jobs. |
+| Statuses | Assigned → Started → Completed, with Hold in between. Completed can be reopened (back to Started). Cancelled is final, needs a reason, and frees the team's dates. Only Assigned / Started / Hold jobs can be edited. |
+| CSM code | Defaults to the code linked to whoever raised the order; a second code is optional. |
+| Grid label | `<CSM code or order no>[/<2nd code>]`, then `-N_<tag>` for non-local or `-<tag>` for local (e.g. `RK/SK-N_CN`, `RK-CN`, plain `RK-N` with no tag). Local / non-local is copied from the area when the job is saved. |
+| What field staff see | Their own jobs only, from two weeks back: order no and client name (no amounts or order status), work, dates, area and route, stores, team with phone numbers, vehicle, instructions, and the CSM's name and phone. |
+| Notifications | In-app now; WhatsApp joins in Phase G2. The team hears about assignment, removal and cancellation. The CSM hears about start, completion, hold and cancellation. |
+| Orders with jobs | Can no longer be deleted; the API explains that the jobs must go first. |
+
+Not in Phase C, still to come: a CSM's view of the jobs on their orders, Started / Completed buttons for field staff (Phase E), and checking the grid against the WB2 9–15 Oct sample once real jobs are entered.
+
 ---
 
 ## 0. Headline findings

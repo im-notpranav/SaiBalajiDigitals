@@ -87,22 +87,28 @@ export const setFieldStaffStatus = (id: number, is_active: boolean) =>
   apiFetch<FieldStaff>(`/field-staff/${id}/status`, { method: "PUT", data: { is_active } });
 
 export const resetFieldStaffPassword = (id: number, new_password: string) =>
-  apiFetch<{ message: string }>(`/field-staff/${id}/password`, { method: "PUT", data: { new_password } });
+  apiFetch<{ message: string }>(`/field-staff/${id}/password`, {
+    method: "PUT",
+    data: { new_password },
+  });
 
 // --- Masters ---------------------------------------------------------------
 
 export const fetchAreas = () => apiFetch<{ areas: Area[] }>("/masters/areas");
-export const createArea = (data: Partial<Area>) => apiFetch<Area>("/masters/areas", { method: "POST", data });
+export const createArea = (data: Partial<Area>) =>
+  apiFetch<Area>("/masters/areas", { method: "POST", data });
 export const updateArea = (id: number, data: Partial<Area>) =>
   apiFetch<Area>(`/masters/areas/${id}`, { method: "PATCH", data });
 
 export const fetchVehicles = () => apiFetch<{ vehicles: Vehicle[] }>("/masters/vehicles");
-export const createVehicle = (data: Partial<Vehicle>) => apiFetch<Vehicle>("/masters/vehicles", { method: "POST", data });
+export const createVehicle = (data: Partial<Vehicle>) =>
+  apiFetch<Vehicle>("/masters/vehicles", { method: "POST", data });
 export const updateVehicle = (id: number, data: Partial<Vehicle>) =>
   apiFetch<Vehicle>(`/masters/vehicles/${id}`, { method: "PATCH", data });
 
 export const fetchCsmCodes = () => apiFetch<{ codes: CsmCode[] }>("/masters/csm-codes");
-export const createCsmCode = (data: Partial<CsmCode>) => apiFetch<CsmCode>("/masters/csm-codes", { method: "POST", data });
+export const createCsmCode = (data: Partial<CsmCode>) =>
+  apiFetch<CsmCode>("/masters/csm-codes", { method: "POST", data });
 export const updateCsmCode = (id: number, data: Partial<CsmCode>) =>
   apiFetch<CsmCode>(`/masters/csm-codes/${id}`, { method: "PATCH", data });
 
@@ -111,4 +117,217 @@ export function apiErrorMessage(err: any, fallback: string): string {
   const data = err?.response?.data;
   if (Array.isArray(data?.errors) && data.errors.length) return data.errors.join(", ");
   return data?.message || fallback;
+}
+
+// --- Work jobs -------------------------------------------------------------
+
+export type WorkJobStatus = "ASSIGNED" | "STARTED" | "COMPLETED" | "HOLD" | "CANCELLED";
+
+export const JOB_STATUS_LABELS: Record<WorkJobStatus, string> = {
+  ASSIGNED: "Assigned",
+  STARTED: "Started",
+  COMPLETED: "Completed",
+  HOLD: "On hold",
+  CANCELLED: "Cancelled",
+};
+
+/** Mirrors STATUS_TRANSITIONS in the API (utils/work-allocation.ts). */
+export const JOB_STATUS_NEXT: Record<WorkJobStatus, WorkJobStatus[]> = {
+  ASSIGNED: ["STARTED", "HOLD", "CANCELLED"],
+  STARTED: ["COMPLETED", "HOLD", "CANCELLED"],
+  HOLD: ["ASSIGNED", "STARTED", "CANCELLED"],
+  COMPLETED: ["STARTED"],
+  CANCELLED: [],
+};
+
+export const JOB_EDITABLE: WorkJobStatus[] = ["ASSIGNED", "STARTED", "HOLD"];
+
+export interface JobStore {
+  id: number;
+  s_no: number;
+  store_name: string;
+  location: string | null;
+}
+interface CodeRef {
+  id: number;
+  code: string;
+  kind: CsmCodeKind;
+  label: string | null;
+  user: { id: number; name: string } | null;
+}
+
+export interface WorkJob {
+  id: number;
+  job_no: string;
+  status: WorkJobStatus;
+  start_date: string;
+  end_date: string;
+  days: number;
+  work_details: string;
+  locality: AreaLocality;
+  route: string | null;
+  extra_tag: string | null;
+  instructions: string | null;
+  allow_double_booking: boolean;
+  label: string;
+  order: {
+    id: number;
+    order_no: string;
+    client_name: string;
+    status: string;
+    created_by: number | null;
+    creator_name: string | null;
+  };
+  area: { id: number; name: string; locality: AreaLocality };
+  vehicle: { id: number; reg_no: string; type: string } | null;
+  csm_code: CodeRef | null;
+  csm2_code: CodeRef | null;
+  creator: { id: number; name: string } | null;
+  members: { user_id: number; name: string; phone: string | null; slot_role: FieldRole }[];
+  stores: JobStore[];
+  started_at: string | null;
+  completed_at: string | null;
+  cancelled_at: string | null;
+  cancel_reason: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface JobConflict {
+  user_id: number;
+  name: string;
+  job_id: number;
+  job_no: string;
+  work_details: string;
+  start_date: string;
+  end_date: string;
+}
+
+export interface WorkJobInput {
+  order_id: number;
+  store_ids: number[];
+  start_date: string;
+  end_date?: string;
+  csm_code_id?: number | null;
+  csm2_code_id?: number | null;
+  work_details: string;
+  area_id: number;
+  vehicle_id?: number | null;
+  route?: string | null;
+  extra_tag?: string | null;
+  instructions?: string | null;
+  allow_double_booking: boolean;
+  member_ids: number[];
+}
+
+export interface OrderOption {
+  id: number;
+  order_no: string;
+  client_name: string;
+  status: string;
+  created_by: number | null;
+  creator_name: string | null;
+  stores: JobStore[];
+  csm_code: { id: number; code: string } | null;
+}
+
+export interface StaffBrief {
+  id: number;
+  name: string;
+  role: FieldRole;
+  phone: string | null;
+  emp_code: string | null;
+}
+type JobRef = { job_id: number; job_no: string; label: string };
+
+export interface DailyBoard {
+  date: string;
+  counts: {
+    jobs: number;
+    free_pasters: number;
+    free_helpers: number;
+    free_drivers: number;
+    busy: number;
+    double_booked: number;
+  };
+  free: Record<FieldRole, StaffBrief[]>;
+  busy: (StaffBrief & { jobs: JobRef[] })[];
+  jobs: WorkJob[];
+}
+
+export interface WeeklyGrid {
+  from: string;
+  to: string;
+  dates: string[];
+  rows: (StaffBrief & { days: (JobRef & { status: WorkJobStatus })[][] })[];
+  free: Record<FieldRole, number>[];
+}
+
+export interface MyJob extends Omit<WorkJob, "order"> {
+  order: { order_no: string; client_name: string };
+  csm: { id: number; name: string; phone: string | null } | null;
+}
+
+export type JobFilters = Partial<
+  Record<
+    | "from"
+    | "to"
+    | "status"
+    | "user_id"
+    | "area_id"
+    | "csm_code_id"
+    | "locality"
+    | "order_id"
+    | "q",
+    string
+  >
+>;
+
+const qs = (params: Record<string, string | undefined>) => {
+  const s = new URLSearchParams(
+    Object.entries(params).filter(([, v]) => v) as [string, string][],
+  ).toString();
+  return s ? `?${s}` : "";
+};
+
+export const fetchWorkJobs = (filters: JobFilters) =>
+  apiFetch<{ from: string; to: string; jobs: WorkJob[] }>(`/work-jobs${qs(filters)}`);
+export const fetchWorkJob = (id: number) => apiFetch<WorkJob>(`/work-jobs/${id}`);
+export const createWorkJob = (data: WorkJobInput) =>
+  apiFetch<WorkJob>("/work-jobs", { method: "POST", data });
+export const updateWorkJob = (id: number, data: WorkJobInput) =>
+  apiFetch<WorkJob>(`/work-jobs/${id}`, { method: "PUT", data });
+export const setWorkJobStatus = (id: number, status: WorkJobStatus, reason?: string) =>
+  apiFetch<WorkJob>(`/work-jobs/${id}/status`, { method: "PUT", data: { status, reason } });
+export const fetchOrderOptions = (q: string) =>
+  apiFetch<{ orders: OrderOption[] }>(`/work-jobs/order-options${qs({ q })}`);
+export const fetchDailyBoard = (date?: string) =>
+  apiFetch<DailyBoard>(`/work-jobs/board${qs({ date })}`);
+export const fetchWeeklyGrid = (from?: string, days = 7) =>
+  apiFetch<WeeklyGrid>(`/work-jobs/grid${qs({ from, days: String(days) })}`);
+export const fetchMyJobs = () => apiFetch<{ today: string; jobs: MyJob[] }>("/my/work-jobs");
+
+/** Today in India as YYYY-MM-DD, matching the API's todayIST(). */
+export function todayIST(): string {
+  return new Date(Date.now() + 5.5 * 3600 * 1000).toISOString().slice(0, 10);
+}
+
+export function addDays(day: string, n: number): string {
+  const d = new Date(`${day}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+/** "21 Oct" or "21 – 23 Oct" for a job's dates. */
+export function formatJobDates(start: string, end: string): string {
+  const fmt = (d: string, month = true) =>
+    new Date(`${d}T00:00:00Z`).toLocaleDateString("en-IN", {
+      day: "numeric",
+      month: month ? "short" : undefined,
+      timeZone: "UTC",
+    });
+  if (start === end) return fmt(start);
+  return start.slice(0, 7) === end.slice(0, 7)
+    ? `${fmt(start, false)} – ${fmt(end)}`
+    : `${fmt(start)} – ${fmt(end)}`;
 }
