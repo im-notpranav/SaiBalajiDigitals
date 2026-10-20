@@ -13,7 +13,16 @@ import { ProviderError, sendTemplate } from "./askeva";
 import { WA_TEMPLATES, cleanParam, firstName, renderPreview, type WaEvent } from "./templates";
 
 type Db = Prisma.TransactionClient | typeof prisma;
-type Ref = { type: "payment_request" | "work_job" | "order"; id: number };
+/** What a message is about. Jobs also name their order, for people who follow the order rather than the job. */
+type Ref = { type: "payment_request" | "work_job" | "order"; id: number; orderId?: number | null };
+
+/** The "Open in app" button's ending: {APP_URL}/go/<this>. */
+export function linkFor(ref?: Ref): string | null {
+  if (!ref) return null;
+  if (ref.type === "payment_request") return `pr/${ref.id}`;
+  if (ref.type === "order") return `order/${ref.id}`;
+  return ref.orderId ? `job/${ref.id}/${ref.orderId}` : `job/${ref.id}`;
+}
 
 /**
  * A phone number in E.164, or null when it can't be one. Indian numbers may be stored as
@@ -78,6 +87,7 @@ export async function queueWhatsApp(
       to_phone: route.to_phone,
       params: all,
       preview: renderPreview(event, all),
+      link: linkFor(ref),
       ref_type: ref?.type ?? null,
       ref_id: ref?.id ?? null,
       status: route.status,
@@ -128,7 +138,7 @@ const LEASE_MIN = 5;
 
 const maskPhone = (p: string | null) => (p ? `${p.slice(0, 3)}…${p.slice(-4)}` : "no number");
 
-type Claimed = { id: number; template: string; language: string; to_phone: string | null; params: unknown; preview: string; attempts: number };
+type Claimed = { id: number; template: string; language: string; to_phone: string | null; params: unknown; preview: string; link: string | null; attempts: number };
 
 /**
  * Claim due rows. SKIP LOCKED plus a short lease means two API instances never send the
@@ -149,7 +159,7 @@ async function claimBatch(): Promise<Claimed[]> {
         ORDER BY id
         LIMIT ${BATCH}
         FOR UPDATE SKIP LOCKED)
-    RETURNING id, template, language, to_phone, params, preview, attempts`;
+    RETURNING id, template, language, to_phone, params, preview, link, attempts`;
 }
 
 async function deliver(row: Claimed) {
@@ -165,6 +175,7 @@ async function deliver(row: Claimed) {
       template: row.template,
       language: row.language,
       params: (row.params as string[]) ?? [],
+      link: row.link,
     });
     await prisma.whatsAppMessage.updateMany({
       where: { id: row.id, status: "QUEUED" },

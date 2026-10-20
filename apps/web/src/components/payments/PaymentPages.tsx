@@ -36,13 +36,26 @@ import { PaymentRequestSheet } from "./PaymentRequestSheet";
 
 type Crumbs = { label: string; to?: string }[];
 
+/** A request to open straight away, from ?open=<id> (WhatsApp "Open in app" links land here). */
+function openFromUrl(): number | null {
+  if (typeof window === "undefined") return null;
+  const n = Number(new URLSearchParams(window.location.search).get("open"));
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
+/** Once that request is closed, drop ?open= so a reload doesn't bring it back. */
+function clearOpenFromUrl() {
+  if (typeof window === "undefined" || !window.location.search.includes("open=")) return;
+  window.history.replaceState(window.history.state, "", window.location.pathname);
+}
+
 /* ------------------------------------------------------------------ requester */
 
 /** A CSM's or field staff member's own requests, newest first, with a button to raise one. */
 export function MyPaymentRequests({ crumbs }: { crumbs: Crumbs }) {
   const [show, setShow] = useState<"open" | "all">("open");
   const [creating, setCreating] = useState(false);
-  const [openId, setOpenId] = useState<number | null>(null);
+  const [openId, setOpenId] = useState<number | null>(openFromUrl);
   const { data, isLoading } = useQuery({
     queryKey: ["payment-requests", "mine"],
     queryFn: () => fetchPaymentRequests(),
@@ -141,7 +154,13 @@ export function MyPaymentRequests({ crumbs }: { crumbs: Crumbs }) {
         onClose={() => setCreating(false)}
         lastUpi={all[0]?.upi_id}
       />
-      <PaymentRequestSheet requestId={openId} onClose={() => setOpenId(null)} />
+      <PaymentRequestSheet
+        requestId={openId}
+        onClose={() => {
+          setOpenId(null);
+          clearOpenFromUrl();
+        }}
+      />
     </>
   );
 }
@@ -174,7 +193,7 @@ export function PaymentReviewQueue({
   const [status, setStatus] = useState<string>(ALL);
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
-  const [openId, setOpenId] = useState<number | null>(null);
+  const [openId, setOpenId] = useState<number | null>(openFromUrl);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQ(q.trim()), 300);
@@ -367,7 +386,13 @@ export function PaymentReviewQueue({
         </Table>
       </div>
 
-      <PaymentRequestSheet requestId={openId} onClose={() => setOpenId(null)} />
+      <PaymentRequestSheet
+        requestId={openId}
+        onClose={() => {
+          setOpenId(null);
+          clearOpenFromUrl();
+        }}
+      />
     </>
   );
 }

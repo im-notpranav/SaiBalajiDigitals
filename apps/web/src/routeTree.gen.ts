@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as PortalRouteImport } from './routes/_portal'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as PortalProfileRouteImport } from './routes/_portal.profile'
+import { Route as GoSplatRouteImport } from './routes/go.$'
 import { Route as PortalAccountantBillingRouteImport } from './routes/_portal.accountant.billing'
 import { Route as PortalAccountantDashboardRouteImport } from './routes/_portal.accountant.dashboard'
 import { Route as PortalAccountantFinancialYearRouteImport } from './routes/_portal.accountant.financial-year'
@@ -79,6 +80,11 @@ const PortalProfileRoute = PortalProfileRouteImport.update({
   id: '/profile',
   path: '/profile',
   getParentRoute: () => PortalRoute,
+} as any)
+const GoSplatRoute = GoSplatRouteImport.update({
+  id: '/go/$',
+  path: '/go/$',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const PortalAccountantBillingRoute = PortalAccountantBillingRouteImport.update({
   id: '/accountant/billing',
@@ -335,6 +341,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/profile': typeof PortalProfileRoute
+  '/go/$': typeof GoSplatRoute
   '/accountant/billing': typeof PortalAccountantBillingRoute
   '/accountant/dashboard': typeof PortalAccountantDashboardRoute
   '/accountant/financial-year': typeof PortalAccountantFinancialYearRoute
@@ -387,6 +394,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/profile': typeof PortalProfileRoute
+  '/go/$': typeof GoSplatRoute
   '/accountant/billing': typeof PortalAccountantBillingRoute
   '/accountant/dashboard': typeof PortalAccountantDashboardRoute
   '/accountant/financial-year': typeof PortalAccountantFinancialYearRoute
@@ -441,6 +449,7 @@ export interface FileRoutesById {
   '/_portal': typeof PortalRouteWithChildren
   '/login': typeof LoginRoute
   '/_portal/profile': typeof PortalProfileRoute
+  '/go/$': typeof GoSplatRoute
   '/_portal/accountant/billing': typeof PortalAccountantBillingRoute
   '/_portal/accountant/dashboard': typeof PortalAccountantDashboardRoute
   '/_portal/accountant/financial-year': typeof PortalAccountantFinancialYearRoute
@@ -495,6 +504,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/profile'
+    | '/go/$'
     | '/accountant/billing'
     | '/accountant/dashboard'
     | '/accountant/financial-year'
@@ -547,6 +557,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/profile'
+    | '/go/$'
     | '/accountant/billing'
     | '/accountant/dashboard'
     | '/accountant/financial-year'
@@ -600,6 +611,7 @@ export interface FileRouteTypes {
     | '/_portal'
     | '/login'
     | '/_portal/profile'
+    | '/go/$'
     | '/_portal/accountant/billing'
     | '/_portal/accountant/dashboard'
     | '/_portal/accountant/financial-year'
@@ -653,6 +665,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   PortalRoute: typeof PortalRouteWithChildren
   LoginRoute: typeof LoginRoute
+  GoSplatRoute: typeof GoSplatRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -684,6 +697,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/profile'
       preLoaderRoute: typeof PortalProfileRouteImport
       parentRoute: typeof PortalRoute
+    }
+    '/go/$': {
+      id: '/go/$'
+      path: '/go/$'
+      fullPath: '/go/$'
+      preLoaderRoute: typeof GoSplatRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_portal/accountant/billing': {
       id: '/_portal/accountant/billing'
@@ -1126,6 +1146,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   PortalRoute: PortalRouteWithChildren,
   LoginRoute: LoginRoute,
+  GoSplatRoute: GoSplatRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

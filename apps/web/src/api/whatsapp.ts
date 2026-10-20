@@ -20,6 +20,8 @@ export interface WhatsAppMessage {
   user: { id: number; name: string; role: UserRole } | null;
   to_phone: string | null;
   preview: string;
+  /** Full "Open in app" link. */
+  link: string | null;
   ref_type: string | null;
   ref_id: number | null;
   status: WhatsAppStatus;
@@ -48,7 +50,17 @@ export interface WhatsAppSetup {
   webhook_secret_set: boolean;
   send_host: string;
   webhook_path: string;
-  templates: { event: string; template: string; body: string; vars: string[]; category: string; language: string }[];
+  app_url: string;
+  button: { text: string; url: string };
+  templates: {
+    event: string;
+    template: string;
+    body: string;
+    vars: string[];
+    button_sample: string;
+    category: string;
+    language: string;
+  }[];
   people: {
     active: number;
     with_phone: number;

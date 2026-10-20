@@ -56,6 +56,8 @@ export const ASKEVA_SEND_URL = optional("ASKEVA_SEND_URL", "https://backend.aske
 export const ASKEVA_TOKEN = process.env.ASKEVA_TOKEN || "";
 /** Shared secret for the delivery-report webhook (verify token and ?key= on the URL). */
 export const ASKEVA_WEBHOOK_SECRET = process.env.ASKEVA_WEBHOOK_SECRET || "";
+/** Where "Open in app" buttons lead: the web app's address (defaults to the first CLIENT_URL). */
+export const APP_URL = (process.env.APP_URL || CLIENT_URL.split(",")[0] || "").trim().replace(/\/+$/, "");
 /** Live only when asked for and a token is present; otherwise nothing leaves the server. */
 export const WHATSAPP_LIVE = WHATSAPP_MODE === "live" && !!ASKEVA_TOKEN;
 

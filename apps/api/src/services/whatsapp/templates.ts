@@ -57,6 +57,16 @@ export const WA_TEMPLATES = {
 
 export type WaEvent = keyof typeof WA_TEMPLATES;
 
+/**
+ * Every template also carries one button. In AskEva: a "Visit website" button with this text
+ * and a dynamic URL `{APP_URL}/go/{{1}}`; the outbox fills {{1}} with the message's link
+ * ("pr/28", "job/12/30", "order/30"), and the web app's /go page opens the right screen.
+ */
+export const WA_BUTTON_TEXT = "Open in app";
+
+/** A believable button value per event, for the template's sample in AskEva. */
+export const sampleLink = (event: WaEvent) => (event.startsWith("JOB_") ? "job/12/30" : event.startsWith("PAYMENT_") ? "pr/28" : "order/30");
+
 /** Longest a single variable may be; the whole body must stay under WhatsApp's 1024. */
 const MAX_PARAM = 160;
 

@@ -2,9 +2,9 @@ import { Request, Response } from "express";
 import { createHash, timingSafeEqual } from "node:crypto";
 import type { Prisma, WhatsAppStatus } from "@prisma/client";
 import { prisma } from "../utils/prisma";
-import { ASKEVA_SEND_URL, ASKEVA_TOKEN, ASKEVA_WEBHOOK_SECRET, WHATSAPP_LIVE, WHATSAPP_MODE } from "../utils/config";
+import { APP_URL, ASKEVA_SEND_URL, ASKEVA_TOKEN, ASKEVA_WEBHOOK_SECRET, WHATSAPP_LIVE, WHATSAPP_MODE } from "../utils/config";
 import { applyDeliveryReport, applyOptReply, requeueMessage, toE164 } from "../services/whatsapp/outbox";
-import { WA_TEMPLATES } from "../services/whatsapp/templates";
+import { WA_BUTTON_TEXT, WA_TEMPLATES, sampleLink, type WaEvent } from "../services/whatsapp/templates";
 
 const STATUSES: WhatsAppStatus[] = ["QUEUED", "SENT", "DELIVERED", "READ", "FAILED", "SKIPPED", "LOGGED"];
 const PAGE = 50;
@@ -63,6 +63,7 @@ export const listMessages = async (req: Request, res: Response) => {
         user: m.user,
         to_phone: m.to_phone,
         preview: m.preview,
+        link: m.link ? `${APP_URL}/go/${m.link}` : null,
         ref_type: m.ref_type,
         ref_id: m.ref_id,
         status: m.status,
@@ -109,11 +110,14 @@ export const setupInfo = async (_req: Request, res: Response) => {
       webhook_secret_set: !!ASKEVA_WEBHOOK_SECRET,
       send_host: sendHost,
       webhook_path: "/api/webhooks/askeva",
+      app_url: APP_URL,
+      button: { text: WA_BUTTON_TEXT, url: `${APP_URL}/go/{{1}}` },
       templates: Object.entries(WA_TEMPLATES).map(([event, t]) => ({
         event,
         template: t.template,
         body: t.body,
         vars: ["First name", ...t.vars],
+        button_sample: sampleLink(event as WaEvent),
         category: "Utility",
         language: "en",
       })),

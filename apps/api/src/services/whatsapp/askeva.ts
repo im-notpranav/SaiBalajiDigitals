@@ -14,6 +14,8 @@ export interface TemplateMessage {
   template: string;
   language: string;
   params: string[];
+  /** Value for the template's dynamic URL button ({{1}} at the end of its URL), if any. */
+  link?: string | null;
 }
 
 /** Why a send failed, and whether trying again later could help. */
@@ -32,15 +34,16 @@ function providerIdOf(body: any): string | null {
 }
 
 export async function sendTemplate(msg: TemplateMessage): Promise<{ providerId: string | null }> {
+  const components: object[] = [];
+  if (msg.params.length) components.push({ type: "body", parameters: msg.params.map((text) => ({ type: "text", text })) });
+  if (msg.link) components.push({ type: "button", sub_type: "url", index: "0", parameters: [{ type: "text", text: msg.link }] });
   const payload = {
     to: msg.to.replace(/^\+/, ""),
     type: "template",
     template: {
       name: msg.template,
       language: { policy: "deterministic", code: msg.language },
-      ...(msg.params.length
-        ? { components: [{ type: "body", parameters: msg.params.map((text) => ({ type: "text", text })) }] }
-        : {}),
+      ...(components.length ? { components } : {}),
     },
   };
 

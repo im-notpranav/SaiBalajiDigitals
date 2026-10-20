@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, CheckCircle2, Copy, Loader2, RotateCw, Search } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Copy, ExternalLink, Loader2, RotateCw, Search } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -207,6 +207,16 @@ function DeliveryLog() {
                     {m.delivered_at ? ` · delivered ${formatWhen(m.delivered_at)}` : ""}
                     {m.read_at ? ` · read ${formatWhen(m.read_at)}` : ""}
                   </div>
+                  {m.link && (
+                    <a
+                      href={m.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
+                    >
+                      <ExternalLink className="h-3 w-3" /> {m.link}
+                    </a>
+                  )}
                   {m.error && (
                     <div className={cn("mt-0.5 text-xs", m.status === "FAILED" ? "text-destructive" : "text-warning")}>{m.error}</div>
                   )}
@@ -266,6 +276,22 @@ function Templates({ setup }: { setup: WhatsAppSetup }) {
         WhatsApp only delivers business messages that use templates Meta has approved. Create each template below in
         AskEva with exactly this name and text, category <strong className="text-foreground">Utility</strong>, language{" "}
         <strong className="text-foreground">English</strong>. Messages wait for these approvals before going live.
+        <div className="mt-3 grid gap-1 rounded-lg border bg-muted/40 px-3 py-2 text-foreground">
+          <div className="font-medium">Add the same button to every template</div>
+          <div>
+            Type <strong>Visit website</strong>, text <strong>{setup.button.text}</strong>, URL type <strong>Dynamic</strong>:
+          </div>
+          <div className="flex items-center gap-2">
+            <code className="break-all rounded bg-background px-2 py-1 text-xs">{setup.button.url}</code>
+            <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => copy(setup.button.url, "Button URL")} aria-label="Copy button URL">
+              <Copy className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+          <div className="text-xs text-muted-foreground">
+            The app address comes from the server's APP_URL setting{setup.app_url ? "" : " (not set yet)"}. Each message
+            fills {"{{1}}"} with what it is about, and the page it opens depends on who taps it.
+          </div>
+        </div>
       </div>
       {setup.templates.map((t) => (
         <div key={t.template} className="surface-panel grid gap-2 p-4">
@@ -285,6 +311,9 @@ function Templates({ setup }: { setup: WhatsAppSetup }) {
             <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => copy(t.body, "Text")} aria-label="Copy text">
               <Copy className="h-3.5 w-3.5" />
             </Button>
+          </div>
+          <div className="text-xs text-muted-foreground">
+            Button sample: <span className="font-mono">{t.button_sample}</span>
           </div>
           <div className="text-xs text-muted-foreground">
             {t.vars.map((v, i) => (

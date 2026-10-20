@@ -226,7 +226,7 @@ function jobSummary(job: JobBrief) {
   return `${job.job_no} · ${job.work_details} · ${job.area.name} · ${jobWhen(job)}`;
 }
 
-type JobBrief = { id: number; job_no: string; work_details: string; area: { name: string }; start_date: Date; end_date: Date };
+type JobBrief = { id: number; job_no: string; work_details: string; area: { name: string }; start_date: Date; end_date: Date; order?: { id: number } | null };
 
 /** "21 Oct" or "21 Oct – 23 Oct". */
 function jobWhen(job: Pick<JobBrief, "start_date" | "end_date">) {
@@ -236,7 +236,7 @@ function jobWhen(job: Pick<JobBrief, "start_date" | "end_date">) {
 
 /** Job number, work, area and dates: the shared variables of the field-staff WhatsApp templates. */
 const jobVars = (job: JobBrief) => [job.job_no, job.work_details, job.area.name, jobWhen(job)];
-const jobRef = (job: JobBrief) => ({ type: "work_job" as const, id: job.id });
+const jobRef = (job: JobBrief) => ({ type: "work_job" as const, id: job.id, orderId: job.order?.id ?? null });
 
 /** Tell field staff about their jobs (no order link: they have no order page to open). */
 async function notifyPeople(userIds: number[], title: string, body: string, kind = "info") {

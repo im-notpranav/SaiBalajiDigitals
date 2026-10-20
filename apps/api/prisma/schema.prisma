@@ -724,6 +724,8 @@ model WhatsAppMessage {
   params              Json
   /// The message as the person would read it, for the log.
   preview             String
+  /// Ending of the "Open in app" button's link: {APP_URL}/go/{link}, e.g. "pr/28".
+  link                String?
   ref_type            String?
   ref_id              Int?
   status              WhatsAppStatus @default(QUEUED)
