@@ -98,7 +98,11 @@ export const deleteUser = async (req: Request, res: Response) => {
 
     await prisma.user.delete({ where: { id } });
     return res.status(200).json({ message: "User deleted" });
-  } catch (err) {
+  } catch (err: any) {
+    // Records that must outlive the person (payment requests, job slots) block the delete.
+    if (err?.code === "P2003" || String(err?.message ?? "").includes("_fkey")) {
+      return res.status(400).json({ message: "This user has work or payment history. Deactivate them instead." });
+    }
     return res.status(500).json({ message: "Internal server error" });
   }
 };

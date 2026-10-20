@@ -399,3 +399,52 @@ export const myJobStatusSchema = z.object({
   status: z.enum(["STARTED", "COMPLETED"]),
   note: z.string().trim().max(500).optional().nullable(),
 });
+
+/* ---------------------------------------------------------------- payment requests */
+
+const rupees = z
+  .number({ invalid_type_error: "Enter an amount" })
+  .positive("Amount must be more than zero")
+  .max(99_999_999.99, "Amount is too large")
+  .refine((n) => Math.abs(n * 100 - Math.round(n * 100)) < 1e-6, "Use at most 2 decimals");
+
+const upiId = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .regex(/^[a-z0-9][a-z0-9._-]{1,255}@[a-z][a-z0-9.-]{1,63}$/, "Enter a UPI ID like name@bank");
+
+/** The parts of a request the requester fills in, and may correct when it is returned. */
+const paymentRequestFields = {
+  amount: rupees,
+  upi_id: upiId,
+  category: z.enum(["TRAVEL", "MATERIAL", "LABOUR", "FOOD", "ADVANCE", "OTHER"]).optional().nullable(),
+  purpose: z.string().trim().min(3, "Say what the money is for").max(300),
+  remarks: z.string().trim().max(1000).optional().nullable(),
+};
+
+export const paymentRequestSchema = z.object({
+  ...paymentRequestFields,
+  order_id: z.number().int().positive(),
+  work_job_id: optionalId,
+  bill_details_required: z.boolean(),
+  /** A fresh value per form, so a double click or a retry creates one request. */
+  idempotency_key: z.string().trim().min(8).max(100),
+});
+
+export const paymentNoteSchema = z.object({
+  note: z.string().trim().max(500).optional().nullable(),
+});
+
+/** Resubmitting a returned request: the requester may correct the details (not the route). */
+export const paymentResubmitSchema = z.object({
+  ...paymentRequestFields,
+  note: z.string().trim().max(500).optional().nullable(),
+});
+
+export const paymentMarkPaidSchema = z.object({
+  /** Defaults to the amount asked for. */
+  paid_amount: rupees.optional().nullable(),
+  payment_reference: z.string().trim().min(4, "Enter the UTR or bank reference").max(64),
+  note: z.string().trim().max(500).optional().nullable(),
+});

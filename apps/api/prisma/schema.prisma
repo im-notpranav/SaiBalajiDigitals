@@ -113,6 +113,10 @@ model User {
   overtime        OvertimeEntry[] @relation("OvertimePerson")
   overtimeEntered OvertimeEntry[] @relation("OvertimeCreator")
   overtimeDecided OvertimeEntry[] @relation("OvertimeDecider")
+  paymentRequests PaymentRequest[] @relation("PaymentRequester")
+  paymentsPaid    PaymentRequest[] @relation("PaymentPayer")
+  paymentsClosed  PaymentRequest[] @relation("PaymentCloser")
+  paymentEvents   PaymentRequestEvent[]
 }
 
 model OrderSequence {
@@ -146,6 +150,7 @@ model Order {
   notifications          Notification[]        @relation("OrderNotifications")
   followUps              PaymentFollowUp[]
   workJobs               WorkJob[]
+  paymentRequests        PaymentRequest[]
   created_at             DateTime              @default(now())
   updated_at             DateTime              @updatedAt
 
@@ -436,6 +441,7 @@ model WorkJob {
   members              WorkJobMember[]
   stores               WorkJobStore[]
   overtime             OvertimeEntry[]
+  paymentRequests      PaymentRequest[]
   created_at           DateTime        @default(now())
   updated_at           DateTime        @updatedAt
 
@@ -533,4 +539,105 @@ model OvertimeEntry {
   @@index([user_id, work_date])
   @@index([work_date])
   @@index([status])
+}
+
+/// Where a payment request sits. Rules live in utils/payment-workflow.ts.
+enum PaymentRequestStatus {
+  ADMIN_REVIEW
+  CCM_REVIEW
+  /// Sent back to the requester; resubmitting returns it to `returned_from`.
+  INFO_REQUESTED
+  PAYMENT_PENDING
+  PAID
+  CLOSED
+  REJECTED
+  CANCELLED
+}
+
+/// Fixed when the request is submitted, from "Bill details required?".
+enum PaymentRoute {
+  /// No bill details: the Admin approves first, then the Cost Control Manager.
+  ADMIN_THEN_CCM
+  /// Bill details given: straight to the Cost Control Manager.
+  CCM_ONLY
+}
+
+enum PaymentCategory {
+  TRAVEL
+  MATERIAL
+  LABOUR
+  FOOD
+  ADVANCE
+  OTHER
+}
+
+enum PaymentAction {
+  SUBMIT
+  APPROVE
+  REJECT
+  RETURN
+  RESUBMIT
+  CANCEL
+  MARK_PAID
+  CLOSE
+}
+
+/// Money the company pays out to the requester by UPI. Never order revenue.
+model PaymentRequest {
+  id                    Int                   @id @default(autoincrement())
+  /// PR-YYMM-0001, minted from payment_request_no_seq (see the migration).
+  request_no            String                @unique
+  order_id              Int
+  order                 Order                 @relation(fields: [order_id], references: [id], onDelete: Restrict)
+  work_job_id           Int?
+  workJob               WorkJob?              @relation(fields: [work_job_id], references: [id], onDelete: SetNull)
+  /// The requester is also the payee.
+  requested_by          Int
+  requester             User                  @relation("PaymentRequester", fields: [requested_by], references: [id], onDelete: Restrict)
+  amount                Decimal               @db.Decimal(10, 2)
+  upi_id                String
+  category              PaymentCategory?
+  purpose               String
+  remarks               String?
+  bill_details_required Boolean
+  route                 PaymentRoute
+  status                PaymentRequestStatus
+  returned_from         PaymentRequestStatus?
+  /// When the request entered its current status; the Phase H overdue timers read it.
+  status_changed_at     DateTime              @default(now())
+  paid_amount           Decimal?              @db.Decimal(10, 2)
+  paid_at               DateTime?
+  /// UTR or other bank reference, required to mark a request paid.
+  payment_reference     String?
+  paid_by               Int?
+  payer                 User?                 @relation("PaymentPayer", fields: [paid_by], references: [id], onDelete: SetNull)
+  closed_at             DateTime?
+  closed_by             Int?
+  closer                User?                 @relation("PaymentCloser", fields: [closed_by], references: [id], onDelete: SetNull)
+  /// Sent by the client with each new request so a double submit creates one row.
+  idempotency_key       String                @unique
+  events                PaymentRequestEvent[]
+  created_at            DateTime              @default(now())
+  updated_at            DateTime              @updatedAt
+
+  @@index([order_id])
+  @@index([requested_by])
+  @@index([status])
+}
+
+/// Append-only history of a payment request. The migration blocks updates.
+model PaymentRequestEvent {
+  id          Int                   @id @default(autoincrement())
+  request_id  Int
+  request     PaymentRequest        @relation(fields: [request_id], references: [id], onDelete: Cascade)
+  action      PaymentAction
+  from_status PaymentRequestStatus?
+  to_status   PaymentRequestStatus
+  actor_id    Int?
+  actor       User?                 @relation(fields: [actor_id], references: [id], onDelete: SetNull)
+  actor_role  Role
+  note        String?
+  created_at  DateTime              @default(now())
+
+  @@index([request_id])
 }

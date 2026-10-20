@@ -83,6 +83,29 @@ Still open on this flow: whether Admin and CCM can **return a request for more i
 | Notified | The CSM and whoever assigned the job (not the person who tapped the button). WhatsApp follows in Phase G2. |
 | Photos / proof | Not yet: uploads arrive in Phase G. |
 
+**Phase F defaults (payment requests core, built 2026-10-20; change any of these on request):**
+
+| Topic | Default used |
+|---|---|
+| Who raises | A CSM on orders they created; a Paster, Helper or Driver on orders where they are on a live (not cancelled) job. Admin, Operation Manager, Cost Control and Accounts do not raise requests. |
+| Who sees | A requester sees only their own requests. The Admin and the Cost Control Manager see all of them. The Operation Manager has no access. |
+| Eligibility (#6–#9) | Open once every item sent to production is produced, or the order is Installed. An order with nothing sent to production is open. Closed to new requests from the first invoice on any store (not only the "billing started" statuses, since a part-billed order can still read Installed). Requests already raised carry on after billing. |
+| Request | Amount (₹, up to 2 decimals), UPI ID (name@bank, stored lower-case), what it is for, optional category (Travel, Material, Labour, Food, Advance, Other), optional remarks, optional field job on that order, and "Bill details required?" Yes/No. The requester is the payee. |
+| Number | `PR-YYMM-NNNN` (month in India time); the running number does not reset monthly. |
+| Routes | As decided: No bill → Admin review → Cost Control review; Bill → Cost Control review. The route is fixed at submission. |
+| Return for info | Yes. Either reviewer can return a request with a reason; the requester corrects amount, UPI ID, purpose, category or remarks (not the bill choice) and it goes back to the same stage. Changes are written into the history. |
+| Reject | Either reviewer, at their own stage, with a reason. Final. |
+| Cancel | The requester can withdraw while it waits at its first review stage or is returned to them. The Admin can cancel any request that is not yet paid, with a reason. |
+| Mark paid | Cost Control only, from Payment pending. UTR/reference is mandatory; the amount paid defaults to the amount asked and cannot exceed it. |
+| Close | Cost Control only, once paid. The "bill must be attached" check arrives with uploads in Phase G. |
+| Amount cap (#11, #19) | None. Reviewers see the order's value, total asked (live requests) and total paid out, with a red warning when asked exceeds the order value. The requester gets the same warning on submit. |
+| Duplicates | Each form carries a one-time key; a double submit returns the first request. |
+| Concurrency | Every action checks the status it was read in, so two reviewers acting at once cannot both succeed. |
+| History | Every step is an append-only event (who, role, from → to, note); the database refuses edits to it. Request rows are also in the audit log. |
+| Orders and users | An order with payment requests cannot be deleted; a user with payment or work history cannot be deleted (deactivate instead). Closing a request never changes the order. |
+| Notified (in-app) | New and resubmitted requests → the reviewers for that stage; Admin approval → Cost Control and the requester; Cost Control approval, rejection, return, cancellation and payment → the requester; withdrawal → that stage's reviewers. WhatsApp follows in Phase G2. |
+| Overdue timers | Not yet (Phase H). Each request records when it entered its current status, and queues list the oldest first. |
+
 Not in Phase C, still to come: a CSM's view of the jobs on their orders, Started / Completed buttons for field staff (Phase E), and checking the grid against the WB2 9–15 Oct sample once real jobs are entered.
 
 ---

@@ -967,6 +967,10 @@ export const deleteOrder = async (req: Request, res: Response) => {
     // Field jobs keep their order (WorkJob.order_id is ON DELETE RESTRICT) so job history
     // is never silently lost with it.
     // ON DELETE RESTRICT surfaces as Postgres 23001 (an unknown-request error), not P2003.
+    // Payment requests hold their order the same way: money paid out keeps its order.
+    if (String(err?.message ?? "").includes("PaymentRequest_order_id_fkey")) {
+      return res.status(400).json({ message: "This order has payment requests. It cannot be deleted." });
+    }
     if (err?.code === "P2003" || String(err?.message ?? "").includes("WorkJob_order_id_fkey")) {
       return res.status(400).json({ message: "This order has field jobs in the work-allocation portal. Cancel or move those jobs before deleting the order." });
     }

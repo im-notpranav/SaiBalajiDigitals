@@ -50,6 +50,7 @@ interface NavItem {
 
 const FIELD_NAV: NavItem[] = [
   { to: "/field/dashboard", label: "My Work", icon: ClipboardList },
+  { to: "/field/payments", label: "Payments", icon: Wallet },
   { to: "/field/notifications", label: "Notifications", icon: Bell },
   { to: "/profile", label: "Profile", icon: UserCircle },
 ];
@@ -59,6 +60,7 @@ const NAV: Record<UserRole, NavItem[]> = {
     { to: "/employee/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { to: "/employee/new-order", label: "New Order", icon: PlusCircle },
     { to: "/employee/orders", label: "My Orders", icon: ClipboardList },
+    { to: "/employee/payments", label: "Payment Requests", icon: Wallet },
     { to: "/employee/notifications", label: "Notifications", icon: Bell },
     { to: "/profile", label: "Profile", icon: UserCircle },
   ],
@@ -113,6 +115,7 @@ const NAV: Record<UserRole, NavItem[]> = {
   ADMIN: [
     { to: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { to: "/admin/users", label: "Users", icon: Users },
+    { to: "/admin/payments", label: "Payment Requests", icon: Wallet },
     { to: "/admin/jobs", label: "Field Jobs", icon: Truck },
     { to: "/admin/board", label: "Daily Board", icon: LayoutGrid },
     { to: "/admin/grid", label: "Weekly Grid", icon: CalendarRange },
