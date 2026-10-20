@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, Paperclip, Plus, Search, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -30,8 +30,11 @@ import {
   roleLabel,
   type PaymentRequest,
   type PaymentStatus,
+  type PaymentTimer,
 } from "@/api/payments";
 import { NewPaymentRequestDialog, PaymentStatusBadge } from "./PaymentBits";
+import { PaymentDashboard } from "./PaymentDashboard";
+import { TimerChips, overdueText } from "./PaymentTimers";
 import { PaymentRequestSheet } from "./PaymentRequestSheet";
 
 type Crumbs = { label: string; to?: string }[];
@@ -126,11 +129,14 @@ export function MyPaymentRequests({ crumbs }: { crumbs: Crumbs }) {
               className={cn(
                 "surface-panel grid gap-1 p-4 text-left transition-colors hover:bg-muted/40",
                 r.status === "INFO_REQUESTED" && "border-warning/50",
+                r.overdue && "border-destructive/50",
               )}
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  <span className="font-mono font-semibold">{r.request_no}</span>
+                  <span className={cn("font-mono font-semibold", overdueText(r.overdue))}>
+                    {r.request_no}
+                  </span>
                   <PaymentStatusBadge status={r.status} />
                 </div>
                 <span className="text-lg font-semibold tabular-nums">{formatRupees(r.amount)}</span>
@@ -142,7 +148,8 @@ export function MyPaymentRequests({ crumbs }: { crumbs: Crumbs }) {
               </div>
               <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-muted-foreground">
                 {nextStepFor(r)}
-                {r.bill_missing && <BillMissing />}
+                <TimerChips timers={statusTimers(r)} />
+                {r.bill_missing && <BillMissing timer={billTimer(r)} />}
               </div>
             </button>
           ))}
@@ -194,6 +201,14 @@ export function PaymentReviewQueue({
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
   const [openId, setOpenId] = useState<number | null>(openFromUrl);
+  const [overdueOnly, setOverdueOnly] = useState(false);
+  const tableRef = useRef<HTMLDivElement>(null);
+  const showInTable = (next: { status?: string; overdue?: boolean }) => {
+    setTab("all");
+    setStatus(next.status ?? ALL);
+    setOverdueOnly(next.overdue ?? false);
+    tableRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQ(q.trim()), 300);
@@ -204,6 +219,7 @@ export function PaymentReviewQueue({
     scope: tab === "queue" ? ("queue" as const) : undefined,
     status: status === ALL ? undefined : status,
     q: debouncedQ || undefined,
+    overdue: overdueOnly ? ("1" as const) : undefined,
   };
   const { data, isLoading } = useQuery({
     queryKey: ["payment-requests", "review", params],
@@ -215,6 +231,12 @@ export function PaymentReviewQueue({
   return (
     <>
       <PageHeader title={title} description={description} crumbs={crumbs} />
+
+      <PaymentDashboard
+        onOpen={setOpenId}
+        onStage={(s) => showInTable({ status: s })}
+        onOverdueOnly={() => showInTable({ overdue: true })}
+      />
 
       <div className="mb-4 grid gap-3 sm:grid-cols-3">
         {queueStatuses.map((s) => (
@@ -239,7 +261,10 @@ export function PaymentReviewQueue({
         ))}
       </div>
 
-      <div className="surface-panel mb-4 grid gap-3 p-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center">
+      <div
+        ref={tableRef}
+        className="surface-panel mb-4 grid scroll-mt-4 gap-3 p-3 sm:grid-cols-[auto_minmax(0,1fr)_auto_auto] sm:items-center"
+      >
         <div className="inline-flex rounded-xl border p-1">
           {(["queue", "all"] as const).map((t) => (
             <button
@@ -285,6 +310,21 @@ export function PaymentReviewQueue({
             ))}
           </SelectContent>
         </Select>
+        <button
+          type="button"
+          aria-pressed={overdueOnly}
+          onClick={() => setOverdueOnly((o) => !o)}
+          className={cn(
+            "inline-flex h-10 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border px-3 text-sm",
+            overdueOnly
+              ? "border-destructive/50 bg-destructive/10 font-semibold text-destructive"
+              : "text-muted-foreground hover:bg-muted/40",
+          )}
+          title={`Only requests waiting more than ${data?.threshold ?? 10} working days`}
+        >
+          <AlertTriangle className="h-4 w-4" />
+          Overdue{data ? ` (${data.overdue_count})` : ""}
+        </button>
       </div>
 
       <div className="surface-panel overflow-x-auto">
@@ -310,14 +350,18 @@ export function PaymentReviewQueue({
             ) : rows.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={7} className="p-8 text-center text-muted-foreground">
-                  {tab === "queue" ? "Nothing is waiting on you." : "No requests match."}
+                  {overdueOnly
+                    ? "Nothing here is overdue."
+                    : tab === "queue"
+                      ? "Nothing is waiting on you."
+                      : "No requests match."}
                 </TableCell>
               </TableRow>
             ) : (
               rows.map((r) => (
                 <TableRow
                   key={r.id}
-                  className="cursor-pointer"
+                  className={cn("cursor-pointer", r.overdue && "bg-destructive/5 hover:bg-destructive/10")}
                   tabIndex={0}
                   onClick={() => setOpenId(r.id)}
                   onKeyDown={(e) => {
@@ -328,7 +372,9 @@ export function PaymentReviewQueue({
                   }}
                 >
                   <TableCell>
-                    <div className="font-mono font-semibold">{r.request_no}</div>
+                    <div className={cn("whitespace-nowrap font-mono font-semibold", overdueText(r.overdue))}>
+                      {r.request_no}
+                    </div>
                     <div className="whitespace-nowrap text-xs text-muted-foreground">
                       {formatWhen(r.created_at)}
                     </div>
@@ -364,7 +410,7 @@ export function PaymentReviewQueue({
                   <TableCell className="text-sm">
                     <div>{r.bill_details_required ? "Yes" : "No"}</div>
                     {r.bill_missing ? (
-                      <BillMissing />
+                      <BillMissing timer={billTimer(r)} />
                     ) : (
                       fileCount(r) > 0 && (
                         <div className="flex items-center gap-1 whitespace-nowrap text-xs text-muted-foreground">
@@ -375,9 +421,7 @@ export function PaymentReviewQueue({
                   </TableCell>
                   <TableCell>
                     <PaymentStatusBadge status={r.status} />
-                    <div className="mt-1 whitespace-nowrap text-xs text-muted-foreground">
-                      since {formatWhen(r.status_changed_at)}
-                    </div>
+                    <TimerChips timers={statusTimers(r)} className="mt-1" />
                   </TableCell>
                 </TableRow>
               ))
@@ -400,11 +444,26 @@ export function PaymentReviewQueue({
 const fileCount = (r: PaymentRequest) =>
   r.attachment_counts.BILL + r.attachment_counts.PHOTO + r.attachment_counts.RECEIPT;
 
-/** A bill request with no bill on file: it cannot be closed until one is attached. */
-function BillMissing() {
+/** The timer for the request's current status (the bill has its own, shown as BillMissing). */
+const statusTimers = (r: PaymentRequest) => r.timers.filter((t) => t.kind !== "BILL");
+const billTimer = (r: PaymentRequest) => r.timers.find((t) => t.kind === "BILL");
+
+/**
+ * A bill request with no bill on file: it cannot be closed until one is attached. Shows how
+ * long the bill has been awaited, red and bold once that is overdue.
+ */
+function BillMissing({ timer }: { timer?: PaymentTimer }) {
   return (
-    <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-warning/15 px-2 py-0.5 text-[11px] font-medium text-warning-foreground">
-      <AlertTriangle className="h-3 w-3" /> Bill missing
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium",
+        timer?.overdue
+          ? "border border-destructive/40 bg-destructive/10 font-bold text-destructive"
+          : "bg-warning/15 text-warning-foreground",
+      )}
+      title={timer ? `Bill awaited for ${timer.days} working days` : undefined}
+    >
+      <AlertTriangle className="h-3 w-3" /> Bill missing{timer ? ` · ${timer.days}d` : ""}
     </span>
   );
 }

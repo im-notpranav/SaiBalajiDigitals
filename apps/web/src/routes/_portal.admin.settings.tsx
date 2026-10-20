@@ -8,8 +8,11 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { REMARK_TYPES } from "@/lib/constants";
 import { toast } from "sonner";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { apiClient } from "@/api/client";
+import { apiErrorMessage } from "@/api/allocation";
+import { fetchPaymentSettings, updatePaymentSettings } from "@/api/payments";
+import { useAuth } from "@/lib/auth-store";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/_portal/admin/settings")({
@@ -129,7 +132,76 @@ function SettingsPage() {
             </div>
           </div>
         </div>
+
+        <PaymentOverdueCard />
       </div>
     </>
+  );
+}
+
+/** How many working days a payment request may wait on one thing before it turns red. */
+function PaymentOverdueCard() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const canEdit = user?.role === "ADMIN";
+  const [days, setDays] = useState("");
+  const { data } = useQuery({ queryKey: ["payment-settings"], queryFn: fetchPaymentSettings });
+  const saved = data?.payment_overdue_days;
+
+  useEffect(() => {
+    if (saved != null) setDays(String(saved));
+  }, [saved]);
+
+  const value = Number(days);
+  const valid = /^\d+$/.test(days) && value >= 1 && value <= 90;
+
+  const save = useMutation({
+    mutationFn: () => updatePaymentSettings(value),
+    onSuccess: () => {
+      toast.success(`Payment requests now turn red after ${value} working days`);
+      queryClient.invalidateQueries({ queryKey: ["payment-settings"] });
+      queryClient.invalidateQueries({ queryKey: ["payment-requests"] });
+    },
+    onError: (err) => toast.error(apiErrorMessage(err, "Could not save the limit")),
+  });
+
+  return (
+    <div className="surface-panel p-6">
+      <h3 className="mb-1 text-sm font-semibold">Payment request overdue limit</h3>
+      <p className="mb-4 text-xs text-muted-foreground">
+        Each thing a request waits on (Admin approval, Cost Control review, a returned request, payment,
+        closing, a promised bill) gets its own timer. Past this many working days it shows red and bold
+        on the dashboards, and the people it waits on get a daily reminder. Sundays are not counted.
+      </p>
+      <form
+        className="flex flex-wrap items-end gap-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (valid && value !== saved) save.mutate();
+        }}
+      >
+        <div className="grid gap-1.5">
+          <Label htmlFor="overdue_days">Working days</Label>
+          <Input
+            id="overdue_days"
+            inputMode="numeric"
+            value={days}
+            onChange={(e) => setDays(e.target.value.trim())}
+            disabled={!canEdit}
+            className="w-28 font-mono"
+            aria-invalid={days !== "" && !valid}
+          />
+        </div>
+        {canEdit && (
+          <Button type="submit" className="rounded-xl" disabled={!valid || value === saved || save.isPending}>
+            Save
+          </Button>
+        )}
+      </form>
+      {days !== "" && !valid && (
+        <div className="mt-2 text-xs text-destructive">Enter a whole number from 1 to 90.</div>
+      )}
+      {!canEdit && <div className="mt-2 text-xs text-muted-foreground">Only the Admin can change this.</div>}
+    </div>
   );
 }

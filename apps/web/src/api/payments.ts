@@ -89,9 +89,35 @@ export interface PaymentRequest {
   bill_missing: boolean;
   /** The kinds of file you may add now. */
   attach_kinds: AttachmentKind[];
+  /** What it is waiting on and for how many working days. */
+  timers: PaymentTimer[];
+  /** A timer has run past the overdue limit: shown red and bold until it is resolved. */
+  overdue: boolean;
   /** Reviewers only. */
   order_money?: OrderMoney;
 }
+
+export type TimerKind = "ADMIN_REVIEW" | "CCM_REVIEW" | "REPLY" | "PAYMENT" | "CLOSE" | "BILL";
+export type TimerOwner = "ADMIN" | "COST_CONTROL_MANAGER" | "REQUESTER";
+
+/** One condition a request is waiting on, counted in working days (Sundays off, India time). */
+export interface PaymentTimer {
+  kind: TimerKind;
+  owner: TimerOwner;
+  /** e.g. "Waiting for Cost Control review". */
+  label: string;
+  /** e.g. "Cost Control review". */
+  short: string;
+  since: string;
+  days: number;
+  overdue: boolean;
+}
+
+export const TIMER_OWNER_LABELS: Record<TimerOwner, string> = {
+  ADMIN: "Admin",
+  COST_CONTROL_MANAGER: "Cost Control",
+  REQUESTER: "Requester",
+};
 
 export type AttachmentKind = "BILL" | "PHOTO" | "RECEIPT";
 
@@ -139,11 +165,67 @@ export interface PaymentList {
   counts: Record<PaymentStatus, number>;
   amounts: Record<PaymentStatus, number>;
   queue_statuses: PaymentStatus[];
+  /** Rows in this list with an overdue timer (before the overdue-only filter). */
+  overdue_count: number;
+  /** Working days after which a timer turns red. */
+  threshold: number;
 }
 
 export const fetchPaymentRequests = (
-  params: { scope?: "queue"; status?: string; q?: string } = {},
+  params: { scope?: "queue"; status?: string; q?: string; overdue?: "1" } = {},
 ) => apiFetch<PaymentList>("/payment-requests", { params });
+
+export type WaitingStatus = "ADMIN_REVIEW" | "CCM_REVIEW" | "INFO_REQUESTED" | "PAYMENT_PENDING" | "PAID";
+export const WAITING_STATUSES: WaitingStatus[] = [
+  "ADMIN_REVIEW",
+  "CCM_REVIEW",
+  "INFO_REQUESTED",
+  "PAYMENT_PENDING",
+  "PAID",
+];
+
+export interface OverdueItem {
+  id: number;
+  request_no: string;
+  amount: number;
+  status: PaymentStatus;
+  requester: { id: number; name: string; role: string };
+  order: { id: number; order_no: string; client_name: string };
+  timer: PaymentTimer;
+}
+
+interface MoneyCount {
+  amount: number;
+  count: number;
+}
+
+/** The Admin's and Cost Control's overview: where requests wait, what is overdue, money paid. */
+export interface PaymentDashboardData {
+  threshold: number;
+  stages: Record<WaitingStatus, { count: number; amount: number; oldest_days: number; overdue: number }>;
+  waiting_on_you: { owner: TimerOwner | null; count: number; overdue: number; amount: number };
+  overdue: { total: number; by_kind: Partial<Record<TimerKind, number>>; items: OverdueItem[] };
+  bills_missing: number;
+  money: {
+    paid_this_month: MoneyCount;
+    paid_last_month: MoneyCount;
+    asked_this_month: MoneyCount;
+    pending_payout: number;
+    by_category: { category: PaymentCategory | null; amount: number; count: number }[];
+  };
+}
+
+export const fetchPaymentDashboard = () =>
+  apiFetch<PaymentDashboardData>("/payment-requests/dashboard");
+
+export const fetchPaymentSettings = () =>
+  apiFetch<{ payment_overdue_days: number }>("/admin/payment-settings");
+
+export const updatePaymentSettings = (payment_overdue_days: number) =>
+  apiFetch<{ payment_overdue_days: number }>("/admin/payment-settings", {
+    method: "PUT",
+    data: { payment_overdue_days },
+  });
 
 export const fetchPaymentRequest = (id: number) =>
   apiFetch<{ request: PaymentRequest; attachments: PaymentAttachment[]; events: PaymentEvent[] }>(

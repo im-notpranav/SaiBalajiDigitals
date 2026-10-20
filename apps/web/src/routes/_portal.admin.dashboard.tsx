@@ -42,6 +42,8 @@ import type { CsmStageOrder, CsmCompletedOrder } from "@/api/dashboard";
 import { format, subDays } from "date-fns";
 import { cn } from "@/lib/utils";
 import { inr } from "@/lib/format";
+import { useAuth } from "@/lib/auth-store";
+import { PaymentOverviewCard } from "@/components/payments/PaymentDashboard";
 
 export const Route = createFileRoute("/_portal/admin/dashboard")({
   head: () => ({ meta: [{ title: "Admin Dashboard — SB OMS" }] }),
@@ -86,6 +88,7 @@ function formatCurrency(n: number) {
 }
 
 function AdminDashboard() {
+  const { user } = useAuth();
   const now = new Date();
   // A rolling window, not the calendar month: an order dated last month can
   // still be in flight today, and on the 1st a month-to-date window is empty
@@ -205,6 +208,13 @@ function AdminDashboard() {
               delay={0.2}
             />
           </div>
+
+          {/* Payment requests: overdue timers (the Admin only; the Operation Manager has no part in payments) */}
+          {user?.role === "ADMIN" && (
+            <div className="mt-6">
+              <PaymentOverviewCard />
+            </div>
+          )}
 
           {/* Pipeline stage cards */}
           <div className="mt-8">

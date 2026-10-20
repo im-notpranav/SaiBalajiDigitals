@@ -2,7 +2,7 @@ import { Router } from "express";
 import { getAuditLog, getFinancialYearConfig, getLossReport, getOverdueReport } from "../controllers/admin.controller";
 import { authenticate, authorize , denyReadOnlyMutations } from "../middlewares/auth.middleware";
 
-import { getOrderSequence, updateOrderSequence } from "../controllers/settings.controller";
+import { getOrderSequence, getPaymentSettings, updateOrderSequence, updatePaymentSettings } from "../controllers/settings.controller";
 
 const router = Router();
 
@@ -17,5 +17,7 @@ router.get("/order-sequence", getOrderSequence);
 router.put("/order-sequence", updateOrderSequence);
 router.get("/loss-report", getLossReport);
 router.get("/overdue", getOverdueReport);
+router.get("/payment-settings", getPaymentSettings);
+router.put("/payment-settings", authorize("ADMIN"), updatePaymentSettings);
 
 export default router;

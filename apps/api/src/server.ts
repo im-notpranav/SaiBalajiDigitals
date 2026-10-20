@@ -67,6 +67,7 @@ import overtimeRoutes from "./routes/overtime.routes";
 import paymentRequestsRoutes from "./routes/payment-requests.routes";
 import { initEmailService } from "./services/email.service";
 import { startWhatsAppSender } from "./services/whatsapp/outbox";
+import { startPaymentReminders } from "./services/payment-reminders";
 
 app.use("/api/auth", authRoutes);
 app.use("/api/orders", ordersRoutes);
@@ -89,4 +90,5 @@ app.listen(PORT, async () => {
   console.log(`Server listening on port ${PORT}`);
   await initEmailService();
   startWhatsAppSender();
+  startPaymentReminders();
 });

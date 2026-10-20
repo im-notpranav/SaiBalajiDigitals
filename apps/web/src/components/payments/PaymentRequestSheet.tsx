@@ -44,6 +44,7 @@ import {
   type RequestDraft,
 } from "./PaymentBits";
 import { AttachmentsPanel } from "./AttachmentsPanel";
+import { TimerList, overdueText } from "./PaymentTimers";
 
 /** One payment request: its details, the order's money, its history and the actions open to you. */
 
@@ -109,7 +110,7 @@ export function PaymentRequestSheet({
           <>
             <SheetHeader className="text-left">
               <SheetTitle className="flex flex-wrap items-center gap-2">
-                <span className="font-mono">{r.request_no}</span>
+                <span className={cn("font-mono", overdueText(r.overdue))}>{r.request_no}</span>
                 <PaymentStatusBadge status={r.status} />
               </SheetTitle>
               <SheetDescription>{nextStepFor(r)}</SheetDescription>
@@ -125,6 +126,8 @@ export function PaymentRequestSheet({
                   </div>
                 )}
               </div>
+
+              <TimerList timers={r.timers} />
 
               {r.status === "INFO_REQUESTED" && returned?.note && (
                 <div className="rounded-xl border border-warning/40 bg-warning/10 p-3 text-sm">

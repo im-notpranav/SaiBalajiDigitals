@@ -1,6 +1,7 @@
 import express, { Router, type NextFunction, type Request, type Response } from "express";
 import {
   createRequest,
+  dashboard,
   downloadAttachment,
   getRequest,
   listRequests,
@@ -10,7 +11,7 @@ import {
   uploadAttachment,
 } from "../controllers/payment-requests.controller";
 import { authenticate, authorize } from "../middlewares/auth.middleware";
-import { PAYMENT_ROLES, REQUESTER_ROLES } from "../utils/payment-workflow";
+import { PAYMENT_ROLES, REQUESTER_ROLES, REVIEWER_ROLES } from "../utils/payment-workflow";
 import { MAX_FILE_BYTES, MAX_FILE_LABEL } from "../utils/payment-files";
 
 /**
@@ -33,6 +34,7 @@ const parseUpload = (req: Request, res: Response, next: NextFunction) =>
 
 // Fixed paths first, so they are not taken for a request id.
 router.get("/order-options", authorize(...REQUESTER_ROLES), orderOptions);
+router.get("/dashboard", authorize(...REVIEWER_ROLES), dashboard);
 
 router.get("/", listRequests);
 router.post("/", authorize(...REQUESTER_ROLES), createRequest);

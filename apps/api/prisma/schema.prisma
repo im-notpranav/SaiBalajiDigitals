@@ -122,6 +122,7 @@ model User {
   paymentFilesUploaded PaymentAttachment[] @relation("AttachmentUploader")
   paymentFilesRemoved  PaymentAttachment[] @relation("AttachmentRemover")
   whatsappMessages     WhatsAppMessage[]
+  settingsChanged      AppSetting[]
 }
 
 model OrderSequence {
@@ -743,4 +744,15 @@ model WhatsAppMessage {
   @@index([status, next_attempt_at])
   @@index([created_at])
   @@index([user_id])
+}
+
+/// Small business settings the Admin can change without a deploy, one row per key.
+/// Read through utils/app-settings.ts, which supplies the defaults for missing rows.
+model AppSetting {
+  id         Int      @id @default(autoincrement())
+  key        String   @unique
+  value      Json
+  updated_by Int?
+  updater    User?    @relation(fields: [updated_by], references: [id], onDelete: SetNull)
+  updated_at DateTime @updatedAt
 }

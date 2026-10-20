@@ -2,6 +2,8 @@ import { Request, Response } from "express";
 import { createHash } from "node:crypto";
 import { Prisma, type PaymentAttachmentKind, type PaymentRequestStatus, type Role } from "@prisma/client";
 import { prisma } from "../utils/prisma";
+import { getSetting } from "../utils/app-settings";
+import { ownerFor, paymentTimers } from "../utils/payment-timers";
 import { queueWhatsApp, queueWhatsAppRole } from "../services/whatsapp/outbox";
 import type { WaEvent } from "../services/whatsapp/templates";
 import {
@@ -115,9 +117,13 @@ interface OrderMoney {
   over_value: boolean;
 }
 
-function serializeRequest(r: RequestRow, actor: Actor, money?: OrderMoney) {
+/** Working days after which a waiting request turns red (Admin → Settings). */
+const overdueDays = () => getSetting("payment_overdue_days");
+
+function serializeRequest(r: RequestRow, actor: Actor, money: OrderMoney | undefined, threshold: number) {
   const files: Record<PaymentAttachmentKind, number> = { BILL: 0, PHOTO: 0, RECEIPT: 0 };
   for (const a of r.attachments) files[a.kind]++;
+  const timers = paymentTimers(r, files.BILL, threshold);
   return {
     id: r.id,
     request_no: r.request_no,
@@ -147,6 +153,9 @@ function serializeRequest(r: RequestRow, actor: Actor, money?: OrderMoney) {
     /** Still open, raised with bill details, and no bill attached yet: it cannot close like this. */
     bill_missing: r.bill_details_required && files.BILL === 0 && OPEN_PAYMENT_STATUSES.includes(r.status),
     attach_kinds: attachKindsFor(r, actor),
+    /** What it is waiting on and for how many working days; overdue ones show red. */
+    timers,
+    overdue: timers.some((t) => t.overdue),
     ...(money ? { order_money: money } : {}),
   };
 }
@@ -356,7 +365,7 @@ export const createRequest = async (req: Request, res: Response) => {
     });
     if (existing) {
       if (existing.requested_by !== actor.id) throw new HttpError(409, "This request was already submitted.");
-      return res.status(200).json({ request: serializeRequest(existing, actor), duplicate: true });
+      return res.status(200).json({ request: serializeRequest(existing, actor, undefined, await overdueDays()), duplicate: true });
     }
 
     const created = await withAudit(actor.id, async (tx) => {
@@ -435,7 +444,7 @@ export const createRequest = async (req: Request, res: Response) => {
     const warning = money?.over_value
       ? `Requests on ${created.order.order_no} now add up to more than the order value. Reviewers will see this.`
       : null;
-    return res.status(201).json({ request: serializeRequest(created, actor), warning });
+    return res.status(201).json({ request: serializeRequest(created, actor, undefined, await overdueDays()), warning });
   } catch (err: any) {
     // Two submits with the same key racing: hand back the one that won.
     if (err?.code === "P2002" && String(err?.meta?.target ?? "").includes("idempotency_key")) {
@@ -444,7 +453,7 @@ export const createRequest = async (req: Request, res: Response) => {
         include: requestInclude,
       });
       if (again && again.requested_by === req.user!.id) {
-        return res.status(200).json({ request: serializeRequest(again, req.user!), duplicate: true });
+        return res.status(200).json({ request: serializeRequest(again, req.user!, undefined, await overdueDays()), duplicate: true });
       }
     }
     return sendError(res, err);
@@ -508,6 +517,9 @@ export const listRequests = async (req: Request, res: Response) => {
     ]);
 
     const money = reviewer ? await orderMoney(prisma, rows.map((r) => r.order_id)) : null;
+    const threshold = await overdueDays();
+    const serialized = rows.map((r) => serializeRequest(r, actor, money?.get(r.order_id), threshold));
+    const overdueOnly = req.query.overdue === "1";
     const counts = Object.fromEntries(ALL_STATUSES.map((s) => [s, 0])) as Record<PaymentRequestStatus, number>;
     const amounts = { ...counts };
     for (const g of grouped) {
@@ -516,7 +528,9 @@ export const listRequests = async (req: Request, res: Response) => {
     }
 
     return res.json({
-      requests: rows.map((r) => serializeRequest(r, actor, money?.get(r.order_id))),
+      requests: overdueOnly ? serialized.filter((r) => r.overdue) : serialized,
+      overdue_count: serialized.filter((r) => r.overdue).length,
+      threshold,
       counts,
       amounts,
       queue_statuses: QUEUE[actor.role] ?? [],
@@ -547,7 +561,7 @@ export const getRequest = async (req: Request, res: Response) => {
     });
     const money = isReviewerRole(actor.role) ? (await orderMoney(prisma, [r.order_id])).get(r.order_id) : undefined;
     return res.json({
-      request: serializeRequest(r, actor, money),
+      request: serializeRequest(r, actor, money, await overdueDays()),
       attachments: files.map((f) => serializeFile(f, r, actor)),
       events: r.events.map((e) => ({
         id: e.id,
@@ -659,7 +673,7 @@ export const transition = (action: WorkflowAction) => async (req: Request, res: 
     const money = isReviewerRole(actor.role)
       ? (await orderMoney(prisma, [updated.order_id])).get(updated.order_id)
       : undefined;
-    return res.json({ request: serializeRequest(updated, actor, money) });
+    return res.json({ request: serializeRequest(updated, actor, money, await overdueDays()) });
   } catch (err) {
     return sendError(res, err);
   }
@@ -838,6 +852,105 @@ export const removeAttachment = async (req: Request, res: Response) => {
       });
     });
     return res.json({ ok: true });
+  } catch (err) {
+    return sendError(res, err);
+  }
+};
+
+/* ------------------------------------------------------------------ dashboard */
+
+/** Start of this month and of last month, in India time. */
+function istMonthStarts(now = new Date()) {
+  const ist = new Date(now.getTime() + 330 * 60_000);
+  const at = (y: number, m: number) => new Date(Date.UTC(y, m, 1) - 330 * 60_000);
+  return { thisMonth: at(ist.getUTCFullYear(), ist.getUTCMonth()), lastMonth: at(ist.getUTCFullYear(), ist.getUTCMonth() - 1) };
+}
+
+/** The statuses a request waits in, in the order the dashboard shows them. */
+const WAITING: PaymentRequestStatus[] = ["ADMIN_REVIEW", "CCM_REVIEW", "INFO_REQUESTED", "PAYMENT_PENDING", "PAID"];
+
+/**
+ * GET /dashboard — for the Admin and Cost Control: where requests are waiting and for how
+ * long, every overdue timer (oldest first), what is waiting on the viewer, and money paid out.
+ */
+export const dashboard = async (req: Request, res: Response) => {
+  try {
+    const actor = req.user!;
+    const threshold = await overdueDays();
+    const now = new Date();
+    const { thisMonth, lastMonth } = istMonthStarts(now);
+
+    const [open, paidThis, paidLast, askedThis, byCategory] = await Promise.all([
+      prisma.paymentRequest.findMany({
+        where: { status: { in: WAITING } },
+        select: {
+          id: true,
+          request_no: true,
+          amount: true,
+          status: true,
+          bill_details_required: true,
+          status_changed_at: true,
+          created_at: true,
+          requester: { select: { id: true, name: true, role: true } },
+          order: { select: { id: true, order_no: true, client_name: true } },
+          _count: { select: { attachments: { where: { deleted_at: null, kind: "BILL" } } } },
+        },
+        orderBy: { status_changed_at: "asc" },
+      }),
+      prisma.paymentRequest.aggregate({ where: { paid_at: { gte: thisMonth } }, _sum: { paid_amount: true }, _count: { _all: true } }),
+      prisma.paymentRequest.aggregate({ where: { paid_at: { gte: lastMonth, lt: thisMonth } }, _sum: { paid_amount: true }, _count: { _all: true } }),
+      prisma.paymentRequest.aggregate({ where: { created_at: { gte: thisMonth }, status: { not: "CANCELLED" } }, _sum: { amount: true }, _count: { _all: true } }),
+      prisma.paymentRequest.groupBy({ by: ["category"], where: { paid_at: { gte: thisMonth } }, _sum: { paid_amount: true }, _count: { _all: true } }),
+    ]);
+
+    const stages = Object.fromEntries(
+      WAITING.map((s) => [s, { count: 0, amount: 0, oldest_days: 0, overdue: 0 }]),
+    ) as Record<PaymentRequestStatus, { count: number; amount: number; oldest_days: number; overdue: number }>;
+    const byKind: Record<string, number> = {};
+    const overdueItems: { timer: { days: number } }[] = [];
+    const mine = ownerFor(actor.role);
+    const waitingOnYou = { count: 0, overdue: 0, amount: 0 };
+    let billsMissing = 0;
+
+    for (const r of open) {
+      const timers = paymentTimers(r, r._count.attachments, threshold, now);
+      const stage = stages[r.status];
+      const amount = Number(r.amount);
+      stage.count++;
+      stage.amount += amount;
+      for (const t of timers) {
+        if (t.kind === "BILL") billsMissing++;
+        else stage.oldest_days = Math.max(stage.oldest_days, t.days);
+        if (!t.overdue) continue;
+        if (t.kind !== "BILL") stage.overdue++;
+        byKind[t.kind] = (byKind[t.kind] ?? 0) + 1;
+        overdueItems.push({ id: r.id, request_no: r.request_no, amount, status: r.status, requester: r.requester, order: r.order, timer: t } as never);
+      }
+      const onYou = timers.filter((t) => t.owner === mine);
+      if (onYou.length) {
+        waitingOnYou.count++;
+        waitingOnYou.amount += amount;
+        if (onYou.some((t) => t.overdue)) waitingOnYou.overdue++;
+      }
+    }
+    overdueItems.sort((a, b) => b.timer.days - a.timer.days);
+
+    return res.json({
+      threshold,
+      stages,
+      waiting_on_you: { owner: mine, ...waitingOnYou },
+      overdue: { total: overdueItems.length, by_kind: byKind, items: overdueItems.slice(0, 100) },
+      bills_missing: billsMissing,
+      money: {
+        paid_this_month: { amount: Number(paidThis._sum.paid_amount ?? 0), count: paidThis._count._all },
+        paid_last_month: { amount: Number(paidLast._sum.paid_amount ?? 0), count: paidLast._count._all },
+        asked_this_month: { amount: Number(askedThis._sum.amount ?? 0), count: askedThis._count._all },
+        pending_payout: stages.PAYMENT_PENDING.amount,
+        by_category: byCategory
+          .map((g) => ({ category: g.category, amount: Number(g._sum.paid_amount ?? 0), count: g._count._all }))
+          .sort((a, b) => b.amount - a.amount),
+      },
+    });
   } catch (err) {
     return sendError(res, err);
   }
