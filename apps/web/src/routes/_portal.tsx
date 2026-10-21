@@ -1,7 +1,8 @@
 import { createFileRoute, Outlet, useNavigate, useLocation } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect } from "react";
-import { Sidebar } from "@/components/layout/Sidebar";
+import { FieldTabBar, Sidebar, isFieldRole } from "@/components/layout/Sidebar";
+import { cn } from "@/lib/utils";
 import { TopHeader } from "@/components/layout/TopHeader";
 import { useAuth, type UserRole, roleHome } from "@/lib/auth-store";
 
@@ -48,6 +49,7 @@ function PortalLayout() {
   }, [user, isLoading, location.pathname, location.href, navigate]);
 
   if (!user) return null;
+  const field = isFieldRole(user.role);
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -62,13 +64,18 @@ function PortalLayout() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -6 }}
               transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-              className="mx-auto w-full max-w-7xl p-4 sm:p-6 lg:p-8"
+              className={cn(
+                "mx-auto w-full max-w-7xl p-4 sm:p-6 lg:p-8",
+                // Room for the bottom tab bar (4rem plus the home-indicator inset).
+                field && "pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-6 lg:pb-8",
+              )}
             >
               <Outlet />
             </motion.div>
           </AnimatePresence>
         </main>
       </div>
+      {field && <FieldTabBar />}
     </div>
   );
 }

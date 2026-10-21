@@ -1,9 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CalendarDays,
-  CalendarPlus,
   CheckCircle2,
   ClipboardList,
   Loader2,
@@ -18,7 +17,6 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -30,24 +28,18 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { JobStatusBadge, LocalityTag } from "@/components/allocation/JobBits";
+import { TimeOffSummary } from "@/components/allocation/FieldTimeOff";
+import { EmptyState, ErrorState, LoadingState } from "@/components/layout/PageStates";
 import { useAuth } from "@/lib/auth-store";
 import { roleLabel } from "@/lib/constants";
 import {
   FIELD_ROLE_LABELS,
-  OT_STATUS_LABELS,
   apiErrorMessage,
   fetchMyJobs,
-  fetchMyLeave,
-  fetchMyOvertime,
   formatJobDates,
-  formatMinutes,
-  requestMyLeave,
   setMyJobStatus,
   todayIST,
-  withdrawMyLeave,
-  type LeaveState,
   type MyJob,
-  type OvertimeStatus,
 } from "@/api/allocation";
 
 export const Route = createFileRoute("/_portal/field/dashboard")({
@@ -62,7 +54,7 @@ export const Route = createFileRoute("/_portal/field/dashboard")({
 function FieldDashboard() {
   const { user } = useAuth();
   const firstName = user?.name.split(" ")[0] ?? "";
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["my", "work-jobs"],
     queryFn: fetchMyJobs,
     refetchInterval: 60_000,
@@ -91,272 +83,30 @@ function FieldDashboard() {
         </div>
       )}
 
+      {/* Leave sits above the job list: with dozens of upcoming jobs a section after them
+          is effectively out of reach on a phone. */}
+      <TimeOffSummary />
+
       {isLoading ? (
-        <div className="surface-panel p-8 text-center text-muted-foreground">
-          Loading your jobs…
-        </div>
+        <LoadingState label="Loading your jobs…" />
+      ) : isError && !data ? (
+        <ErrorState title="Couldn't load your jobs" error={error} onRetry={() => refetch()} />
       ) : jobs.length === 0 ? (
-        <div className="surface-panel flex flex-col items-center gap-3 p-8 text-center">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-            <ClipboardList className="h-6 w-6" />
-          </div>
-          <div className="text-base font-semibold">No jobs assigned to you yet</div>
-          <p className="max-w-sm text-sm text-muted-foreground">
-            When the Operations Manager assigns you work, it shows up here with the CSM, location,
-            team and vehicle.
-          </p>
-        </div>
+        <EmptyState
+          icon={ClipboardList}
+          title="No jobs assigned to you yet"
+          description="When the Operations Manager assigns you work, it shows up here with the CSM, location, team and vehicle."
+        />
       ) : (
         <div className="grid gap-6">
           <JobGroup title="Today" jobs={current} empty="Nothing for today." highlight />
-          {upcoming.length > 0 && <JobGroup title="Coming up" jobs={upcoming} />}
-          {past.length > 0 && <JobGroup title="Last two weeks" jobs={past} muted />}
+          {/* A long run of future jobs is cut to the next few so today's work and the
+              rest of the page stay within a thumb's reach. */}
+          {upcoming.length > 0 && <JobGroup title="Coming up" jobs={upcoming} limit={4} />}
+          {past.length > 0 && <JobGroup title="Last two weeks" jobs={past} muted limit={2} />}
         </div>
       )}
-
-      <div className="mt-6 grid gap-6 md:grid-cols-2">
-        <MyLeave />
-        <MyOvertime />
-      </div>
     </>
-  );
-}
-
-const leaveStateLabel: Record<LeaveState, string> = {
-  PENDING: "Waiting for approval",
-  REJECTED: "Not approved",
-  CURRENT: "On leave now",
-  UPCOMING: "Approved",
-  PAST: "Taken",
-  CANCELLED: "Cancelled",
-};
-
-const leaveStateStyle: Partial<Record<LeaveState, string>> = {
-  PENDING: "text-warning-foreground font-medium",
-  REJECTED: "text-destructive",
-  CURRENT: "text-destructive",
-  UPCOMING: "text-success font-medium",
-};
-
-function MyLeave() {
-  const qc = useQueryClient();
-  const [asking, setAsking] = useState(false);
-  const { data } = useQuery({ queryKey: ["my", "leave"], queryFn: fetchMyLeave });
-  const leave = data?.leave ?? [];
-  const withdraw = useMutation({
-    mutationFn: (id: number) => withdrawMyLeave(id),
-    onSuccess: () => {
-      toast.success("Leave request withdrawn");
-      qc.invalidateQueries({ queryKey: ["my", "leave"] });
-    },
-    onError: (err) => toast.error(apiErrorMessage(err, "Could not withdraw the request")),
-  });
-  return (
-    <section>
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-          My leave
-        </h2>
-        <Button size="sm" variant="outline" className="rounded-xl" onClick={() => setAsking(true)}>
-          <CalendarPlus className="mr-1.5 h-4 w-4" /> Request leave
-        </Button>
-      </div>
-      <div className="surface-panel p-4">
-        {leave.length === 0 ? (
-          <div className="text-sm text-muted-foreground">
-            No leave yet. Tap “Request leave” to ask the Operations Manager.
-          </div>
-        ) : (
-          <ul className="grid gap-3">
-            {leave.map((l) => (
-              <li key={l.id} className="flex items-start justify-between gap-2 text-sm">
-                <span className="min-w-0">
-                  <span className="font-medium">{formatJobDates(l.from_date, l.to_date)}</span>
-                  <span className="text-muted-foreground">
-                    {" "}
-                    · {l.days} day{l.days === 1 ? "" : "s"}
-                  </span>
-                  {l.reason && (
-                    <span className="block text-xs text-muted-foreground">{l.reason}</span>
-                  )}
-                  {l.reject_reason && (
-                    <span className="block text-xs text-destructive">
-                      Reason: {l.reject_reason}
-                    </span>
-                  )}
-                </span>
-                <span className="flex shrink-0 flex-col items-end gap-1">
-                  <span className={cn("text-xs text-muted-foreground", leaveStateStyle[l.state])}>
-                    {leaveStateLabel[l.state]}
-                  </span>
-                  {l.state === "PENDING" && (
-                    <button
-                      type="button"
-                      className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground disabled:opacity-50"
-                      disabled={withdraw.isPending}
-                      onClick={() => withdraw.mutate(l.id)}
-                    >
-                      Withdraw
-                    </button>
-                  )}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-      <RequestLeaveDialog open={asking} onClose={() => setAsking(false)} />
-    </section>
-  );
-}
-
-/** Ask for leave. It shows as waiting until the Operations Manager approves or rejects it. */
-function RequestLeaveDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const qc = useQueryClient();
-  const today = todayIST();
-  const [from, setFrom] = useState(today);
-  const [to, setTo] = useState(today);
-  const [reason, setReason] = useState("");
-
-  useEffect(() => {
-    if (!open) return;
-    setFrom(today);
-    setTo(today);
-    setReason("");
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only when the dialog opens
-  }, [open]);
-
-  const save = useMutation({
-    mutationFn: () => requestMyLeave({ from_date: from, to_date: to, reason: reason.trim() }),
-    onSuccess: () => {
-      toast.success("Leave requested. The Operations Manager will approve or reject it.");
-      qc.invalidateQueries({ queryKey: ["my", "leave"] });
-      onClose();
-    },
-    onError: (err) => toast.error(apiErrorMessage(err, "Could not send the request")),
-  });
-
-  const valid = !!from && from >= today && to >= from && reason.trim().length >= 2;
-
-  return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Request leave</DialogTitle>
-          <DialogDescription>
-            The Operations Manager is told and approves or rejects it. You will get a
-            notification either way.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="grid gap-4 py-1">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="grid gap-2">
-              <Label htmlFor="my-leave-from">From</Label>
-              <Input
-                id="my-leave-from"
-                type="date"
-                value={from}
-                min={today}
-                onChange={(e) => {
-                  setFrom(e.target.value);
-                  if (to < e.target.value) setTo(e.target.value);
-                }}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="my-leave-to">To</Label>
-              <Input
-                id="my-leave-to"
-                type="date"
-                value={to}
-                min={from}
-                onChange={(e) => setTo(e.target.value)}
-              />
-            </div>
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="my-leave-reason">Reason</Label>
-            <Textarea
-              id="my-leave-reason"
-              rows={3}
-              maxLength={300}
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="e.g. Family function in my village"
-            />
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button disabled={!valid || save.isPending} onClick={() => save.mutate()}>
-            {save.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Send request
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-const otStyles: Record<OvertimeStatus, string> = {
-  PENDING: "text-warning-foreground",
-  APPROVED: "text-success",
-  REJECTED: "text-muted-foreground line-through",
-};
-
-function MyOvertime() {
-  const { data } = useQuery({ queryKey: ["my", "overtime"], queryFn: fetchMyOvertime });
-  const entries = data?.entries ?? [];
-  return (
-    <section>
-      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-        My overtime
-      </h2>
-      <div className="surface-panel p-4">
-        <div className="mb-3 flex gap-4 text-sm">
-          <div>
-            <div className="text-xs text-muted-foreground">Approved this month</div>
-            <div className="text-lg font-bold tabular-nums">
-              {formatMinutes(data?.month_approved_minutes ?? 0)}
-            </div>
-          </div>
-          <div>
-            <div className="text-xs text-muted-foreground">Waiting for approval</div>
-            <div className="text-lg font-bold tabular-nums">
-              {formatMinutes(data?.month_pending_minutes ?? 0)}
-            </div>
-          </div>
-        </div>
-        {entries.length === 0 ? (
-          <div className="text-sm text-muted-foreground">No overtime in the last two months.</div>
-        ) : (
-          <ul className="grid gap-2">
-            {entries.slice(0, 10).map((o) => (
-              <li key={o.id} className="flex items-start justify-between gap-2 text-sm">
-                <span>
-                  <span className="font-medium">{formatJobDates(o.work_date, o.work_date)}</span>{" "}
-                  <span className="font-mono text-xs">
-                    {o.start_time}–{o.end_time}
-                    {o.past_midnight ? " (+1)" : ""}
-                  </span>
-                  {o.order_no && (
-                    <span className="text-xs text-muted-foreground"> · {o.order_no}</span>
-                  )}
-                  {o.reject_reason && (
-                    <span className="block text-xs text-destructive">{o.reject_reason}</span>
-                  )}
-                </span>
-                <span className={cn("shrink-0 text-xs font-medium", otStyles[o.status])}>
-                  {o.duration} · {OT_STATUS_LABELS[o.status]}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    </section>
   );
 }
 
@@ -366,26 +116,46 @@ function JobGroup({
   empty,
   highlight,
   muted,
+  limit,
 }: {
   title: string;
   jobs: MyJob[];
   empty?: string;
   highlight?: boolean;
   muted?: boolean;
+  /** Show only the first few until the person asks for the rest. */
+  limit?: number;
 }) {
+  const [showAll, setShowAll] = useState(false);
+  const shown = limit && !showAll ? jobs.slice(0, limit) : jobs;
+  const hidden = jobs.length - shown.length;
   return (
     <section>
-      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+      <h2 className="mb-2 flex items-baseline gap-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
         {title}
+        {jobs.length > 0 && (
+          <span className="font-medium normal-case tracking-normal tabular-nums">
+            {jobs.length}
+          </span>
+        )}
       </h2>
       {jobs.length === 0 ? (
         <div className="surface-panel p-4 text-sm text-muted-foreground">{empty}</div>
       ) : (
         <div className="grid gap-3 md:grid-cols-2">
-          {jobs.map((j) => (
+          {shown.map((j) => (
             <JobCard key={j.id} job={j} highlight={highlight} muted={muted} />
           ))}
         </div>
+      )}
+      {!!limit && jobs.length > limit && (
+        <Button
+          variant="outline"
+          className="mt-3 h-11 w-full rounded-xl"
+          onClick={() => setShowAll((s) => !s)}
+        >
+          {showAll ? "Show fewer" : `Show ${hidden} more`}
+        </Button>
       )}
     </section>
   );
@@ -628,9 +398,9 @@ function CallLink({ phone, name }: { phone: string; name: string }) {
     <a
       href={`tel:${phone}`}
       aria-label={`Call ${name}`}
-      className="inline-flex h-7 w-7 items-center justify-center rounded-full border text-primary"
+      className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border text-primary transition-colors active:bg-accent"
     >
-      <Phone className="h-3.5 w-3.5" />
+      <Phone className="h-4 w-4" />
     </a>
   );
 }

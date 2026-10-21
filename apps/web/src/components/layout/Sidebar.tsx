@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import type { LucideIcon } from "lucide-react";
@@ -42,6 +42,7 @@ import {
 import { type UserRole, useAuth } from "@/lib/auth-store";
 import { cn } from "@/lib/utils";
 import { BrandLockup } from "@/components/brand/Logo";
+import { fetchMyNotifications } from "@/api/notifications";
 
 interface NavItem {
   to: string;
@@ -86,10 +87,23 @@ const WORK_ALLOCATION: NavItem[] = (
 
 const FIELD_NAV: NavItem[] = [
   { to: "/field/dashboard", label: "My Work", icon: ClipboardList },
+  { to: "/field/leave", label: "Leave & Overtime", icon: CalendarOff },
   { to: "/field/payments", label: "Payments", icon: Wallet },
   { to: "/field/notifications", label: "Notifications", icon: Bell },
   { to: "/profile", label: "Profile", icon: UserCircle },
 ];
+
+/** Shorter labels for the phone tab bar, where five items share one row. */
+const FIELD_TAB_LABELS: Record<string, string> = {
+  "/field/dashboard": "Work",
+  "/field/leave": "Leave",
+  "/field/payments": "Payments",
+  "/field/notifications": "Alerts",
+  "/profile": "Profile",
+};
+
+const FIELD_ROLES: UserRole[] = ["PASTER", "HELPER", "DRIVER"];
+export const isFieldRole = (role: UserRole) => FIELD_ROLES.includes(role);
 
 const NAV: Record<UserRole, NavItem[]> = {
   CSM: [
@@ -284,6 +298,64 @@ export function Sidebar({ role }: { role: UserRole }) {
     <aside className="hidden w-64 shrink-0 flex-col border-r bg-sidebar md:flex lg:w-72">
       <SidebarBody role={role} layoutGroup="sidebar" />
     </aside>
+  );
+}
+
+/**
+ * Field staff work from a phone, so below `md` their five destinations also sit in a bottom
+ * tab bar within thumb reach — no menu to open to get to leave or payments.
+ */
+export function FieldTabBar() {
+  const location = useLocation();
+  const { data: notifications = [] } = useQuery({
+    queryKey: ["notifications"],
+    queryFn: fetchMyNotifications,
+  });
+  const unread = notifications.filter((n) => !n.read).length;
+  return (
+    <nav
+      aria-label="Main"
+      className="fixed inset-x-0 bottom-0 z-30 border-t bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden"
+    >
+      <ul className="grid grid-cols-5">
+        {FIELD_NAV.map((item) => {
+          const active =
+            location.pathname === item.to || location.pathname.startsWith(item.to + "/");
+          const Icon = item.icon;
+          const badge = item.to === "/field/notifications" && unread > 0;
+          return (
+            <li key={item.to}>
+              <Link
+                to={item.to}
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  "relative flex h-16 flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors [-webkit-tap-highlight-color:transparent]",
+                  active ? "text-primary" : "text-muted-foreground active:text-foreground",
+                )}
+              >
+                {active && (
+                  <motion.span
+                    layoutId="field-tab-active"
+                    className="absolute inset-x-4 top-0 h-0.5 rounded-b-full bg-primary"
+                    transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                  />
+                )}
+                <span className="relative">
+                  <Icon className="h-5 w-5" />
+                  {badge && (
+                    <span className="absolute -right-2 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">
+                      {unread > 9 ? "9+" : unread}
+                    </span>
+                  )}
+                </span>
+                {FIELD_TAB_LABELS[item.to] ?? item.label}
+                {badge && <span className="sr-only">, {unread} unread</span>}
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
   );
 }
 
