@@ -132,102 +132,142 @@ export function OrderDetail({ order, actions, related, userRole, currentUserId }
   /** Group under store headings only when the server sent stores carrying their items. */
   const grouped = stores.length > 0 && stores.some((s) => (s.items?.length ?? 0) > 0);
 
-  /** The item table, shared by the grouped and flat layouts. */
+  /** Flag and loss-remark badges for one item; shared by the phone list and the table. */
+  const remarksFor = (item: OrderItem) => (
+    <div className="space-y-1">
+      {item.is_flagged && (
+        <div className="inline-flex items-center rounded-md bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive">
+          Flagged
+          {item.flag_reason && <span className="ml-1 font-normal opacity-80">({item.flag_reason})</span>}
+        </div>
+      )}
+      {item.remarks && item.remarks_confirmed && (
+        <div className="text-xs">
+          <span className="font-medium text-amber-600 dark:text-amber-500">Loss: {remarkLabel(item.remarks)}</span>
+          {item.remarks_other_text && <div className="text-muted-foreground mt-0.5 whitespace-pre-wrap max-w-[200px] truncate" title={item.remarks_other_text}>{item.remarks_other_text}</div>}
+        </div>
+      )}
+      {item.remarks && !item.remarks_confirmed && (
+        <div className="text-xs">
+          <span className="inline-flex items-center rounded-md bg-blue-500/10 px-2 py-0.5 font-medium text-blue-600 dark:text-blue-400">
+            Proposed loss: {remarkLabel(item.remarks)}
+          </span>
+          <div className="text-muted-foreground mt-0.5">pending admin approval</div>
+          {item.remarks_other_text && <div className="text-muted-foreground mt-0.5 whitespace-pre-wrap max-w-[200px] truncate" title={item.remarks_other_text}>{item.remarks_other_text}</div>}
+        </div>
+      )}
+      {!item.is_flagged && !item.remarks && (
+        <span className="text-muted-foreground">-</span>
+      )}
+    </div>
+  );
+
+  const actionsFor = (item: OrderItem) => (
+    <div className="flex items-center justify-end space-x-2">
+      {(userRole === "CSM" || userRole === "ADMIN") && (order.status === "Active" || order.status === "Installed") && (
+        <FlagDialog
+          item={item}
+          onSave={(flagged, reason) => handleFlagItem(item.id!, flagged, reason)}
+          isSubmitting={isSubmitting}
+        />
+      )}
+      {userRole === "ADMIN" && item.is_flagged && (
+        <Button
+          variant="outline"
+          size="icon"
+          className="h-7 w-7 border-destructive/40 text-destructive hover:bg-destructive/10"
+          title="Reject flag"
+          onClick={() => handleRejectFlag(item.id!)}
+          disabled={isSubmitting}
+        >
+          <Ban className="h-3.5 w-3.5" />
+        </Button>
+      )}
+      {userRole === "ADMIN" && (
+        <RemarkDialog
+          item={item}
+          onSave={(remark, custom) => handleSetRemark(item.id!, remark, custom)}
+          isSubmitting={isSubmitting}
+        />
+      )}
+    </div>
+  );
+
+  /**
+   * The items, shared by the grouped and flat layouts: a stacked list on phones (nine
+   * columns don't fit 375px) and the full table from `md` up.
+   */
   const ItemsTable = ({ items }: { items: OrderItem[] }) => (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead className="w-12 text-center">#</TableHead>
-          <TableHead>Media</TableHead>
-          <TableHead className="text-right">Size (in)</TableHead>
-          <TableHead className="text-right">Qty</TableHead>
-          <TableHead className="text-right">Total Sft</TableHead>
-          {hasFinancials && <TableHead className="text-right">Rate (₹)</TableHead>}
-          {hasFinancials && <TableHead className="text-right">Amount (₹)</TableHead>}
-          {showProduction && <TableHead>Production</TableHead>}
-          <TableHead>Remarks / Flags</TableHead>
-          {userRole && <TableHead className="text-right">Actions</TableHead>}
-        </TableRow>
-      </TableHeader>
-      <TableBody>
+    <>
+      <ul className="divide-y md:hidden">
         {items?.map((item: OrderItem) => (
-          <TableRow key={item.id}>
-            <TableCell className="text-center text-muted-foreground">{item.s_no}</TableCell>
-            <TableCell className="font-medium">{item.media}</TableCell>
-            <TableCell className="text-right">{item.width_inches} x {item.height_inches}</TableCell>
-            <TableCell className="text-right">{item.qty}</TableCell>
-            <TableCell className="text-right">{(item.total_sft || 0).toFixed(2)}</TableCell>
-            {hasFinancials && <TableCell className="text-right">{item.rate}</TableCell>}
-            {hasFinancials && <TableCell className="text-right font-semibold">{inr(item.amount || 0)}</TableCell>}
-            {showProduction && (
-              <TableCell>
-                <ProductionCell item={item} />
-              </TableCell>
-            )}
-            <TableCell>
-              <div className="space-y-1">
-                {item.is_flagged && (
-                  <div className="inline-flex items-center rounded-md bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive">
-                    Flagged
-                    {item.flag_reason && <span className="ml-1 font-normal opacity-80">({item.flag_reason})</span>}
-                  </div>
-                )}
-                {item.remarks && item.remarks_confirmed && (
-                  <div className="text-xs">
-                    <span className="font-medium text-amber-600 dark:text-amber-500">Loss: {remarkLabel(item.remarks)}</span>
-                    {item.remarks_other_text && <div className="text-muted-foreground mt-0.5 whitespace-pre-wrap max-w-[200px] truncate" title={item.remarks_other_text}>{item.remarks_other_text}</div>}
-                  </div>
-                )}
-                {item.remarks && !item.remarks_confirmed && (
-                  <div className="text-xs">
-                    <span className="inline-flex items-center rounded-md bg-blue-500/10 px-2 py-0.5 font-medium text-blue-600 dark:text-blue-400">
-                      Proposed loss: {remarkLabel(item.remarks)}
-                    </span>
-                    <div className="text-muted-foreground mt-0.5">pending admin approval</div>
-                    {item.remarks_other_text && <div className="text-muted-foreground mt-0.5 whitespace-pre-wrap max-w-[200px] truncate" title={item.remarks_other_text}>{item.remarks_other_text}</div>}
-                  </div>
-                )}
-                {!item.is_flagged && !item.remarks && (
-                  <span className="text-muted-foreground">-</span>
-                )}
+          <li key={item.id} className="grid gap-1.5 px-1 py-3 text-sm">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <span className="text-muted-foreground">{item.s_no}. </span>
+                <span className="font-medium">{item.media}</span>
               </div>
-            </TableCell>
-            {userRole && (
-              <TableCell className="text-right">
-                <div className="flex items-center justify-end space-x-2">
-                  {(userRole === "CSM" || userRole === "ADMIN") && (order.status === "Active" || order.status === "Installed") && (
-                    <FlagDialog
-                      item={item}
-                      onSave={(flagged, reason) => handleFlagItem(item.id!, flagged, reason)}
-                      isSubmitting={isSubmitting}
-                    />
-                  )}
-                  {userRole === "ADMIN" && item.is_flagged && (
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-7 w-7 border-destructive/40 text-destructive hover:bg-destructive/10"
-                      title="Reject flag"
-                      onClick={() => handleRejectFlag(item.id!)}
-                      disabled={isSubmitting}
-                    >
-                      <Ban className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
-                  {userRole === "ADMIN" && (
-                    <RemarkDialog
-                      item={item}
-                      onSave={(remark, custom) => handleSetRemark(item.id!, remark, custom)}
-                      isSubmitting={isSubmitting}
-                    />
-                  )}
-                </div>
-              </TableCell>
-            )}
-          </TableRow>
+              {hasFinancials && (
+                <span className="shrink-0 font-semibold tabular-nums">{inr(item.amount || 0)}</span>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground tabular-nums">
+              <span>{item.width_inches} x {item.height_inches} in</span>
+              <span>Qty {item.qty}</span>
+              <span>{(item.total_sft || 0).toFixed(2)} sft</span>
+              {hasFinancials && <span>@ ₹{item.rate}</span>}
+            </div>
+            {showProduction && <ProductionCell item={item} />}
+            {(item.is_flagged || item.remarks) && remarksFor(item)}
+            {userRole && <div className="flex justify-end">{actionsFor(item)}</div>}
+          </li>
         ))}
-      </TableBody>
-    </Table>
+      </ul>
+      <div className="hidden md:block">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-12 text-center">#</TableHead>
+              <TableHead>Media</TableHead>
+              <TableHead className="text-right">Size (in)</TableHead>
+              <TableHead className="text-right">Qty</TableHead>
+              <TableHead className="text-right">Total Sft</TableHead>
+              {hasFinancials && <TableHead className="text-right">Rate (₹)</TableHead>}
+              {hasFinancials && <TableHead className="text-right">Amount (₹)</TableHead>}
+              {showProduction && <TableHead>Production</TableHead>}
+              <TableHead>Remarks / Flags</TableHead>
+              {userRole && <TableHead className="text-right">Actions</TableHead>}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {items?.map((item: OrderItem) => (
+              <TableRow key={item.id}>
+                <TableCell className="text-center text-muted-foreground">{item.s_no}</TableCell>
+                <TableCell className="font-medium">{item.media}</TableCell>
+                <TableCell className="text-right">{item.width_inches} x {item.height_inches}</TableCell>
+                <TableCell className="text-right">{item.qty}</TableCell>
+                <TableCell className="text-right">{(item.total_sft || 0).toFixed(2)}</TableCell>
+                {hasFinancials && <TableCell className="text-right">{item.rate}</TableCell>}
+                {hasFinancials && <TableCell className="text-right font-semibold">{inr(item.amount || 0)}</TableCell>}
+                {showProduction && (
+                  <TableCell>
+                    <ProductionCell item={item} />
+                  </TableCell>
+                )}
+                <TableCell>
+                  {remarksFor(item)}
+                </TableCell>
+                {userRole && (
+                  <TableCell className="text-right">
+                    {actionsFor(item)}
+                  </TableCell>
+                )}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </>
   );
 
   return (
@@ -235,7 +275,7 @@ export function OrderDetail({ order, actions, related, userRole, currentUserId }
       <motion.section
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="surface-panel p-6"
+        className="surface-panel p-4 sm:p-6"
       >
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Order Details</h2>
@@ -404,7 +444,7 @@ export function OrderDetail({ order, actions, related, userRole, currentUserId }
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="surface-panel p-6"
+          className="surface-panel p-4 sm:p-6"
         >
           {actions}
         </motion.section>

@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { KpiCard } from "@/components/kpi/KpiCard";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { ErrorState, LoadingState } from "@/components/layout/PageStates";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -50,7 +51,7 @@ function AgingBadge({ days }: { days: number }) {
 }
 
 function ProdManagerDashboard() {
-  const { data: dash, isLoading } = useQuery({
+  const { data: dash, isLoading, error, refetch } = useQuery({
     queryKey: ["prod-manager-dashboard"],
     queryFn: fetchProdManagerDashboard,
   });
@@ -71,9 +72,9 @@ function ProdManagerDashboard() {
       />
 
       {isLoading ? (
-        <div className="p-12 text-center text-muted-foreground">Loading production data...</div>
+        <LoadingState label="Loading production data…" />
       ) : !dash ? (
-        <div className="p-12 text-center text-muted-foreground">No data available.</div>
+        <ErrorState title="Couldn't load the dashboard" error={error} onRetry={() => refetch()} />
       ) : (
         <>
           {/* Summary KPIs */}

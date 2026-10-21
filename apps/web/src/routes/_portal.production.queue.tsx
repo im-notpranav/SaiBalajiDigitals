@@ -1,10 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { EmptyState, ErrorState, LoadingState } from "@/components/layout/PageStates";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { fetchOrders, completeOrderItem } from "@/api/orders";
-import { CheckCircle2, Flag, Loader2, Undo2 } from "lucide-react";
+import { CheckCircle2, Flag, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 import type { Order, OrderItem } from "@sb-oms/shared-types";
 import { storeLabel, storeSubLabel } from "@/lib/stores";
@@ -17,7 +18,7 @@ export const Route = createFileRoute("/_portal/production/queue")({
 function ProductionQueue() {
   const queryClient = useQueryClient();
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["orders", "Active"],
     queryFn: () => fetchOrders({ status: "Active" }),
   });
@@ -47,12 +48,11 @@ function ProductionQueue() {
       />
 
       {isLoading ? (
-        <div className="p-12 flex justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+        <LoadingState label="Loading your queue…" />
+      ) : error && !data ? (
+        <ErrorState title="Couldn't load your queue" error={error} onRetry={() => refetch()} />
       ) : totalItems === 0 ? (
-        <div className="surface-panel p-12 text-center text-muted-foreground">
-          <CheckCircle2 className="mx-auto mb-3 h-10 w-10 opacity-20" />
-          <p>Nothing assigned to you right now.</p>
-        </div>
+        <EmptyState icon={CheckCircle2} title="Nothing assigned to you right now" />
       ) : (
         <div className="space-y-6">
           {orders.map((order) => {

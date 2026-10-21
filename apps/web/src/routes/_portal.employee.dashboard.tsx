@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { KpiCard } from "@/components/kpi/KpiCard";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { LoadingState } from "@/components/layout/PageStates";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -180,7 +181,7 @@ function EmployeeDashboard() {
       </div>
 
       {isLoading ? (
-        <div className="p-12 text-center text-muted-foreground">Loading dashboard data...</div>
+        <LoadingState className="mt-6" label="Loading dashboard…" />
       ) : isError ? (
         <div className="mt-6 rounded-xl border border-destructive/30 bg-destructive/5 p-8 text-center">
           <AlertTriangle className="mx-auto h-6 w-6 text-destructive" />

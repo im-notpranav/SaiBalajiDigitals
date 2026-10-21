@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Info, AlertTriangle, BellOff, Loader2 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { ErrorState, LoadingState } from "@/components/layout/PageStates";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
@@ -22,7 +23,7 @@ export function NotificationsList({ title = "Notifications", crumbs = [{ label: 
   const queryClient = useQueryClient();
   const goToOrder = useGoToOrder();
 
-  const { data: notifications = [], isLoading } = useQuery({
+  const { data: notifications = [], isLoading, isError, error, refetch } = useQuery({
     queryKey: ["notifications"],
     queryFn: fetchMyNotifications,
   });
@@ -72,9 +73,9 @@ export function NotificationsList({ title = "Notifications", crumbs = [{ label: 
       
       <div className="surface-panel divide-y min-h-[50vh]">
         {isLoading ? (
-          <div className="flex items-center justify-center p-12 text-muted-foreground">
-            <Loader2 className="h-8 w-8 animate-spin" />
-          </div>
+          <LoadingState bare label="Loading notifications…" />
+        ) : isError && notifications.length === 0 ? (
+          <ErrorState bare title="Couldn't load notifications" error={error} onRetry={() => refetch()} />
         ) : notifications.length === 0 ? (
           <div className="flex flex-col items-center justify-center p-12 text-muted-foreground">
             <CheckCircle2 className="mb-2 h-12 w-12 text-muted-foreground/30" />

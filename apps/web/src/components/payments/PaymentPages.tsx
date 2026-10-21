@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, Paperclip, Plus, Search, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { ErrorState, LoadingState, TableStateRow } from "@/components/layout/PageStates";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -59,7 +60,7 @@ export function MyPaymentRequests({ crumbs }: { crumbs: Crumbs }) {
   const [show, setShow] = useState<"open" | "all">("open");
   const [creating, setCreating] = useState(false);
   const [openId, setOpenId] = useState<number | null>(openFromUrl);
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["payment-requests", "mine"],
     queryFn: () => fetchPaymentRequests(),
   });
@@ -105,7 +106,9 @@ export function MyPaymentRequests({ crumbs }: { crumbs: Crumbs }) {
       </div>
 
       {isLoading ? (
-        <div className="surface-panel p-8 text-center text-muted-foreground">Loading…</div>
+        <LoadingState label="Loading your requests…" />
+      ) : error && !data ? (
+        <ErrorState title="Couldn't load your requests" error={error} onRetry={() => refetch()} />
       ) : rows.length === 0 ? (
         <div className="surface-panel flex flex-col items-center gap-3 p-8 text-center">
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
@@ -220,7 +223,7 @@ export function PaymentReviewQueue({
     q: debouncedQ || undefined,
     overdue: overdueOnly ? ("1" as const) : undefined,
   };
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["payment-requests", "review", params],
     queryFn: () => fetchPaymentRequests(params),
   });
@@ -287,6 +290,7 @@ export function PaymentReviewQueue({
           <Input
             value={q}
             onChange={(e) => setQ(e.target.value)}
+            aria-label="Search payment requests"
             placeholder="Request no, order, client, requester or purpose"
             className="pl-9"
           />
@@ -339,12 +343,14 @@ export function PaymentReviewQueue({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {isLoading ? (
-              <TableRow>
-                <TableCell colSpan={6} className="p-8 text-center text-muted-foreground">
-                  Loading…
-                </TableCell>
-              </TableRow>
+            {isLoading || (error && !data) ? (
+              <TableStateRow
+                colSpan={6}
+                loading={isLoading}
+                loadingLabel="Loading requests…"
+                error={error}
+                onRetry={() => refetch()}
+              />
             ) : rows.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6} className="p-8 text-center text-muted-foreground">

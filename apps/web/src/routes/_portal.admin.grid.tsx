@@ -5,6 +5,7 @@ import { AlertTriangle, ChevronLeft, ChevronRight, Loader2, Pencil, Plus } from 
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { ErrorState, LoadingState } from "@/components/layout/PageStates";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -64,7 +65,7 @@ function WeeklyGridPage() {
   const [view, setView] = useState<View>("dates");
   const [dialog, setDialog] = useState<DialogState>(null);
   const [opening, setOpening] = useState<number | null>(null);
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["work-jobs", "grid", from, days],
     queryFn: () => fetchWeeklyGrid(from, days),
   });
@@ -187,8 +188,10 @@ function WeeklyGridPage() {
         </div>
       </div>
 
-      {isLoading || !data ? (
-        <div className="surface-panel p-8 text-center text-muted-foreground">Loading…</div>
+      {isLoading ? (
+        <LoadingState label="Loading the grid…" />
+      ) : !data ? (
+        <ErrorState title="Couldn't load the grid" error={error} onRetry={() => refetch()} />
       ) : view === "dates" ? (
         <>
           <DateCalendar data={data} today={today} selected={selected} onSelect={setSelected} />
@@ -401,7 +404,7 @@ function DayPanel({
       </div>
 
       {isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
+        <LoadingState bare className="p-4" />
       ) : jobs.length === 0 ? (
         <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
           Nothing is booked on this date. Use “Assign workers” to book a team for an order.

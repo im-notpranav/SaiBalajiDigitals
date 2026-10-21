@@ -4,6 +4,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { AlertTriangle, CheckCircle2, Copy, ExternalLink, Loader2, RotateCw, Search } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { ErrorState, LoadingState } from "@/components/layout/PageStates";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -175,14 +176,16 @@ function DeliveryLog() {
         ))}
         <div className="relative ml-auto w-full sm:w-64">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Name, number or text" className="pl-9" />
+          <Input value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search messages" placeholder="Name, number or text" className="pl-9" />
         </div>
       </div>
       <p className="text-xs text-muted-foreground">Counts are for the last 30 days. The list refreshes every 15 seconds.</p>
 
       <div className="surface-panel overflow-hidden">
         {log.isLoading ? (
-          <div className="p-8 text-center text-muted-foreground">Loading messages…</div>
+          <LoadingState bare label="Loading messages…" />
+        ) : log.error && !data ? (
+          <ErrorState bare title="Couldn't load messages" error={log.error} onRetry={() => log.refetch()} />
         ) : !data?.messages.length ? (
           <div className="p-8 text-center text-muted-foreground">
             No messages {status || q ? "match this filter" : "yet. They appear here as jobs, payments and orders change"}.

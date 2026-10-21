@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { ErrorState, LoadingState } from "@/components/layout/PageStates";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,7 +26,7 @@ function SettingsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [newOrderNo, setNewOrderNo] = useState("");
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["order-sequence"],
     queryFn: async () => {
       const res = await apiClient.get("/admin/order-sequence");
@@ -49,7 +50,9 @@ function SettingsPage() {
     }
   });
 
-  if (isLoading) return <div className="p-8 text-center text-muted-foreground">Loading settings...</div>;
+  if (isLoading) return <LoadingState label="Loading settings…" />;
+  if (error && !data)
+    return <ErrorState title="Couldn't load settings" error={error} onRetry={() => refetch()} />;
 
   const seq = data?.seq;
   const nextOrderNumber = data?.next_order_number;

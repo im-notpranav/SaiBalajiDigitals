@@ -93,6 +93,7 @@ function ImportPage() {
             <input
               ref={fileRef}
               type="file"
+              aria-label="Excel file to import"
               accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
               onChange={(e) => { setFile(e.target.files?.[0] ?? null); setResult(null); setRowErrors(null); }}
               className="block text-sm file:mr-3 file:rounded-lg file:border file:bg-muted file:px-3 file:py-1.5 file:text-sm"

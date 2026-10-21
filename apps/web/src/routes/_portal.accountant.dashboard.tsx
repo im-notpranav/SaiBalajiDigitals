@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { format, subDays } from "date-fns";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { ErrorState, LoadingState } from "@/components/layout/PageStates";
 import { KpiCard } from "@/components/kpi/KpiCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -123,7 +124,7 @@ function AccountantDashboard() {
   });
   const [expanded, setExpanded] = useState<string | null>(null);
 
-  const { data: dash, isLoading } = useQuery({
+  const { data: dash, isLoading, error, refetch } = useQuery({
     queryKey: [
       "accountant-dashboard",
       format(dateRange.from, "yyyy-MM-dd"),
@@ -174,9 +175,9 @@ function AccountantDashboard() {
       />
 
       {isLoading ? (
-        <div className="p-12 text-center text-muted-foreground">Loading accountant data…</div>
+        <LoadingState label="Loading dashboard…" />
       ) : !dash ? (
-        <div className="p-12 text-center text-muted-foreground">No data available.</div>
+        <ErrorState title="Couldn't load the dashboard" error={error} onRetry={() => refetch()} />
       ) : (
         <>
           {/* KPI Cards */}

@@ -1,13 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { EmptyState, ErrorState, LoadingState } from "@/components/layout/PageStates";
 import { fetchOrders, assignOrderItem } from "@/api/orders";
 import { fetchProductionStaff } from "@/api/users";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Loader2, CheckCircle2, Flag, Users, ChevronsUpDown } from "lucide-react";
+import { CheckCircle2, Flag, Users, ChevronsUpDown } from "lucide-react";
 import { toast } from "sonner";
 import { StatusBadge } from "@/components/orders/StatusBadge";
 import type { Order, OrderItem } from "@sb-oms/shared-types";
@@ -21,7 +22,7 @@ export const Route = createFileRoute("/_portal/prod-manager/assign")({
 function ProdManagerAssignPage() {
   const queryClient = useQueryClient();
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["orders", "prod-manager"],
     queryFn: () => fetchOrders({ limit: 100 }),
   });
@@ -61,9 +62,11 @@ function ProdManagerAssignPage() {
       />
 
       {isLoading ? (
-        <div className="p-12 flex justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+        <LoadingState label="Loading orders…" />
+      ) : error && !data ? (
+        <ErrorState title="Couldn't load orders" error={error} onRetry={() => refetch()} />
       ) : orders.length === 0 ? (
-        <div className="surface-panel p-12 text-center text-muted-foreground">No active orders to assign.</div>
+        <EmptyState icon={CheckCircle2} title="No active orders to assign" />
       ) : (
         <div className="space-y-6">
           {orders.map((order) => {

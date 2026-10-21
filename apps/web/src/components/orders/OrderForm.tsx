@@ -491,6 +491,7 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
                   <div className="sm:col-span-2">
                     <Label className="text-[10px] uppercase text-muted-foreground">W (in)</Label>
                     <Input
+                      aria-label="Width in inches"
                       type="text"
                       inputMode="decimal"
                       autoComplete="off"
@@ -505,6 +506,7 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
                   <div className="sm:col-span-2">
                     <Label className="text-[10px] uppercase text-muted-foreground">H (in)</Label>
                     <Input
+                      aria-label="Height in inches"
                       type="text"
                       inputMode="decimal"
                       autoComplete="off"
@@ -519,6 +521,7 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
                   <div className="sm:col-span-2">
                     <Label className="text-[10px] uppercase text-muted-foreground">Qty</Label>
                     <Input
+                      aria-label="Quantity"
                       type="number"
                       min={1}
                       step={1}
@@ -531,6 +534,7 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
                   <div className="sm:col-span-2">
                     <Label className="text-[10px] uppercase text-muted-foreground">Rate (₹)</Label>
                     <Input
+                      aria-label="Rate in rupees"
                       type="text"
                       inputMode="decimal"
                       autoComplete="off"
@@ -563,7 +567,7 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
                       {isAdmin ? "Loss remark (optional)" : "Propose loss remark (needs admin approval)"}
                     </Label>
                     <Select value={line.remarks ?? "none"} onValueChange={(v) => update(store.id, line.id, { remarks: v === "none" ? null : v })}>
-                      <SelectTrigger className="h-8 text-xs w-full sm:w-64"><SelectValue /></SelectTrigger>
+                      <SelectTrigger aria-label="Loss remark" className="h-9 text-xs w-full sm:h-8 sm:w-64"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="none">None</SelectItem>
                         {LOSS_REMARK_TYPES.map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
