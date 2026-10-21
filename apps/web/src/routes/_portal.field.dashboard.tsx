@@ -1,8 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CalendarDays,
+  CalendarPlus,
   CheckCircle2,
   ClipboardList,
   Loader2,
@@ -17,6 +18,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -39,8 +41,10 @@ import {
   fetchMyOvertime,
   formatJobDates,
   formatMinutes,
+  requestMyLeave,
   setMyJobStatus,
   todayIST,
+  withdrawMyLeave,
   type LeaveState,
   type MyJob,
   type OvertimeStatus,
@@ -119,28 +123,54 @@ function FieldDashboard() {
 }
 
 const leaveStateLabel: Record<LeaveState, string> = {
+  PENDING: "Waiting for approval",
+  REJECTED: "Not approved",
   CURRENT: "On leave now",
-  UPCOMING: "Upcoming",
+  UPCOMING: "Approved",
   PAST: "Taken",
   CANCELLED: "Cancelled",
 };
 
+const leaveStateStyle: Partial<Record<LeaveState, string>> = {
+  PENDING: "text-warning-foreground font-medium",
+  REJECTED: "text-destructive",
+  CURRENT: "text-destructive",
+  UPCOMING: "text-success font-medium",
+};
+
 function MyLeave() {
+  const qc = useQueryClient();
+  const [asking, setAsking] = useState(false);
   const { data } = useQuery({ queryKey: ["my", "leave"], queryFn: fetchMyLeave });
   const leave = data?.leave ?? [];
+  const withdraw = useMutation({
+    mutationFn: (id: number) => withdrawMyLeave(id),
+    onSuccess: () => {
+      toast.success("Leave request withdrawn");
+      qc.invalidateQueries({ queryKey: ["my", "leave"] });
+    },
+    onError: (err) => toast.error(apiErrorMessage(err, "Could not withdraw the request")),
+  });
   return (
     <section>
-      <h2 className="mb-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-        My leave
-      </h2>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+          My leave
+        </h2>
+        <Button size="sm" variant="outline" className="rounded-xl" onClick={() => setAsking(true)}>
+          <CalendarPlus className="mr-1.5 h-4 w-4" /> Request leave
+        </Button>
+      </div>
       <div className="surface-panel p-4">
         {leave.length === 0 ? (
-          <div className="text-sm text-muted-foreground">No leave recorded.</div>
+          <div className="text-sm text-muted-foreground">
+            No leave yet. Tap “Request leave” to ask the Operations Manager.
+          </div>
         ) : (
-          <ul className="grid gap-2">
+          <ul className="grid gap-3">
             {leave.map((l) => (
               <li key={l.id} className="flex items-start justify-between gap-2 text-sm">
-                <span>
+                <span className="min-w-0">
                   <span className="font-medium">{formatJobDates(l.from_date, l.to_date)}</span>
                   <span className="text-muted-foreground">
                     {" "}
@@ -149,21 +179,124 @@ function MyLeave() {
                   {l.reason && (
                     <span className="block text-xs text-muted-foreground">{l.reason}</span>
                   )}
-                </span>
-                <span
-                  className={cn(
-                    "shrink-0 text-xs",
-                    l.state === "CURRENT" ? "text-destructive" : "text-muted-foreground",
+                  {l.reject_reason && (
+                    <span className="block text-xs text-destructive">
+                      Reason: {l.reject_reason}
+                    </span>
                   )}
-                >
-                  {leaveStateLabel[l.state]}
+                </span>
+                <span className="flex shrink-0 flex-col items-end gap-1">
+                  <span className={cn("text-xs text-muted-foreground", leaveStateStyle[l.state])}>
+                    {leaveStateLabel[l.state]}
+                  </span>
+                  {l.state === "PENDING" && (
+                    <button
+                      type="button"
+                      className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground disabled:opacity-50"
+                      disabled={withdraw.isPending}
+                      onClick={() => withdraw.mutate(l.id)}
+                    >
+                      Withdraw
+                    </button>
+                  )}
                 </span>
               </li>
             ))}
           </ul>
         )}
       </div>
+      <RequestLeaveDialog open={asking} onClose={() => setAsking(false)} />
     </section>
+  );
+}
+
+/** Ask for leave. It shows as waiting until the Operations Manager approves or rejects it. */
+function RequestLeaveDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const qc = useQueryClient();
+  const today = todayIST();
+  const [from, setFrom] = useState(today);
+  const [to, setTo] = useState(today);
+  const [reason, setReason] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    setFrom(today);
+    setTo(today);
+    setReason("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only when the dialog opens
+  }, [open]);
+
+  const save = useMutation({
+    mutationFn: () => requestMyLeave({ from_date: from, to_date: to, reason: reason.trim() }),
+    onSuccess: () => {
+      toast.success("Leave requested. The Operations Manager will approve or reject it.");
+      qc.invalidateQueries({ queryKey: ["my", "leave"] });
+      onClose();
+    },
+    onError: (err) => toast.error(apiErrorMessage(err, "Could not send the request")),
+  });
+
+  const valid = !!from && from >= today && to >= from && reason.trim().length >= 2;
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Request leave</DialogTitle>
+          <DialogDescription>
+            The Operations Manager is told and approves or rejects it. You will get a
+            notification either way.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4 py-1">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-2">
+              <Label htmlFor="my-leave-from">From</Label>
+              <Input
+                id="my-leave-from"
+                type="date"
+                value={from}
+                min={today}
+                onChange={(e) => {
+                  setFrom(e.target.value);
+                  if (to < e.target.value) setTo(e.target.value);
+                }}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="my-leave-to">To</Label>
+              <Input
+                id="my-leave-to"
+                type="date"
+                value={to}
+                min={from}
+                onChange={(e) => setTo(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="my-leave-reason">Reason</Label>
+            <Textarea
+              id="my-leave-reason"
+              rows={3}
+              maxLength={300}
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="e.g. Family function in my village"
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button disabled={!valid || save.isPending} onClick={() => save.mutate()}>
+            {save.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Send request
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

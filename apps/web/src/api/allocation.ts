@@ -347,7 +347,9 @@ export function formatJobDates(start: string, end: string): string {
 
 // --- Leave -----------------------------------------------------------------
 
-export type LeaveState = "UPCOMING" | "CURRENT" | "PAST" | "CANCELLED";
+export type LeaveStatus = "PENDING" | "APPROVED" | "REJECTED";
+/** Approved leave is UPCOMING / CURRENT / PAST; otherwise PENDING, REJECTED or CANCELLED. */
+export type LeaveState = "PENDING" | "REJECTED" | "UPCOMING" | "CURRENT" | "PAST" | "CANCELLED";
 
 export interface LeaveRecord {
   id: number;
@@ -362,9 +364,15 @@ export interface LeaveRecord {
   to_date: string;
   days: number;
   reason: string | null;
+  status: LeaveStatus;
   state: LeaveState;
+  /** Asked for by the person themself, not recorded by a manager. */
+  requested: boolean;
   creator: { id: number; name: string } | null;
   created_at: string;
+  decider: { id: number; name: string } | null;
+  decided_at: string | null;
+  reject_reason: string | null;
   cancelled_at: string | null;
   canceller: { id: number; name: string } | null;
   cancel_reason: string | null;
@@ -401,11 +409,16 @@ export const fetchLeave = (filters: {
   from?: string;
   to?: string;
   user_id?: string;
+  status?: LeaveStatus;
   include_cancelled?: boolean;
 }) =>
   apiFetch<{ from: string; to: string; leave: LeaveRecord[] }>(
-    `/leave${qs({ from: filters.from, to: filters.to, user_id: filters.user_id, include_cancelled: filters.include_cancelled ? "1" : undefined })}`,
+    `/leave${qs({ from: filters.from, to: filters.to, user_id: filters.user_id, status: filters.status, include_cancelled: filters.include_cancelled ? "1" : undefined })}`,
   );
+export const decideLeave = (
+  id: number,
+  data: { status: "APPROVED" | "REJECTED"; reason?: string; acknowledge_jobs?: boolean },
+) => apiFetch<LeaveRecord>(`/leave/${id}/decision`, { method: "PUT", data });
 export const createLeave = (data: LeaveInput) =>
   apiFetch<LeaveRecord>("/leave", { method: "POST", data });
 export const updateLeave = (id: number, data: LeaveInput) =>
@@ -415,8 +428,15 @@ export const cancelLeave = (id: number, reason: string) =>
 export const fetchMyLeave = () =>
   apiFetch<{
     today: string;
-    leave: Pick<LeaveRecord, "id" | "from_date" | "to_date" | "days" | "reason" | "state">[];
+    leave: Pick<
+      LeaveRecord,
+      "id" | "from_date" | "to_date" | "days" | "reason" | "status" | "state" | "reject_reason"
+    >[];
   }>("/my/leave");
+export const requestMyLeave = (data: { from_date: string; to_date?: string | null; reason: string }) =>
+  apiFetch<LeaveRecord>("/my/leave", { method: "POST", data });
+export const withdrawMyLeave = (id: number) =>
+  apiFetch<LeaveRecord>(`/my/leave/${id}/withdraw`, { method: "PUT" });
 
 // --- Overtime --------------------------------------------------------------
 

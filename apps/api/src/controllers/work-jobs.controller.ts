@@ -536,7 +536,7 @@ export const dailyBoard = async (req: Request, res: Response) => {
         include: jobInclude,
         orderBy: { id: "asc" },
       }),
-      prisma.leaveRecord.findMany({ where: { cancelled_at: null, from_date: { lte: day }, to_date: { gte: day } } }),
+      prisma.leaveRecord.findMany({ where: { cancelled_at: null, status: "APPROVED", from_date: { lte: day }, to_date: { gte: day } } }),
     ]);
     const leaveByUser = new Map(leave.map((l) => [l.user_id, { id: l.id, from_date: dayKey(l.from_date), to_date: dayKey(l.to_date), reason: l.reason }]));
     const jobsByUser = new Map<number, { job_id: number; order_no: string; label: string }[]>();
@@ -585,7 +585,7 @@ export const weeklyGrid = async (req: Request, res: Response) => {
         where: { status: { not: "CANCELLED" }, start_date: { lte: parseDay(to) }, end_date: { gte: parseDay(from) } },
         include: { csmCode: { select: { code: true } }, csm2Code: { select: { code: true } }, order: { select: { order_no: true } }, members: { select: { user_id: true } } },
       }),
-      prisma.leaveRecord.findMany({ where: { cancelled_at: null, from_date: { lte: parseDay(to) }, to_date: { gte: parseDay(from) } } }),
+      prisma.leaveRecord.findMany({ where: { cancelled_at: null, status: "APPROVED", from_date: { lte: parseDay(to) }, to_date: { gte: parseDay(from) } } }),
     ]);
     const onLeave = new Set<string>(); // `${user}|${date}`
     for (const l of leave) {

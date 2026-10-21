@@ -112,6 +112,7 @@ model User {
   leaveRecords    LeaveRecord[]   @relation("LeavePerson")
   leaveEntered    LeaveRecord[]   @relation("LeaveCreator")
   leaveCancelled  LeaveRecord[]   @relation("LeaveCanceller")
+  leaveDecided    LeaveRecord[]   @relation("LeaveDecider")
   overtime        OvertimeEntry[] @relation("OvertimePerson")
   overtimeEntered OvertimeEntry[] @relation("OvertimeCreator")
   overtimeDecided OvertimeEntry[] @relation("OvertimeDecider")
@@ -488,29 +489,44 @@ model WorkJobStore {
   @@index([order_store_id])
 }
 
-/// Leave register: a field-staff member is unavailable for whole days. Leave blocks
-/// allocation outright ("Allow 2nd job" does not override it). One person's live leave
-/// records never overlap (exclusion constraint in the migration).
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/// Leave register: a field-staff member is unavailable for whole days. Approved leave blocks
+/// allocation outright ("Allow 2nd job" does not override it). Field staff request leave
+/// (PENDING) and the Operation Manager decides; leave a manager records is approved at once.
+/// One person's pending and approved records never overlap (exclusion constraint in the
+/// migration).
 model LeaveRecord {
-  id            Int       @id @default(autoincrement())
+  id            Int         @id @default(autoincrement())
   user_id       Int
-  user          User      @relation("LeavePerson", fields: [user_id], references: [id], onDelete: Restrict)
-  from_date     DateTime  @db.Date
+  user          User        @relation("LeavePerson", fields: [user_id], references: [id], onDelete: Restrict)
+  from_date     DateTime    @db.Date
   /// Same as from_date for one day.
-  to_date       DateTime  @db.Date
+  to_date       DateTime    @db.Date
   reason        String?
+  status        LeaveStatus @default(APPROVED)
+  decided_by    Int?
+  decider       User?       @relation("LeaveDecider", fields: [decided_by], references: [id], onDelete: SetNull)
+  decided_at    DateTime?
+  reject_reason String?
+  /// The person themself when they requested it, else the manager who recorded it.
   created_by    Int?
-  creator       User?     @relation("LeaveCreator", fields: [created_by], references: [id], onDelete: SetNull)
+  creator       User?       @relation("LeaveCreator", fields: [created_by], references: [id], onDelete: SetNull)
   /// Cancelled leave is kept for history and no longer blocks anything.
   cancelled_at  DateTime?
   cancelled_by  Int?
-  canceller     User?     @relation("LeaveCanceller", fields: [cancelled_by], references: [id], onDelete: SetNull)
+  canceller     User?       @relation("LeaveCanceller", fields: [cancelled_by], references: [id], onDelete: SetNull)
   cancel_reason String?
-  created_at    DateTime  @default(now())
-  updated_at    DateTime  @updatedAt
+  created_at    DateTime    @default(now())
+  updated_at    DateTime    @updatedAt
 
   @@index([user_id, from_date])
   @@index([from_date, to_date])
+  @@index([status])
 }
 
 /// Overtime register: one row per person per stretch of extra work. Hours come from the

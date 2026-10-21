@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { listLeave, createLeave, updateLeave, cancelLeave } from "../controllers/leave.controller";
+import { listLeave, createLeave, updateLeave, cancelLeave, decideLeave } from "../controllers/leave.controller";
 import { authenticate, authorize } from "../middlewares/auth.middleware";
 import { ALLOCATION_MANAGER_ROLES } from "../utils/roles";
 
@@ -13,5 +13,7 @@ router.get("/", listLeave);
 router.post("/", createLeave);
 router.put("/:id", updateLeave);
 router.put("/:id/cancel", cancelLeave);
+// Field staff's own requests are approved or rejected here.
+router.put("/:id/decision", decideLeave);
 
 export default router;

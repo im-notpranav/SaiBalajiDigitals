@@ -366,6 +366,24 @@ export const leaveCancelSchema = z.object({
   reason: z.string().trim().min(2, "Give a reason for cancelling").max(300),
 });
 
+/** A field-staff member asking for their own leave; the reason is required. */
+export const leaveRequestSchema = z
+  .object({
+    from_date: dayString,
+    to_date: dayString.optional().nullable(),
+    reason: z.string().trim().min(2, "Say why you need the leave").max(300),
+  })
+  .refine((l) => !l.to_date || l.to_date >= l.from_date, { message: "To date cannot be before from date", path: ["to_date"] });
+
+export const leaveDecisionSchema = z
+  .object({
+    status: z.enum(["APPROVED", "REJECTED"]),
+    reason: z.string().trim().max(300).optional().nullable(),
+    /** Approve even though the person is already on jobs over these dates. */
+    acknowledge_jobs: z.boolean().default(false),
+  })
+  .refine((d) => d.status === "APPROVED" || (d.reason?.length ?? 0) >= 2, { message: "Give a reason for rejecting", path: ["reason"] });
+
 /** "HH:MM", 24-hour. */
 const clockTime = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use HH:MM (24-hour)");
 

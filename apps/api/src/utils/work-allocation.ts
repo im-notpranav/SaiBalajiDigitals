@@ -140,16 +140,21 @@ export interface LeaveClash {
   reason: string | null;
 }
 
-/** People in `userIds` with live (not cancelled) leave overlapping [start, end]. */
+/**
+ * People in `userIds` with approved, not cancelled leave overlapping [start, end]. With
+ * `includePending`, requests still waiting for a decision count too: they hold the days
+ * against other leave, but do not block jobs or overtime until approved.
+ */
 export async function findLeaveClashes(
   tx: any,
-  opts: { userIds: number[]; start: string; end: string; excludeLeaveId?: number },
+  opts: { userIds: number[]; start: string; end: string; excludeLeaveId?: number; includePending?: boolean },
 ): Promise<LeaveClash[]> {
   if (opts.userIds.length === 0) return [];
   const rows = await tx.leaveRecord.findMany({
     where: {
       user_id: { in: opts.userIds },
       cancelled_at: null,
+      status: opts.includePending ? { not: "REJECTED" } : "APPROVED",
       from_date: { lte: parseDay(opts.end) },
       to_date: { gte: parseDay(opts.start) },
       ...(opts.excludeLeaveId ? { id: { not: opts.excludeLeaveId } } : {}),
