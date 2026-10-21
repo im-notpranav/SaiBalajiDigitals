@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Pencil, Plus, Search } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { TableStateRow } from "@/components/layout/PageStates";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -64,7 +65,7 @@ function JobsPage() {
     locality: locality === ALL ? undefined : locality,
     q: debouncedQ || undefined,
   };
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["work-jobs", "list", filters],
     queryFn: () => fetchWorkJobs(filters),
   });
@@ -153,18 +154,14 @@ function JobsPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {isLoading ? (
-              <TableRow>
-                <TableCell colSpan={7} className="p-8 text-center text-muted-foreground">
-                  Loading…
-                </TableCell>
-              </TableRow>
-            ) : jobs.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={7} className="p-8 text-center text-muted-foreground">
-                  No jobs in this window. Use “New job” to assign one.
-                </TableCell>
-              </TableRow>
+            {isLoading || (error && !data) || jobs.length === 0 ? (
+              <TableStateRow
+                colSpan={7}
+                loading={isLoading}
+                error={error && !data ? error : undefined}
+                onRetry={() => refetch()}
+                empty={{ title: "No jobs in this window. Use “New job” to assign one." }}
+              />
             ) : (
               jobs.map((j) => (
                 <TableRow key={j.id} className={j.status === "CANCELLED" ? "opacity-60" : ""}>

@@ -131,7 +131,7 @@ function ActiveSwitch({ checked, onChange }: { checked: boolean; onChange: (v: b
         <div className="text-sm font-medium">Active</div>
         <div className="text-xs text-muted-foreground">Inactive entries are hidden from pickers but kept for history.</div>
       </div>
-      <Switch checked={checked} onCheckedChange={onChange} />
+      <Switch checked={checked} onCheckedChange={onChange} aria-label="Active" />
     </div>
   );
 }
@@ -375,7 +375,7 @@ function AreasTab() {
             </div>
             <div className="flex items-center justify-between rounded-xl border p-3">
               <div className="text-sm font-medium">Needs confirmation</div>
-              <Switch checked={form.needs_confirmation} onCheckedChange={(v) => setForm({ ...form, needs_confirmation: v })} />
+              <Switch checked={form.needs_confirmation} onCheckedChange={(v) => setForm({ ...form, needs_confirmation: v })} aria-label="Needs confirmation" />
             </div>
             {form.id && <ActiveSwitch checked={form.is_active} onChange={(v) => setForm({ ...form, is_active: v })} />}
           </>

@@ -1,9 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Search, UserPlus } from "lucide-react";
+import { HardHat, Loader2, Search, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { EmptyState, ErrorState, LoadingState } from "@/components/layout/PageStates";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -52,7 +53,7 @@ function FieldStaffPage() {
   const [pwTarget, setPwTarget] = useState<FieldStaff | null>(null);
   const [newPassword, setNewPassword] = useState("");
 
-  const { data, isLoading } = useQuery({ queryKey: ["field-staff"], queryFn: fetchFieldStaff });
+  const { data, isLoading, error, refetch } = useQuery({ queryKey: ["field-staff"], queryFn: fetchFieldStaff });
   const staff = data?.staff ?? [];
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["field-staff"] });
 
@@ -159,11 +160,16 @@ function FieldStaffPage() {
 
       <div className="surface-panel overflow-hidden">
         {isLoading ? (
-          <div className="p-8 text-center text-muted-foreground">Loading staff…</div>
+          <LoadingState bare label="Loading staff…" />
+        ) : error && !data ? (
+          <ErrorState bare title="Couldn't load field staff" error={error} onRetry={() => refetch()} />
         ) : filtered.length === 0 ? (
-          <div className="p-8 text-center text-muted-foreground">
-            {staff.length === 0 ? "No field staff yet. Add your first Paster, Helper or Driver." : "No one matches these filters."}
-          </div>
+          <EmptyState
+            bare
+            icon={HardHat}
+            title={staff.length === 0 ? "No field staff yet" : "No one matches these filters"}
+            description={staff.length === 0 ? "Add your first Paster, Helper or Driver." : undefined}
+          />
         ) : (
           <Table>
             <TableHeader>

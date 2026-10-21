@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { UserPlus, Search, Loader2 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { ErrorState, LoadingState } from "@/components/layout/PageStates";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -43,7 +44,7 @@ function UsersPage() {
   const { user: currentUser } = useAuth();
 
   const queryClient = useQueryClient();
-  const { data: usersData, isLoading } = useQuery({ queryKey: ["users"], queryFn: fetchUsers });
+  const { data: usersData, isLoading, error, refetch } = useQuery({ queryKey: ["users"], queryFn: fetchUsers });
 
   const createMutation = useMutation({
     mutationFn: () => createUser(newUser),
@@ -268,7 +269,9 @@ function UsersPage() {
 
       <div className="surface-panel overflow-hidden">
         {isLoading ? (
-          <div className="p-8 text-center text-muted-foreground">Loading users...</div>
+          <LoadingState bare label="Loading users…" />
+        ) : error && !usersData ? (
+          <ErrorState bare title="Couldn't load users" error={error} onRetry={() => refetch()} />
         ) : (
           <Table>
             <TableHeader>

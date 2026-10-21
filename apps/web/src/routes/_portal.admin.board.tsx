@@ -12,8 +12,10 @@ import {
   Truck,
   Users,
   Wrench,
+  LayoutGrid,
 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { EmptyState, ErrorState, LoadingState } from "@/components/layout/PageStates";
 import { KpiCard } from "@/components/kpi/KpiCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,7 +44,7 @@ function DailyBoardPage() {
   const today = todayIST();
   const [date, setDate] = useState(today);
   const [dialog, setDialog] = useState<{ job: WorkJob | null } | null>(null);
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["work-jobs", "board", date],
     queryFn: () => fetchDailyBoard(date),
   });
@@ -79,9 +81,10 @@ function DailyBoardPage() {
         </Button>
         <Input
           type="date"
+          aria-label="Day"
           value={date}
           onChange={(e) => e.target.value && setDate(e.target.value)}
-          className="w-44"
+          className="w-auto min-w-0 flex-1 sm:w-44 sm:flex-none"
         />
         <Button
           variant="outline"
@@ -164,11 +167,11 @@ function DailyBoardPage() {
             Jobs on this day
           </h2>
           {isLoading ? (
-            <div className="surface-panel p-8 text-center text-muted-foreground">Loading…</div>
+            <LoadingState label="Loading the day's jobs…" />
+          ) : error && !data ? (
+            <ErrorState title="Couldn't load the board" error={error} onRetry={() => refetch()} />
           ) : (data?.jobs ?? []).length === 0 ? (
-            <div className="surface-panel p-8 text-center text-muted-foreground">
-              No jobs on this day.
-            </div>
+            <EmptyState icon={LayoutGrid} title="No jobs on this day" />
           ) : (
             <div className="grid gap-3 lg:grid-cols-2">
               {data!.jobs.map((j) => (

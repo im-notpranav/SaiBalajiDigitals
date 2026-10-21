@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/lib/auth-store";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { TableStateRow } from "@/components/layout/PageStates";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -114,7 +115,7 @@ function OvertimePage() {
     status: status === ALL ? undefined : status,
     user_id: person ? String(person) : undefined,
   };
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["overtime", "list", filters],
     queryFn: () => fetchOvertime(filters),
   });
@@ -276,18 +277,14 @@ function OvertimePage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {isLoading ? (
-              <TableRow>
-                <TableCell colSpan={9} className="p-8 text-center text-muted-foreground">
-                  Loading…
-                </TableCell>
-              </TableRow>
-            ) : entries.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={9} className="p-8 text-center text-muted-foreground">
-                  No overtime in this window.
-                </TableCell>
-              </TableRow>
+            {isLoading || (error && !data) || entries.length === 0 ? (
+              <TableStateRow
+                colSpan={9}
+                loading={isLoading}
+                error={error && !data ? error : undefined}
+                onRetry={() => refetch()}
+                empty={{ title: "No overtime in this window." }}
+              />
             ) : (
               entries.map((e) => (
                 <TableRow key={e.id} className={e.status === "REJECTED" ? "opacity-60" : ""}>

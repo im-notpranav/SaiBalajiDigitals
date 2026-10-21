@@ -62,8 +62,8 @@ function SettingsPage() {
         <div className="surface-panel p-6">
           <h3 className="mb-4 text-sm font-semibold">Order Number Sequence</h3>
           <div className="grid gap-3">
-            <div><Label>Current prefix</Label><Input readOnly value={seq ? `ORD${seq.year_code}` : ""} className="mt-1.5 font-mono" /></div>
-            <div><Label>Next number</Label><Input readOnly value={nextOrderNumber || ""} className="mt-1.5 font-mono" /></div>
+            <div><Label htmlFor="seq-prefix">Current prefix</Label><Input id="seq-prefix" readOnly value={seq ? `ORD${seq.year_code}` : ""} className="mt-1.5 font-mono" /></div>
+            <div><Label htmlFor="seq-next">Next number</Label><Input id="seq-next" readOnly value={nextOrderNumber || ""} className="mt-1.5 font-mono" /></div>
             <div className="flex items-center justify-between rounded-lg border bg-background p-3">
               <div>
                 <div className="text-sm font-semibold">Lock sequence adjustments</div>
@@ -72,6 +72,7 @@ function SettingsPage() {
               <Switch 
                 checked={seq?.is_locked || false} 
                 onCheckedChange={(checked) => mutation.mutate({ is_locked: checked })}
+                aria-label="Lock sequence adjustments"
                 disabled={mutation.isPending}
               />
             </div>

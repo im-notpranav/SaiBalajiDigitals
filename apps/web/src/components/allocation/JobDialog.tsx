@@ -649,6 +649,7 @@ export function JobDialog({
                   <Switch
                     checked={form.allow_double_booking}
                     onCheckedChange={(v) => set("allow_double_booking", v)}
+                    aria-label="Allow 2nd job"
                   />
                 </div>
               </div>

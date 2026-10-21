@@ -5,6 +5,7 @@ import { AlertTriangle, Ban, Check, Inbox, Loader2, Pencil, Plus, X } from "luci
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { TableStateRow } from "@/components/layout/PageStates";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -119,7 +120,7 @@ function LeavePage() {
     user_id: person ? String(person) : undefined,
     include_cancelled: showCancelled,
   };
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["leave", "list", filters],
     queryFn: () => fetchLeave(filters),
   });
@@ -171,7 +172,7 @@ function LeavePage() {
                   </div>
                   {l.reason && <div className="text-xs text-muted-foreground">“{l.reason}”</div>}
                 </div>
-                <div className="flex gap-2">
+                <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
                   <Button
                     size="sm"
                     disabled={approve.isPending}
@@ -214,7 +215,12 @@ function LeavePage() {
           />
         </label>
         <label className="flex h-10 items-center gap-2 text-sm">
-          <Switch checked={showCancelled} onCheckedChange={setShowCancelled} /> Show cancelled
+          <Switch
+            checked={showCancelled}
+            onCheckedChange={setShowCancelled}
+            aria-label="Show cancelled and rejected"
+          />{" "}
+          Show cancelled
           and rejected
         </label>
       </div>
@@ -232,18 +238,14 @@ function LeavePage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {isLoading ? (
-              <TableRow>
-                <TableCell colSpan={6} className="p-8 text-center text-muted-foreground">
-                  Loading…
-                </TableCell>
-              </TableRow>
-            ) : rows.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} className="p-8 text-center text-muted-foreground">
-                  No leave in this window.
-                </TableCell>
-              </TableRow>
+            {isLoading || (error && !data) || rows.length === 0 ? (
+              <TableStateRow
+                colSpan={6}
+                loading={isLoading}
+                error={error && !data ? error : undefined}
+                onRetry={() => refetch()}
+                empty={{ title: "No leave in this window." }}
+              />
             ) : (
               rows.map((l) => (
                 <TableRow
