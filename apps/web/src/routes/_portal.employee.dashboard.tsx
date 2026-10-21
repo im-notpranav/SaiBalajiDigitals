@@ -209,7 +209,7 @@ function EmployeeDashboard() {
       ) : (
         <>
           {/* Summary KPIs */}
-          <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
             <KpiCard label="Total Orders" value={dash.summary.total_orders} icon={Factory} accent="primary" delay={0} />
             <KpiCard
               label={viewMode === "amount" ? "Total Amount" : "Total Quantity"}
@@ -345,7 +345,7 @@ function OpenStageDrillDown({ stage, orders, viewMode }: { stage: string; orders
                 </td>
                 <td className="px-4 py-2.5 text-right">
                   <Button asChild variant="ghost" size="sm" className="h-7 px-2">
-                    <Link to="/employee/orders/$id" params={{ id: String(o.id) }}>
+                    <Link to="/employee/orders/$id" params={{ id: String(o.id) }} aria-label={`Open order ${o.order_no}`}>
                       <ArrowRight className="h-3.5 w-3.5" />
                     </Link>
                   </Button>
@@ -437,7 +437,7 @@ function CompletedDrillDown({ orders, viewMode }: { orders: CsmCompletedOrder[];
                 <TatCell days={o.total_days} bold />
                 <td className="px-4 py-2.5 text-right">
                   <Button asChild variant="ghost" size="sm" className="h-7 px-2">
-                    <Link to="/employee/orders/$id" params={{ id: String(o.id) }}>
+                    <Link to="/employee/orders/$id" params={{ id: String(o.id) }} aria-label={`Open order ${o.order_no}`}>
                       <ArrowRight className="h-3.5 w-3.5" />
                     </Link>
                   </Button>

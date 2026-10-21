@@ -15,7 +15,7 @@ export const Route = createFileRoute("/_portal/accountant/billing")({
 });
 
 function BillingQueue() {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["orders", "billing-queue"],
     queryFn: () => fetchOrders({ section: "active", limit: 100 }),
   });
@@ -59,31 +59,29 @@ function BillingQueue() {
           </div>
         }
       />
-
-      {isLoading ? (
-        <div className="p-8 text-center text-muted-foreground">Loading billing queue...</div>
-      ) : (
-        <OrdersTable
-          orders={queue}
-          showCreator
-          action={(o) => {
-            const awaitingPay = o.status === "BillingCompleted";
-            return (
-              <Link
-                to="/accountant/billing/$id"
-                params={{ id: String(o.id) }}
-                className={buttonVariants({ variant: awaitingPay ? "secondary" : "default", size: "sm", className: cn("rounded-lg", awaitingPay && "border border-primary/40") })}
-              >
-                {awaitingPay ? (
-                  <><IndianRupee className="mr-1 h-3.5 w-3.5" /> Record Payment</>
-                ) : (
-                  <><Receipt className="mr-1 h-3.5 w-3.5" /> Invoice Order</>
-                )}
-              </Link>
-            );
-          }}
-        />
-      )}
+      <OrdersTable
+        loading={isLoading}
+        error={error}
+        onRetry={() => refetch()}
+        orders={queue}
+        showCreator
+        action={(o) => {
+          const awaitingPay = o.status === "BillingCompleted";
+          return (
+            <Link
+              to="/accountant/billing/$id"
+              params={{ id: String(o.id) }}
+              className={buttonVariants({ variant: awaitingPay ? "secondary" : "default", size: "sm", className: cn("rounded-lg", awaitingPay && "border border-primary/40") })}
+            >
+              {awaitingPay ? (
+                <><IndianRupee className="mr-1 h-3.5 w-3.5" /> Record Payment</>
+              ) : (
+                <><Receipt className="mr-1 h-3.5 w-3.5" /> Invoice Order</>
+              )}
+            </Link>
+          );
+        }}
+      />
     </>
   );
 }

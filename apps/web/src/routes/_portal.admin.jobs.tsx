@@ -89,6 +89,7 @@ function JobsPage() {
           <Input
             value={q}
             onChange={(e) => setQ(e.target.value)}
+            aria-label="Search jobs"
             placeholder="Order no, client or work"
             className="pl-9"
           />

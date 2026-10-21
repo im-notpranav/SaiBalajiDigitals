@@ -63,7 +63,7 @@ function ProdManagerDashboard() {
         crumbs={[{ label: "Production Manager" }, { label: "Dashboard" }]}
         actions={
           <Button asChild size="lg" className="rounded-xl shadow-soft">
-            <Link to="/prod-manager/assign">
+            <Link to="/prod-manager/assign" aria-label="Go to Assign Work">
               <Users className="mr-2 h-4 w-4" /> Assign Work
             </Link>
           </Button>
@@ -77,7 +77,7 @@ function ProdManagerDashboard() {
       ) : (
         <>
           {/* Summary KPIs */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
             <KpiCard
               label="Active Orders"
               value={dash.summary.total_active_orders}
@@ -191,7 +191,7 @@ function ProdManagerDashboard() {
                           </td>
                           <td className="px-4 py-2.5 text-right">
                             <Button asChild variant="ghost" size="sm" className="h-7 px-2">
-                              <Link to="/prod-manager/assign">
+                              <Link to="/prod-manager/assign" aria-label="Go to Assign Work">
                                 <ArrowRight className="h-3.5 w-3.5" />
                               </Link>
                             </Button>

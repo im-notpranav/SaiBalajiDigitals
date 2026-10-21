@@ -28,7 +28,7 @@ function MyOrders() {
   const debouncedQ = useDebounce(q, 300);
   const [section, setSection] = useState<"active" | "completed">("active");
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["orders", "employee", section, searchField, debouncedQ],
     queryFn: () => {
       const params: any = { section };
@@ -76,7 +76,7 @@ function MyOrders() {
             wider than the content column at 375px. */}
         <div className="flex w-full min-w-0 flex-1 items-center gap-2 sm:w-auto">
           <Select value={searchField} onValueChange={(v: any) => setSearchField(v)}>
-            <SelectTrigger className="w-[120px] shrink-0 sm:w-[140px]">
+            <SelectTrigger aria-label="Search in" className="w-[120px] shrink-0 sm:w-[140px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -91,6 +91,7 @@ function MyOrders() {
             <Input
               value={q}
               onChange={(e) => setQ(e.target.value)}
+              aria-label="Search orders"
               placeholder={`Search by ${searchField === 'client' ? 'client name' : searchField === 'store' ? 'store name' : 'order number'}...`}
               className="pl-9"
             />
@@ -101,28 +102,26 @@ function MyOrders() {
           {total} orders found
         </div>
       </div>
-
-      {isLoading ? (
-        <div className="p-8 text-center text-muted-foreground">Loading orders...</div>
-      ) : (
-        <OrdersTable 
-          orders={orders} 
-          action={(o) => (
-            <div className="flex justify-end gap-2">
-              <Link to="/employee/orders/$id" params={{ id: String(o.id) }} className={buttonVariants({ size: "sm", variant: "ghost" })}>
-                View
+      <OrdersTable
+        loading={isLoading}
+        error={error}
+        onRetry={() => refetch()}
+        orders={orders} 
+        action={(o) => (
+          <div className="flex justify-end gap-2">
+            <Link to="/employee/orders/$id" params={{ id: String(o.id) }} className={buttonVariants({ size: "sm", variant: "ghost" })}>
+              View
+            </Link>
+            {/* Header fields (store, location, PO) stay editable past billing, so the
+                link follows the header rule, not the line-item one. */}
+            {["Active", "Installed", "BillingCompleted", "Pending"].includes(o.status) && (
+              <Link to="/employee/edit-order/$id" params={{ id: String(o.id) }} className={buttonVariants({ size: "sm", variant: "outline" })}>
+                <Edit className="mr-1 h-3.5 w-3.5" /> Edit
               </Link>
-              {/* Header fields (store, location, PO) stay editable past billing, so the
-                  link follows the header rule, not the line-item one. */}
-              {["Active", "Installed", "BillingCompleted", "Pending"].includes(o.status) && (
-                <Link to="/employee/edit-order/$id" params={{ id: String(o.id) }} className={buttonVariants({ size: "sm", variant: "outline" })}>
-                  <Edit className="mr-1 h-3.5 w-3.5" /> Edit
-                </Link>
-              )}
-            </div>
-          )}
-        />
-      )}
+            )}
+          </div>
+        )}
+      />
     </>
   );
 }

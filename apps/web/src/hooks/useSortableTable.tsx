@@ -77,9 +77,15 @@ export function SortableHead<T extends string = string>({
     <button
       type="button"
       onClick={() => onSort(column)}
-      className={`inline-flex items-center gap-1 font-medium hover:text-foreground ${className}`}
+      className={`-my-1 inline-flex min-h-8 items-center gap-1 whitespace-nowrap font-medium hover:text-foreground ${className}`}
     >
-      {label} <span className="text-[10px] opacity-60">{arrow}</span>
+      {label}{" "}
+      <span aria-hidden className={`text-[10px] ${active ? "text-foreground" : "opacity-60"}`}>
+        {arrow}
+      </span>
+      <span className="sr-only">
+        {active ? (sortDir === "asc" ? ", sorted ascending" : ", sorted descending") : ", sort"}
+      </span>
     </button>
   );
 }

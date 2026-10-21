@@ -30,6 +30,7 @@ import {
 } from "recharts";
 import { KpiCard } from "@/components/kpi/KpiCard";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { ErrorState, LoadingState } from "@/components/layout/PageStates";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -104,7 +105,7 @@ function AdminDashboard() {
   const fromStr = format(from, "yyyy-MM-dd");
   const toStr = format(to, "yyyy-MM-dd");
 
-  const { data: dash, isLoading } = useQuery({
+  const { data: dash, isLoading, error, refetch } = useQuery({
     queryKey: ["csm-dashboard", "admin", fromStr, toStr],
     queryFn: () => fetchCsmDashboard(fromStr, toStr),
   });
@@ -177,13 +178,13 @@ function AdminDashboard() {
       </div>
 
       {isLoading ? (
-        <div className="p-12 text-center text-muted-foreground">Loading dashboard data...</div>
+        <LoadingState className="mt-6" label="Loading dashboard…" />
       ) : !dash ? (
-        <div className="p-12 text-center text-muted-foreground">No data available.</div>
+        <ErrorState className="mt-6" title="Couldn't load the dashboard" error={error} onRetry={() => refetch()} />
       ) : (
         <>
           {/* Summary KPIs */}
-          <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="mt-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-5">
             <KpiCard label="Total Orders" value={dash.summary.total_orders} icon={Factory} accent="primary" delay={0} />
             <KpiCard
               label={viewMode === "amount" ? "Total Amount" : "Total Quantity"}
@@ -236,6 +237,8 @@ function AdminDashboard() {
                     initial={{ opacity: 0, y: 12 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.05 * i, duration: 0.4 }}
+                    type="button"
+                    aria-expanded={isExpanded}
                     onClick={() => setExpandedStage(isExpanded ? null : stage.key)}
                     className={cn(
                       "group relative overflow-hidden rounded-xl border p-4 text-left transition-all hover:shadow-md",
@@ -249,7 +252,7 @@ function AdminDashboard() {
                       {isExpanded ? (
                         <ChevronUp className="h-4 w-4 text-muted-foreground" />
                       ) : (
-                        <ChevronDown className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <ChevronDown className="h-4 w-4 text-muted-foreground transition-opacity md:opacity-0 md:group-hover:opacity-100" />
                       )}
                     </div>
                     <div className="mt-3 text-2xl font-bold tabular-nums">{data?.count ?? 0}</div>
@@ -329,7 +332,7 @@ function AdminDashboard() {
                           </td>
                           <td className="px-4 py-2.5 text-right">
                             <Button asChild variant="ghost" size="sm" className="h-7 px-2">
-                              <Link to="/admin/orders/$id" params={{ id: String(o.id) }}>
+                              <Link to="/admin/orders/$id" params={{ id: String(o.id) }} aria-label={`Open order ${o.order_no}`}>
                                 <ArrowRight className="h-3.5 w-3.5" />
                               </Link>
                             </Button>
@@ -448,7 +451,7 @@ function OpenStageDrillDown({ stage, orders, viewMode }: { stage: string; orders
                 </td>
                 <td className="px-4 py-2.5 text-right">
                   <Button asChild variant="ghost" size="sm" className="h-7 px-2">
-                    <Link to="/admin/orders/$id" params={{ id: String(o.id) }}>
+                    <Link to="/admin/orders/$id" params={{ id: String(o.id) }} aria-label={`Open order ${o.order_no}`}>
                       <ArrowRight className="h-3.5 w-3.5" />
                     </Link>
                   </Button>
@@ -539,7 +542,7 @@ function CompletedDrillDown({ orders, viewMode }: { orders: CsmCompletedOrder[];
                 <TatCell days={o.total_days} bold />
                 <td className="px-4 py-2.5 text-right">
                   <Button asChild variant="ghost" size="sm" className="h-7 px-2">
-                    <Link to="/admin/orders/$id" params={{ id: String(o.id) }}>
+                    <Link to="/admin/orders/$id" params={{ id: String(o.id) }} aria-label={`Open order ${o.order_no}`}>
                       <ArrowRight className="h-3.5 w-3.5" />
                     </Link>
                   </Button>

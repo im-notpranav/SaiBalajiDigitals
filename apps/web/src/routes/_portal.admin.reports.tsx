@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { ErrorState, LoadingState } from "@/components/layout/PageStates";
 import { KpiCard } from "@/components/kpi/KpiCard";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useQuery } from "@tanstack/react-query";
@@ -12,19 +13,25 @@ export const Route = createFileRoute("/_portal/admin/reports")({
 });
 
 function AdminReports() {
-  const { data: dash, isLoading } = useQuery({ queryKey: ["dashboard"], queryFn: fetchDashboard });
+  const { data: dash, isLoading, error, refetch } = useQuery({ queryKey: ["dashboard"], queryFn: fetchDashboard });
   const revenue = dash?.total_revenue || 0;
   
   return (
     <>
       <PageHeader title="System Reports" description="Cross-portal reporting for administrators." crumbs={[{ label: "Automated System" }, { label: "Reports" }]} />
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {isLoading ? (
+        <LoadingState label="Loading reports…" />
+      ) : error && !dash ? (
+        <ErrorState title="Couldn't load reports" error={error} onRetry={() => refetch()} />
+      ) : (
+      <>
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <KpiCard label="Orders" value={dash?.total_orders || 0} accent="primary" />
         <KpiCard label="Revenue" value={inr(revenue)} accent="success" />
         <KpiCard label="Closure rate" value="87%" accent="info" />
         <KpiCard label="Avg cycle time" value="4.2 days" accent="orange" />
       </div>
-      <div className="surface-panel mt-8 p-6">
+      <div className="surface-panel mt-6 p-4 sm:mt-8 sm:p-6">
         <h3 className="mb-4 text-sm font-semibold">Orders by month</h3>
         <div className="h-72">
           <ResponsiveContainer width="100%" height="100%">
@@ -38,6 +45,8 @@ function AdminReports() {
           </ResponsiveContainer>
         </div>
       </div>
+      </>
+      )}
     </>
   );
 }

@@ -26,7 +26,7 @@ function AccountantOrders() {
   const [searchField, setSearchField] = useState<"client" | "store" | "order_no">("client");
   const debouncedQ = useDebounce(q, 300);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["orders", "accountant", section, searchField, debouncedQ],
     queryFn: () => {
       const params: any = { section };
@@ -63,7 +63,7 @@ function AccountantOrders() {
 
         <div className="flex w-full min-w-0 flex-1 items-center gap-2 sm:w-auto">
           <Select value={searchField} onValueChange={(v: any) => setSearchField(v)}>
-            <SelectTrigger className="w-[120px] shrink-0 sm:w-[140px]">
+            <SelectTrigger aria-label="Search in" className="w-[120px] shrink-0 sm:w-[140px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -78,6 +78,7 @@ function AccountantOrders() {
             <Input
               value={q}
               onChange={(e) => setQ(e.target.value)}
+              aria-label="Search orders"
               placeholder={`Search by ${searchField === 'client' ? 'client name' : searchField === 'store' ? 'store name' : 'order number'}...`}
               className="pl-9"
             />
@@ -88,15 +89,13 @@ function AccountantOrders() {
           {data?.pagination?.total || data?.orders?.length || 0} orders found
         </div>
       </div>
-
-      {isLoading ? (
-        <div className="p-8 text-center text-muted-foreground">Loading orders...</div>
-      ) : (
-        <OrdersTable 
-          orders={data?.orders || []} 
-          showCreator 
-        />
-      )}
+      <OrdersTable
+        loading={isLoading}
+        error={error}
+        onRetry={() => refetch()}
+        orders={data?.orders || []} 
+        showCreator 
+      />
     </>
   );
 }

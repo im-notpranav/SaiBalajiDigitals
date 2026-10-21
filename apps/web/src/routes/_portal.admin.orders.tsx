@@ -58,7 +58,7 @@ function AdminOrders() {
   const isCustom = remark === "Other";
   const canSubmitClose = !isCustom || custom.trim().length > 0;
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["orders", "admin", section, searchField, debouncedQ],
     queryFn: () => {
       const params: any = { section };
@@ -121,7 +121,7 @@ function AdminOrders() {
         
         <div className="flex w-full min-w-0 flex-1 items-center gap-2 sm:w-auto">
           <Select value={searchField} onValueChange={(v: any) => setSearchField(v)}>
-            <SelectTrigger className="w-[120px] shrink-0 sm:w-[140px]">
+            <SelectTrigger aria-label="Search in" className="w-[120px] shrink-0 sm:w-[140px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -136,6 +136,7 @@ function AdminOrders() {
             <Input
               value={q}
               onChange={(e) => setQ(e.target.value)}
+              aria-label="Search orders"
               placeholder={`Search by ${searchField === 'client' ? 'client name' : searchField === 'store' ? 'store name' : 'order number'}...`}
               className="pl-9"
             />
@@ -146,32 +147,30 @@ function AdminOrders() {
           {data?.pagination?.total || data?.orders?.length || 0} orders found
         </div>
       </div>
-
-      {isLoading ? (
-        <div className="p-8 text-center text-muted-foreground">Loading orders...</div>
-      ) : (
-        <OrdersTable 
-          orders={data?.orders || []} 
-          showCreator 
-          action={(o) => (
-            <div className="flex justify-end gap-2">
-              <Link to="/admin/orders/$id" params={{ id: String(o.id) }} className={buttonVariants({ size: "sm", variant: "ghost" })}>
-                View
-              </Link>
-              {!readOnly && o.status !== "Completed" && (
-                <>
-                  <Link to="/admin/edit-order/$id" params={{ id: String(o.id) }} className={buttonVariants({ size: "sm", variant: "outline" })}>
-                    <Edit className="mr-1 h-3.5 w-3.5" /> Edit
-                  </Link>
-                  <Button size="sm" variant="destructive" onClick={() => setClosingOrder(o as Order)}>
-                    <Lock className="mr-1 h-3.5 w-3.5" /> Close
-                  </Button>
-                </>
-              )}
-            </div>
-          )}
-        />
-      )}
+      <OrdersTable
+        loading={isLoading}
+        error={error}
+        onRetry={() => refetch()}
+        orders={data?.orders || []} 
+        showCreator 
+        action={(o) => (
+          <div className="flex justify-end gap-2">
+            <Link to="/admin/orders/$id" params={{ id: String(o.id) }} className={buttonVariants({ size: "sm", variant: "ghost" })}>
+              View
+            </Link>
+            {!readOnly && o.status !== "Completed" && (
+              <>
+                <Link to="/admin/edit-order/$id" params={{ id: String(o.id) }} className={buttonVariants({ size: "sm", variant: "outline" })}>
+                  <Edit className="mr-1 h-3.5 w-3.5" /> Edit
+                </Link>
+                <Button size="sm" variant="destructive" onClick={() => setClosingOrder(o as Order)}>
+                  <Lock className="mr-1 h-3.5 w-3.5" /> Close
+                </Button>
+              </>
+            )}
+          </div>
+        )}
+      />
 
       {/* Admin Force Close Modal */}
       <AlertDialog open={!!closingOrder} onOpenChange={(open) => !open && setClosingOrder(null)}>

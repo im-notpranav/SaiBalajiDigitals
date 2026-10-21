@@ -144,7 +144,7 @@ function FieldStaffPage() {
       <div className="surface-panel mb-4 flex flex-col gap-3 p-3 sm:flex-row">
         <div className="relative flex-1 sm:max-w-sm">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, code or phone" className="pl-9" />
+          <Input value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search field staff" placeholder="Search name, code or phone" className="pl-9" />
         </div>
         <Select value={roleFilter} onValueChange={(v) => setRoleFilter(v as typeof roleFilter)}>
           <SelectTrigger className="sm:w-44"><SelectValue /></SelectTrigger>

@@ -2,10 +2,11 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { EmptyState, ErrorState, LoadingState } from "@/components/layout/PageStates";
 import { fetchOverdueReport } from "@/api/dashboard";
 import { Input } from "@/components/ui/input";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Loader2, AlarmClock, AlertCircle, CheckCircle2 } from "lucide-react";
+import { AlarmClock, CheckCircle2 } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { StatusBadge } from "@/components/orders/StatusBadge";
 import { inr } from "@/lib/format";
@@ -20,7 +21,7 @@ function OverduePage() {
   const [daysInput, setDaysInput] = useState("5");
   const [threshold, setThreshold] = useState(5);
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["overdue-report", threshold],
     queryFn: () => fetchOverdueReport(threshold),
   });
@@ -42,29 +43,28 @@ function OverduePage() {
       />
 
       <div className="space-y-6">
-        <section className="surface-panel p-6">
+        <section className="surface-panel p-4 sm:p-6">
           <form onSubmit={apply} className="flex flex-col sm:flex-row gap-4 items-end">
             <div className="flex-1 w-full space-y-2 max-w-xs">
-              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+              <label htmlFor="overdue-days" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
                 <AlarmClock className="w-3.5 h-3.5" /> Stuck for more than (days)
               </label>
-              <Input type="number" min={0} value={daysInput} onChange={(e) => setDaysInput(e.target.value)} required />
+              <Input id="overdue-days" type="number" inputMode="numeric" min={0} value={daysInput} onChange={(e) => setDaysInput(e.target.value)} required />
             </div>
             <Button type="submit" className="w-full sm:w-auto">Update</Button>
           </form>
         </section>
 
         {isLoading ? (
-          <div className="p-12 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
+          <LoadingState label="Loading overdue orders…" />
         ) : error ? (
-          <div className="p-8 text-destructive surface-panel flex items-center gap-2">
-            <AlertCircle className="w-5 h-5" /> Failed to load report.
-          </div>
+          <ErrorState title="Couldn't load the report" error={error} onRetry={() => refetch()} />
         ) : data && data.orders.length === 0 ? (
-          <div className="p-12 text-center text-muted-foreground surface-panel">
-            <CheckCircle2 className="w-8 h-8 mx-auto mb-3 opacity-20" />
-            <p>No orders stuck for more than {data.threshold} day{data.threshold === 1 ? "" : "s"}. All on track.</p>
-          </div>
+          <EmptyState
+            icon={CheckCircle2}
+            title="All on track"
+            description={`No orders stuck for more than ${data.threshold} day${data.threshold === 1 ? "" : "s"}.`}
+          />
         ) : (
           <div className="grid gap-6 lg:grid-cols-3">
             <section className="lg:col-span-2 surface-panel p-0 overflow-hidden">

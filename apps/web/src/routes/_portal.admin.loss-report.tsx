@@ -2,10 +2,11 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState, useMemo } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { EmptyState, ErrorState, LoadingState } from "@/components/layout/PageStates";
 import { fetchLossReport } from "@/api/dashboard";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Loader2, TrendingDown, Calendar, AlertCircle } from "lucide-react";
+import { TrendingDown, Calendar } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { inr } from "@/lib/format";
 import { remarkLabel } from "@/lib/constants";
@@ -22,7 +23,7 @@ function LossReportPage() {
   
   const [queryDates, setQueryDates] = useState({ start: startDate, end: endDate });
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["loss-report", queryDates.start, queryDates.end],
     queryFn: () => fetchLossReport({ from: queryDates.start, to: queryDates.end }),
   });
@@ -58,35 +59,30 @@ function LossReportPage() {
       />
       
       <div className="space-y-6">
-        <section className="surface-panel p-6">
-          <form onSubmit={handleFilter} className="flex flex-col sm:flex-row gap-4 items-end">
+        <section className="surface-panel p-4 sm:p-6">
+          <form onSubmit={handleFilter} className="grid grid-cols-2 gap-3 sm:flex sm:flex-row sm:gap-4 sm:items-end">
             <div className="flex-1 w-full space-y-2">
-              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+              <label htmlFor="loss-from" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
                 <Calendar className="w-3.5 h-3.5" /> Start Date
               </label>
-              <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} required />
+              <Input id="loss-from" type="date" value={startDate} onChange={e => setStartDate(e.target.value)} required />
             </div>
             <div className="flex-1 w-full space-y-2">
-              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+              <label htmlFor="loss-to" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
                 <Calendar className="w-3.5 h-3.5" /> End Date
               </label>
-              <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} required />
+              <Input id="loss-to" type="date" value={endDate} onChange={e => setEndDate(e.target.value)} required />
             </div>
-            <Button type="submit" className="w-full sm:w-auto">Update Report</Button>
+            <Button type="submit" className="col-span-2 w-full sm:w-auto">Update Report</Button>
           </form>
         </section>
 
         {isLoading ? (
-          <div className="p-12 flex justify-center"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
+          <LoadingState label="Loading loss report…" />
         ) : error ? (
-          <div className="p-8 text-destructive surface-panel flex items-center gap-2">
-            <AlertCircle className="w-5 h-5" /> Failed to load report.
-          </div>
+          <ErrorState title="Couldn't load the report" error={error} onRetry={() => refetch()} />
         ) : data?.items?.length === 0 ? (
-          <div className="p-12 text-center text-muted-foreground surface-panel">
-            <TrendingDown className="w-8 h-8 mx-auto mb-3 opacity-20" />
-            <p>No lost items found in this period.</p>
-          </div>
+          <EmptyState icon={TrendingDown} title="No lost items in this period" description="Try a wider date range." />
         ) : (
           <div className="grid gap-6 lg:grid-cols-3">
             <section className="lg:col-span-2 surface-panel p-0 overflow-hidden">

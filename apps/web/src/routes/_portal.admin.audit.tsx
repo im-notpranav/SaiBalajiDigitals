@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { Search, Filter } from "lucide-react";
+import { Search, Filter, ShieldCheck } from "lucide-react";
+import { EmptyState, ErrorState, LoadingState } from "@/components/layout/PageStates";
 import { formatDistanceToNow, isAfter, subDays, subMonths } from "date-fns";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Input } from "@/components/ui/input";
@@ -34,7 +35,7 @@ function AuditPage() {
   const [userFilter, setUserFilter] = useState("all");
   const [dateRange, setDateRange] = useState("all");
 
-  const { data: auditData, isLoading } = useQuery({
+  const { data: auditData, isLoading, error, refetch } = useQuery({
     queryKey: ["audit", 1, 100],
     queryFn: () => fetchAuditLog(1, 100),
   });
@@ -75,12 +76,12 @@ function AuditPage() {
       />
 
       <div className="surface-panel mb-4 flex flex-wrap items-center gap-3 p-3">
-        <div className="relative min-w-0 flex-1 sm:min-w-[240px]">
+        <div className="relative w-full min-w-0 sm:w-auto sm:flex-1 sm:min-w-[240px]">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search by user, order, or detail" className="pl-9" />
+          <Input value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search audit logs" placeholder="Search by user, order, or detail" className="pl-9" />
         </div>
         <Select value={action} onValueChange={setAction}>
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger aria-label="Filter by action" className="w-[calc(50%-0.375rem)] sm:w-[180px]">
             <Filter className="mr-2 h-3.5 w-3.5" />
             <SelectValue placeholder="Action" />
           </SelectTrigger>
@@ -92,7 +93,7 @@ function AuditPage() {
           </SelectContent>
         </Select>
         <Select value={userFilter} onValueChange={setUserFilter}>
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger aria-label="Filter by user" className="w-[calc(50%-0.375rem)] sm:w-[180px]">
             <Filter className="mr-2 h-3.5 w-3.5" />
             <SelectValue placeholder="User" />
           </SelectTrigger>
@@ -104,7 +105,7 @@ function AuditPage() {
           </SelectContent>
         </Select>
         <Select value={dateRange} onValueChange={setDateRange}>
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger aria-label="Filter by date" className="w-[calc(50%-0.375rem)] sm:w-[180px]">
             <Filter className="mr-2 h-3.5 w-3.5" />
             <SelectValue placeholder="Date range" />
           </SelectTrigger>
@@ -119,7 +120,16 @@ function AuditPage() {
 
       <div className="surface-panel overflow-hidden">
         {isLoading ? (
-          <div className="p-8 text-center text-muted-foreground">Loading audit logs...</div>
+          <LoadingState bare label="Loading audit logs…" />
+        ) : error && !auditData ? (
+          <ErrorState bare title="Couldn't load the audit log" error={error} onRetry={() => refetch()} />
+        ) : filtered.length === 0 ? (
+          <EmptyState
+            bare
+            icon={ShieldCheck}
+            title={logs.length === 0 ? "No audit entries yet" : "No entries match these filters"}
+            description={logs.length === 0 ? undefined : "Clear the search or widen the date range."}
+          />
         ) : (
           <Table>
             <TableHeader>
@@ -134,7 +144,7 @@ function AuditPage() {
             <TableBody>
               {filtered.map((a: any) => (
                 <TableRow key={a.id}>
-                  <TableCell className="text-xs text-muted-foreground">
+                  <TableCell className="whitespace-nowrap text-xs text-muted-foreground" title={new Date(a.changed_at).toLocaleString("en-IN")}>
                     {formatDistanceToNow(new Date(a.changed_at), { addSuffix: true })}
                   </TableCell>
                   <TableCell>
