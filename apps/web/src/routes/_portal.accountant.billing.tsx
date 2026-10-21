@@ -39,7 +39,7 @@ function BillingQueue() {
         description="Orders awaiting an invoice or a payment."
         crumbs={[{ label: "Accountant" }, { label: "Billing" }]}
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {inProduction > 0 && (
               <div className="rounded-xl border bg-muted/40 px-4 py-2 text-sm">
                 <span className="text-muted-foreground">In production:</span>{" "}

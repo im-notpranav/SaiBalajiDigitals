@@ -132,15 +132,15 @@ function UsersPage() {
               <div className="grid gap-4 py-4">
                 <div className="grid gap-2">
                   <Label>Name</Label>
-                  <Input value={newUser.name} onChange={(e) => setNewUser({ ...newUser, name: e.target.value })} />
+                  <Input aria-label="Name" value={newUser.name} onChange={(e) => setNewUser({ ...newUser, name: e.target.value })} />
                 </div>
                 <div className="grid gap-2">
                   <Label>Username</Label>
-                  <Input value={newUser.username} onChange={(e) => setNewUser({ ...newUser, username: e.target.value })} />
+                  <Input aria-label="Username" value={newUser.username} onChange={(e) => setNewUser({ ...newUser, username: e.target.value })} />
                 </div>
                 <div className="grid gap-2">
                   <Label>Password</Label>
-                  <Input type="password" value={newUser.password} onChange={(e) => setNewUser({ ...newUser, password: e.target.value })} />
+                  <Input aria-label="Password" type="password" value={newUser.password} onChange={(e) => setNewUser({ ...newUser, password: e.target.value })} />
                 </div>
                 <div className="grid gap-2">
                   <Label>Role</Label>
@@ -176,11 +176,11 @@ function UsersPage() {
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
                 <Label>Name</Label>
-                <Input value={editUser.name} onChange={(e) => setEditUser({ ...editUser, name: e.target.value })} />
+                <Input aria-label="Name" value={editUser.name} onChange={(e) => setEditUser({ ...editUser, name: e.target.value })} />
               </div>
               <div className="grid gap-2">
                 <Label>Username</Label>
-                <Input value={editUser.username} onChange={(e) => setEditUser({ ...editUser, username: e.target.value })} />
+                <Input aria-label="Username" value={editUser.username} onChange={(e) => setEditUser({ ...editUser, username: e.target.value })} />
               </div>
               <div className="grid gap-2">
                 <Label>Role</Label>
@@ -195,7 +195,7 @@ function UsersPage() {
               </div>
               <div className="grid gap-2">
                 <Label>Mobile number</Label>
-                <Input
+                <Input aria-label="Mobile number"
                   type="tel"
                   inputMode="tel"
                   value={editUser.phone ?? ""}
@@ -239,7 +239,7 @@ function UsersPage() {
             </p>
             <div className="grid gap-2">
               <Label>New password</Label>
-              <Input
+              <Input aria-label="New password"
                 type="text"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}

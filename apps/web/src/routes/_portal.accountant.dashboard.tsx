@@ -146,7 +146,7 @@ function AccountantDashboard() {
         description="Billing pipeline, payment tracking, and overdue monitoring."
         crumbs={[{ label: "Accountant" }, { label: "Dashboard" }]}
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Popover>
               <PopoverTrigger asChild>
                 <Button variant="outline" size="sm" className="h-9 gap-2 rounded-xl">

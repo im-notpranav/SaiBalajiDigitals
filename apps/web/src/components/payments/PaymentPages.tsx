@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, Paperclip, Plus, Search, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { ErrorState, LoadingState, TableStateRow } from "@/components/layout/PageStates";
+import { EmptyState, ErrorState, LoadingState, TableStateRow } from "@/components/layout/PageStates";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -330,7 +330,73 @@ export function PaymentReviewQueue({
         </button>
       </div>
 
-      <div className="surface-panel overflow-x-auto">
+      {/* Phones: one card per request, like the requester's own list, instead of a
+          six-column table that scrolls sideways. Tapping opens the same sheet. */}
+      <div className="md:hidden">
+        {isLoading ? (
+          <LoadingState label="Loading requests…" />
+        ) : error && !data ? (
+          <ErrorState title="Couldn't load requests" error={error} onRetry={() => refetch()} />
+        ) : rows.length === 0 ? (
+          <EmptyState
+            icon={Wallet}
+            title={
+              overdueOnly
+                ? "Nothing here is overdue."
+                : tab === "queue"
+                  ? "Nothing is waiting on you."
+                  : "No requests match."
+            }
+          />
+        ) : (
+          <div className="grid gap-3">
+            {rows.map((r) => (
+              <button
+                key={r.id}
+                type="button"
+                onClick={() => setOpenId(r.id)}
+                className={cn(
+                  "surface-panel grid gap-1 p-4 text-left transition-colors hover:bg-muted/40",
+                  r.overdue && "border-destructive/50",
+                )}
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className={cn("font-mono font-semibold", overdueText(r.overdue))}>
+                      {r.order.order_no}
+                    </span>
+                    <PaymentStatusBadge status={r.status} />
+                  </div>
+                  <span className="text-lg font-semibold tabular-nums">{formatRupees(r.amount)}</span>
+                </div>
+                <div className="line-clamp-2 text-sm">{r.purpose}</div>
+                <div className="text-xs text-muted-foreground">
+                  {r.requester.name} · {roleLabel(r.requester.role)} · {formatWhen(r.created_at)}
+                </div>
+                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  {r.order_money?.over_value && (
+                    <span className="flex items-center gap-1 text-destructive">
+                      <AlertTriangle className="h-3 w-3" /> Over order value
+                    </span>
+                  )}
+                  <TimerChips timers={statusTimers(r)} />
+                  {r.bill_missing ? (
+                    <BillMissing timer={billTimer(r)} />
+                  ) : (
+                    fileCount(r) > 0 && (
+                      <span className="flex items-center gap-1">
+                        <Paperclip className="h-3 w-3" /> {fileCount(r)}
+                      </span>
+                    )
+                  )}
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="surface-panel hidden overflow-x-auto md:block">
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40">

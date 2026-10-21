@@ -496,7 +496,7 @@ function PoDialog({
           <p className="text-xs text-muted-foreground">{description}</p>
           <div className="space-y-2">
             <Label>PO Number</Label>
-            <Input value={value} onChange={(e) => setValue(e.target.value)} placeholder="e.g. PO-12345" autoFocus />
+            <Input aria-label="PO Number" value={value} onChange={(e) => setValue(e.target.value)} placeholder="e.g. PO-12345" autoFocus />
           </div>
           <DialogFooter>
             <Button type="submit" disabled={isSubmitting}>Save</Button>
@@ -568,7 +568,7 @@ function FlagDialog({ item, onSave, isSubmitting }: { item: OrderItem, onSave: (
         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
           <div className="space-y-2">
             <Label>Reason for flagging *</Label>
-            <Input value={reason} onChange={e => setReason(e.target.value)} placeholder="e.g. Dimensions incorrect" />
+            <Input aria-label="Reason for flagging *" value={reason} onChange={e => setReason(e.target.value)} placeholder="e.g. Dimensions incorrect" />
           </div>
           <DialogFooter className="flex justify-between items-center sm:justify-between">
             {item.is_flagged ? (
@@ -632,7 +632,7 @@ function RemarkDialog({ item, onSave, isSubmitting }: { item: OrderItem, onSave:
           {remark === "Other" && (
             <div className="space-y-2">
               <Label>Custom Remark *</Label>
-              <Input value={custom} onChange={e => setCustom(e.target.value)} placeholder="Type remark..." />
+              <Input aria-label="Custom Remark *" value={custom} onChange={e => setCustom(e.target.value)} placeholder="Type remark..." />
             </div>
           )}
           <DialogFooter>

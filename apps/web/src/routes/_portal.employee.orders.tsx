@@ -53,7 +53,7 @@ function MyOrders() {
         description="All orders you originated, filtered server-side by your user ID."
         crumbs={[{ label: "Employee" }, { label: "My Orders" }]}
         actions={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button variant="outline" className="rounded-xl" onClick={handleExport}>
               <Download className="mr-2 h-4 w-4" /> Export {section === "active" ? "Active" : "Completed"}
             </Button>

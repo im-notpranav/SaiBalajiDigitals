@@ -350,11 +350,11 @@ function OrderDetailAccountant() {
                 <form onSubmit={handleInvoice} className="flex flex-col gap-4 sm:flex-row sm:items-end">
                   <div className="w-full flex-1 space-y-2">
                     <label className="text-sm font-medium">Invoice Number</label>
-                    <Input placeholder="e.g. INV-2024-001" value={invoiceNo} onChange={(e) => setInvoiceNo(e.target.value)} required />
+                    <Input aria-label="Invoice Number" placeholder="e.g. INV-2024-001" value={invoiceNo} onChange={(e) => setInvoiceNo(e.target.value)} required />
                   </div>
                   <div className="w-full flex-1 space-y-2">
                     <label className="text-sm font-medium">Bill Amount (₹)</label>
-                    <Input
+                    <Input aria-label="Bill Amount (₹)"
                       type="number" step="0.01" min="0" max={coveredTotal || undefined}
                       placeholder={String(coveredTotal || "")}
                       value={billAmount} onChange={(e) => setBillAmount(e.target.value)} required
@@ -362,7 +362,7 @@ function OrderDetailAccountant() {
                   </div>
                   <div className="w-full flex-1 space-y-2">
                     <label className="text-sm font-medium">Billing Date</label>
-                    <Input
+                    <Input aria-label="Billing Date"
                       type="date" value={billingDate} max={format(new Date(), "yyyy-MM-dd")}
                       onChange={(e) => setBillingDate(e.target.value)} required
                     />
@@ -429,15 +429,15 @@ function OrderDetailAccountant() {
                       <form onSubmit={(e) => submitBillingEdit(e, inv)} className="flex flex-col gap-3 sm:flex-row sm:items-end">
                         <div className="w-full flex-1 space-y-1">
                           <label className="text-xs font-medium">Invoice Number</label>
-                          <Input value={editInvoiceNo} onChange={(e) => setEditInvoiceNo(e.target.value)} />
+                          <Input aria-label="Invoice Number" value={editInvoiceNo} onChange={(e) => setEditInvoiceNo(e.target.value)} />
                         </div>
                         <div className="w-full flex-1 space-y-1">
                           <label className="text-xs font-medium">Bill Amount (₹)</label>
-                          <Input type="number" step="0.01" min="0" value={editBillAmount} onChange={(e) => setEditBillAmount(e.target.value)} />
+                          <Input aria-label="Bill Amount (₹)" type="number" step="0.01" min="0" value={editBillAmount} onChange={(e) => setEditBillAmount(e.target.value)} />
                         </div>
                         <div className="w-full flex-1 space-y-1">
                           <label className="text-xs font-medium">Billing Date</label>
-                          <Input type="date" value={editBillingDate} max={format(new Date(), "yyyy-MM-dd")} onChange={(e) => setEditBillingDate(e.target.value)} />
+                          <Input aria-label="Billing Date" type="date" value={editBillingDate} max={format(new Date(), "yyyy-MM-dd")} onChange={(e) => setEditBillingDate(e.target.value)} />
                         </div>
                         <Button type="submit" disabled={editBillingMutation.isPending} className="h-10 w-full sm:w-auto">
                           {editBillingMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Save"}
@@ -456,11 +456,11 @@ function OrderDetailAccountant() {
                       <form onSubmit={(e) => submitPaymentEdit(e, inv)} className="flex flex-col gap-3 sm:flex-row sm:items-end">
                         <div className="w-full flex-1 space-y-1">
                           <label className="text-xs font-medium">Amount Received (₹)</label>
-                          <Input type="number" step="0.01" min="0" max={inv.bill_amount ?? undefined} value={editAmountReceived} onChange={(e) => setEditAmountReceived(e.target.value)} />
+                          <Input aria-label="Amount Received (₹)" type="number" step="0.01" min="0" max={inv.bill_amount ?? undefined} value={editAmountReceived} onChange={(e) => setEditAmountReceived(e.target.value)} />
                         </div>
                         <div className="w-full flex-1 space-y-1">
                           <label className="text-xs font-medium">Payment Date</label>
-                          <Input type="date" value={editPaymentDate} max={format(new Date(), "yyyy-MM-dd")} onChange={(e) => setEditPaymentDate(e.target.value)} />
+                          <Input aria-label="Payment Date" type="date" value={editPaymentDate} max={format(new Date(), "yyyy-MM-dd")} onChange={(e) => setEditPaymentDate(e.target.value)} />
                         </div>
                         <Button type="submit" disabled={editPaymentMutation.isPending} className="h-10 w-full sm:w-auto">
                           {editPaymentMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Save"}
@@ -484,7 +484,7 @@ function OrderDetailAccountant() {
                       >
                         <div className="w-full flex-1 space-y-1">
                           <label className="text-xs font-medium">Amount Received (₹)</label>
-                          <Input
+                          <Input aria-label="Amount Received (₹)"
                             type="number" step="0.01" min="0" max={inv.bill_amount ?? undefined}
                             placeholder={String(inv.bill_amount ?? "")}
                             value={amountReceived} onChange={(e) => setAmountReceived(e.target.value)} required autoFocus
@@ -492,7 +492,7 @@ function OrderDetailAccountant() {
                         </div>
                         <div className="w-full flex-1 space-y-1">
                           <label className="text-xs font-medium">Payment Date</label>
-                          <Input type="date" value={paymentDate} max={format(new Date(), "yyyy-MM-dd")} onChange={(e) => setPaymentDate(e.target.value)} required />
+                          <Input aria-label="Payment Date" type="date" value={paymentDate} max={format(new Date(), "yyyy-MM-dd")} onChange={(e) => setPaymentDate(e.target.value)} required />
                         </div>
                         <Button type="submit" disabled={payMutation.isPending} className="h-10 w-full sm:w-auto">
                           {payMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Record"}

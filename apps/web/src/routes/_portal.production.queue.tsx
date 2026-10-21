@@ -39,6 +39,51 @@ function ProductionQueue() {
   // "Mine" is my own assignment on the item, which may differ from the item's overall completion.
   const isMineDone = (item: OrderItem) => item.my_assignment_completed ?? item.production_completed ?? false;
 
+  /** The on-hold badge for a flagged item; shared by the phone list and the table. */
+  const flagFor = (item: OrderItem) => (
+    <>
+      {item.is_flagged && (
+        <div className="mt-1 inline-flex items-center gap-1 rounded-md bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive">
+          <Flag className="h-3 w-3" /> Flagged — on hold
+          {item.flag_reason && <span className="font-normal opacity-80">({item.flag_reason})</span>}
+        </div>
+      )}
+    </>
+  );
+
+  /** Mark complete, or the done state with a reopen button. */
+  const actionFor = (order: (typeof orders)[number], item: OrderItem) => (
+    <>
+      {isMineDone(item) ? (
+        <div className="flex items-center justify-end gap-2">
+          <span className="inline-flex items-center gap-1 text-xs font-medium text-success">
+            <CheckCircle2 className="h-3.5 w-3.5" /> {item.production_completed ? "Complete" : "Done (mine)"}
+          </span>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9 md:h-7 md:w-7"
+            title="Reopen"
+            aria-label={`Reopen item ${item.s_no}, ${item.media}`}
+            disabled={completeMutation.isPending}
+            onClick={() => completeMutation.mutate({ orderId: order.id, itemId: item.id!, done: false })}
+          >
+            <Undo2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      ) : (
+        <Button
+          size="sm"
+          disabled={completeMutation.isPending || item.is_flagged}
+          title={item.is_flagged ? "Flagged items must be resolved by an admin first" : undefined}
+          onClick={() => completeMutation.mutate({ orderId: order.id, itemId: item.id!, done: true })}
+        >
+          Mark complete
+        </Button>
+      )}
+    </>
+  );
+
   return (
     <>
       <PageHeader
@@ -62,7 +107,7 @@ function ProductionQueue() {
 
             return (
               <section key={order.id} className="surface-panel p-0 overflow-hidden">
-                <div className="flex flex-wrap items-center justify-between gap-3 border-b p-5">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b p-4 sm:p-5">
                   <div>
                     <h3 className="font-semibold">{order.order_no}</h3>
                     <p className="mt-0.5 text-sm text-muted-foreground">
@@ -75,65 +120,53 @@ function ProductionQueue() {
                   </div>
                 </div>
 
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-12 text-center">#</TableHead>
-                      <TableHead>Media</TableHead>
-                      <TableHead className="text-right">Size (in)</TableHead>
-                      <TableHead className="text-right">Qty</TableHead>
-                      <TableHead className="text-right">Total Sft</TableHead>
-                      <TableHead className="text-right w-44">Action</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {items.map((item: OrderItem) => (
-                      <TableRow key={item.id}>
-                        <TableCell className="text-center text-muted-foreground">{item.s_no}</TableCell>
-                        <TableCell className="font-medium">
-                          {item.media}
-                          {item.is_flagged && (
-                            <div className="mt-1 inline-flex items-center gap-1 rounded-md bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive">
-                              <Flag className="h-3 w-3" /> Flagged — on hold
-                              {item.flag_reason && <span className="font-normal opacity-80">({item.flag_reason})</span>}
-                            </div>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">{item.width_inches} x {item.height_inches}</TableCell>
-                        <TableCell className="text-right">{item.qty}</TableCell>
-                        <TableCell className="text-right">{(item.total_sft || 0).toFixed(2)}</TableCell>
-                        <TableCell className="text-right">
-                          {isMineDone(item) ? (
-                            <div className="flex items-center justify-end gap-2">
-                              <span className="inline-flex items-center gap-1 text-xs font-medium text-success">
-                                <CheckCircle2 className="h-3.5 w-3.5" /> {item.production_completed ? "Complete" : "Done (mine)"}
-                              </span>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7"
-                                title="Reopen"
-                                disabled={completeMutation.isPending}
-                                onClick={() => completeMutation.mutate({ orderId: order.id, itemId: item.id!, done: false })}
-                              >
-                                <Undo2 className="h-3.5 w-3.5" />
-                              </Button>
-                            </div>
-                          ) : (
-                            <Button
-                              size="sm"
-                              disabled={completeMutation.isPending || item.is_flagged}
-                              title={item.is_flagged ? "Flagged items must be resolved by an admin first" : undefined}
-                              onClick={() => completeMutation.mutate({ orderId: order.id, itemId: item.id!, done: true })}
-                            >
-                              Mark complete
-                            </Button>
-                          )}
-                        </TableCell>
+                {/* Phones: one row per item with the button full width under it. */}
+                <ul className="divide-y md:hidden">
+                  {items.map((item: OrderItem) => (
+                    <li key={item.id} className="grid gap-2 p-4 text-sm">
+                      <div>
+                        <span className="text-muted-foreground">{item.s_no}. </span>
+                        <span className="font-medium">{item.media}</span>
+                        <div className="text-xs text-muted-foreground tabular-nums">
+                          {item.width_inches} x {item.height_inches} in · Qty {item.qty} · {(item.total_sft || 0).toFixed(2)} sft
+                        </div>
+                        {flagFor(item)}
+                      </div>
+                      <div className="flex justify-end [&>button]:h-11 [&>button]:w-full">{actionFor(order, item)}</div>
+                    </li>
+                  ))}
+                </ul>
+                <div className="hidden md:block">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-12 text-center">#</TableHead>
+                        <TableHead>Media</TableHead>
+                        <TableHead className="text-right">Size (in)</TableHead>
+                        <TableHead className="text-right">Qty</TableHead>
+                        <TableHead className="text-right">Total Sft</TableHead>
+                        <TableHead className="text-right w-44">Action</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {items.map((item: OrderItem) => (
+                        <TableRow key={item.id}>
+                          <TableCell className="text-center text-muted-foreground">{item.s_no}</TableCell>
+                          <TableCell className="font-medium">
+                            {item.media}
+                            {flagFor(item)}
+                          </TableCell>
+                          <TableCell className="text-right">{item.width_inches} x {item.height_inches}</TableCell>
+                          <TableCell className="text-right">{item.qty}</TableCell>
+                          <TableCell className="text-right">{(item.total_sft || 0).toFixed(2)}</TableCell>
+                          <TableCell className="text-right">
+                            {actionFor(order, item)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               </section>
             );
           })}
