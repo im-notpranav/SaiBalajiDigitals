@@ -60,7 +60,6 @@ type JobRow = Prisma.WorkJobGetPayload<{ include: typeof jobInclude }>;
 export function serializeJob(job: JobRow) {
   return {
     id: job.id,
-    job_no: job.job_no,
     status: job.status,
     start_date: dayKey(job.start_date),
     end_date: dayKey(job.end_date),
@@ -221,12 +220,12 @@ async function resolveJobInput(
   };
 }
 
-/** Plain-language summary for notifications: "W00012 · Big C Kurnool board fixing · Kurnool · 21–23 Oct". */
+/** Plain-language summary for notifications: "ORD260123 · Big C Kurnool board fixing · Kurnool · 21–23 Oct". */
 function jobSummary(job: JobBrief) {
-  return `${job.job_no} · ${job.work_details} · ${job.area.name} · ${jobWhen(job)}`;
+  return `${job.order.order_no} · ${job.work_details} · ${job.area.name} · ${jobWhen(job)}`;
 }
 
-type JobBrief = { id: number; job_no: string; work_details: string; area: { name: string }; start_date: Date; end_date: Date; order?: { id: number } | null };
+type JobBrief = { id: number; work_details: string; area: { name: string }; start_date: Date; end_date: Date; order: { id: number; order_no: string } };
 
 /** "21 Oct" or "21 Oct – 23 Oct". */
 function jobWhen(job: Pick<JobBrief, "start_date" | "end_date">) {
@@ -234,9 +233,9 @@ function jobWhen(job: Pick<JobBrief, "start_date" | "end_date">) {
   return dayKey(job.start_date) === dayKey(job.end_date) ? fmt(job.start_date) : `${fmt(job.start_date)} – ${fmt(job.end_date)}`;
 }
 
-/** Job number, work, area and dates: the shared variables of the field-staff WhatsApp templates. */
-const jobVars = (job: JobBrief) => [job.job_no, job.work_details, job.area.name, jobWhen(job)];
-const jobRef = (job: JobBrief) => ({ type: "work_job" as const, id: job.id, orderId: job.order?.id ?? null });
+/** Order number, work, area and dates: the shared variables of the field-staff WhatsApp templates. */
+const jobVars = (job: JobBrief) => [job.order.order_no, job.work_details, job.area.name, jobWhen(job)];
+const jobRef = (job: JobBrief) => ({ type: "work_job" as const, id: job.id, orderId: job.order.id });
 
 /** Tell field staff about their jobs (no order link: they have no order page to open). */
 async function notifyPeople(userIds: number[], title: string, body: string, kind = "info") {
@@ -254,10 +253,11 @@ export const listJobs = async (req: Request, res: Response) => {
   try {
     const from = dayQuery.safeParse(req.query.from).success ? String(req.query.from) : addDays(todayIST(), -7);
     const to = dayQuery.safeParse(req.query.to).success ? String(req.query.to) : addDays(todayIST(), 14);
-    const where: Prisma.WorkJobWhereInput = {
-      start_date: { lte: parseDay(to) },
-      end_date: { gte: parseDay(from) },
-    };
+    // Looking up one order's work (from its order page) means all of it, whatever the dates.
+    const wholeOrder = !!req.query.order_id && !req.query.from && !req.query.to;
+    const where: Prisma.WorkJobWhereInput = wholeOrder
+      ? {}
+      : { start_date: { lte: parseDay(to) }, end_date: { gte: parseDay(from) } };
     if (req.query.status) {
       where.status = { in: String(req.query.status).split(",").filter(Boolean) as WorkJobStatus[] };
     }
@@ -273,6 +273,7 @@ export const listJobs = async (req: Request, res: Response) => {
       const q = String(req.query.q);
       where.AND = [{
         OR: [
+          // Numbers issued before jobs went by their order's number still find the job.
           { job_no: { contains: q, mode: "insensitive" } },
           { work_details: { contains: q, mode: "insensitive" } },
           { order: { order_no: { contains: q, mode: "insensitive" } } },
@@ -284,7 +285,7 @@ export const listJobs = async (req: Request, res: Response) => {
     const jobs = await prisma.workJob.findMany({
       where,
       include: jobInclude,
-      orderBy: [{ start_date: "asc" }, { job_no: "asc" }],
+      orderBy: [{ start_date: "asc" }, { id: "asc" }],
       take: 500,
     });
     return res.status(200).json({ from, to, jobs: jobs.map(serializeJob) });
@@ -331,7 +332,7 @@ export const createJob = async (req: Request, res: Response) => {
       });
     });
 
-    await notifyPeople(job.members.map((m) => m.user_id), `New job ${job.job_no}`, jobSummary(job));
+    await notifyPeople(job.members.map((m) => m.user_id), `New job on ${job.order.order_no}`, jobSummary(job));
     await queueWhatsAppAfter("JOB_ASSIGNED", job.members.map((m) => m.user_id), jobVars(job), jobRef(job));
     const csm = csmUserOf(job);
     if (csm) {
@@ -340,7 +341,7 @@ export const createJob = async (req: Request, res: Response) => {
       await queueWhatsAppAfter(
         "JOB_UPDATE",
         [csm],
-        [job.job_no, job.order.order_no, job.work_details, "assigned", `${job.area.name}, ${jobWhen(job)}. Team: ${team || "none yet"}`],
+        [job.order.order_no, job.work_details, "assigned", `${job.area.name}, ${jobWhen(job)}. Team: ${team || "none yet"}`],
         jobRef(job),
       );
     }
@@ -390,11 +391,11 @@ export const updateJob = async (req: Request, res: Response) => {
     });
 
     if (added.length) {
-      await notifyPeople(added, `New job ${job.job_no}`, jobSummary(job));
+      await notifyPeople(added, `New job on ${job.order.order_no}`, jobSummary(job));
       await queueWhatsAppAfter("JOB_ASSIGNED", added, jobVars(job), jobRef(job));
     }
     if (removed.length) {
-      await notifyPeople(removed, `Removed from job ${job.job_no}`, `You are no longer on ${jobSummary(job)}.`, "warning");
+      await notifyPeople(removed, `Removed from the job on ${job.order.order_no}`, `You are no longer on ${jobSummary(job)}.`, "warning");
       await queueWhatsAppAfter("JOB_REMOVED", removed, jobVars(job), jobRef(job));
     }
     return res.status(200).json(serializeJob(job));
@@ -459,16 +460,16 @@ export const setJobStatus = async (req: Request, res: Response) => {
     });
 
     if (status === "CANCELLED") {
-      await notifyPeople(job.members.map((m) => m.user_id), `Job ${job.job_no} cancelled`, `${jobSummary(job)}. Reason: ${reason}`, "warning");
+      await notifyPeople(job.members.map((m) => m.user_id), `Job on ${job.order.order_no} cancelled`, `${jobSummary(job)}. Reason: ${reason}`, "warning");
       await queueWhatsAppAfter("JOB_CANCELLED", job.members.map((m) => m.user_id), [...jobVars(job), reason], jobRef(job));
     }
     const csm = csmUserOf(job);
     if (csm && (status === "COMPLETED" || status === "HOLD" || status === "CANCELLED" || (status === "STARTED" && from === "ASSIGNED"))) {
-      await notifyUser(csm, `${job.job_no} ${status.toLowerCase()}`, jobSummary(job), status === "COMPLETED" ? "success" : "info", job.order.id).catch(() => {});
+      await notifyUser(csm, `Job on ${job.order.order_no} ${status === "HOLD" ? "on hold" : status.toLowerCase()}`, jobSummary(job), status === "COMPLETED" ? "success" : "info", job.order.id).catch(() => {});
       await queueWhatsAppAfter(
         "JOB_UPDATE",
         [csm],
-        [job.job_no, job.order.order_no, job.work_details, status === "HOLD" ? "on hold" : status.toLowerCase(), reason || `${job.area.name}, ${jobWhen(job)}`],
+        [job.order.order_no, job.work_details, status === "HOLD" ? "on hold" : status.toLowerCase(), reason || `${job.area.name}, ${jobWhen(job)}`],
         jobRef(job),
       );
     }
@@ -533,16 +534,16 @@ export const dailyBoard = async (req: Request, res: Response) => {
       prisma.workJob.findMany({
         where: { status: { not: "CANCELLED" }, start_date: { lte: day }, end_date: { gte: day } },
         include: jobInclude,
-        orderBy: { job_no: "asc" },
+        orderBy: { id: "asc" },
       }),
       prisma.leaveRecord.findMany({ where: { cancelled_at: null, from_date: { lte: day }, to_date: { gte: day } } }),
     ]);
     const leaveByUser = new Map(leave.map((l) => [l.user_id, { id: l.id, from_date: dayKey(l.from_date), to_date: dayKey(l.to_date), reason: l.reason }]));
-    const jobsByUser = new Map<number, { job_id: number; job_no: string; label: string }[]>();
+    const jobsByUser = new Map<number, { job_id: number; order_no: string; label: string }[]>();
     for (const j of jobs) {
       for (const m of j.members) {
         const list = jobsByUser.get(m.user_id) ?? [];
-        list.push({ job_id: j.id, job_no: j.job_no, label: gridLabel(j) });
+        list.push({ job_id: j.id, order_no: j.order.order_no, label: gridLabel(j) });
         jobsByUser.set(m.user_id, list);
       }
     }
@@ -593,7 +594,7 @@ export const weeklyGrid = async (req: Request, res: Response) => {
       }
     }
 
-    type Cell = { job_id: number; job_no: string; label: string; status: WorkJobStatus };
+    type Cell = { job_id: number; order_no: string; label: string; status: WorkJobStatus };
     const cells = new Map<string, Cell[]>(); // `${user}|${date}`
     for (const j of jobs) {
       const s = dayKey(j.start_date) < from ? from : dayKey(j.start_date);
@@ -602,7 +603,7 @@ export const weeklyGrid = async (req: Request, res: Response) => {
         for (const m of j.members) {
           const key = `${m.user_id}|${d}`;
           const list = cells.get(key) ?? [];
-          list.push({ job_id: j.id, job_no: j.job_no, label: gridLabel(j), status: j.status });
+          list.push({ job_id: j.id, order_no: j.order.order_no, label: gridLabel(j), status: j.status });
           cells.set(key, list);
         }
       }
@@ -641,7 +642,7 @@ export const myJobs = async (req: Request, res: Response) => {
     const jobs = await prisma.workJob.findMany({
       where: { members: { some: { user_id: req.user!.id } }, status: { not: "CANCELLED" }, end_date: { gte: since } },
       include: jobInclude,
-      orderBy: [{ start_date: "asc" }, { job_no: "asc" }],
+      orderBy: [{ start_date: "asc" }, { id: "asc" }],
     });
     // Field staff see who to call and where to go, never order amounts.
     const csmIds = [...new Set(jobs.map((j) => csmUserOf(j)).filter(Boolean) as number[])];
@@ -700,14 +701,14 @@ export const myJobStatus = async (req: Request, res: Response) => {
 
     // The CSM and whoever assigned the job hear about it; the order link is for them.
     const who = job.members.find((m) => m.user_id === me)?.user.name ?? "A team member";
-    const title = `${job.job_no} ${status === "STARTED" ? "started" : "completed"} by ${who}`;
+    const title = `Job on ${job.order.order_no} ${status === "STARTED" ? "started" : "completed"} by ${who}`;
     const body = `${jobSummary(job)}${status === "COMPLETED" && note ? ` — "${note}"` : ""}`;
     const tell = [...new Set([csmUserOf(job), job.created_by].filter((u): u is number => !!u && u !== me))];
     await Promise.all(tell.map((u) => notifyUser(u, title, body, status === "COMPLETED" ? "success" : "info", job.order.id).catch(() => {})));
     await queueWhatsAppAfter(
       "JOB_UPDATE",
       tell,
-      [job.job_no, job.order.order_no, job.work_details, status === "STARTED" ? "started" : "completed", `Marked by ${who}${status === "COMPLETED" && note ? `: ${note}` : ""}`],
+      [job.order.order_no, job.work_details, status === "STARTED" ? "started" : "completed", `Marked by ${who}${status === "COMPLETED" && note ? `: ${note}` : ""}`],
       jobRef(job),
     );
 

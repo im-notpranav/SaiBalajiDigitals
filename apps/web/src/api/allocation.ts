@@ -158,7 +158,6 @@ interface CodeRef {
 
 export interface WorkJob {
   id: number;
-  job_no: string;
   status: WorkJobStatus;
   start_date: string;
   end_date: string;
@@ -200,7 +199,8 @@ export interface JobConflict {
   user_id: number;
   name: string;
   job_id: number;
-  job_no: string;
+  /** A job goes by its order's number. */
+  order_no: string;
   work_details: string;
   start_date: string;
   end_date: string;
@@ -241,7 +241,7 @@ export interface StaffBrief {
   phone: string | null;
   emp_code: string | null;
 }
-type JobRef = { job_id: number; job_no: string; label: string };
+type JobRef = { job_id: number; order_no: string; label: string };
 
 export interface DailyBoard {
   date: string;
@@ -381,7 +381,7 @@ export interface LeaveInput {
 /** A job the person is already on, returned when leave would overlap it. */
 export interface LeaveJobClash {
   job_id: number;
-  job_no: string;
+  order_no: string;
   work_details: string;
   status: WorkJobStatus;
   start_date: string;
@@ -438,7 +438,7 @@ export interface OvertimeEntry {
   hours: number;
   duration: string;
   past_midnight: boolean;
-  work_job: { id: number; job_no: string; work_details: string } | null;
+  work_job: { id: number; work_details: string; order: { order_no: string } } | null;
   csm_code: { id: number; code: string } | null;
   remarks: string | null;
   status: OvertimeStatus;
@@ -466,7 +466,7 @@ export interface MyOvertimeEntry {
   minutes: number;
   duration: string;
   past_midnight: boolean;
-  job_no: string | null;
+  order_no: string | null;
   remarks: string | null;
   status: OvertimeStatus;
   reject_reason: string | null;

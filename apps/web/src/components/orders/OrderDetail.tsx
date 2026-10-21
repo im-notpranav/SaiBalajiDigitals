@@ -20,12 +20,14 @@ import { useQueryClient } from "@tanstack/react-query";
 export interface OrderDetailProps {
   order: Order | any;
   actions?: React.ReactNode;
+  /** Other records filed under this order number (field work, payment requests), shown above the actions. */
+  related?: React.ReactNode;
   userRole?: string;
   /** The signed-in user, so per-store install is offered only to the order's creator. */
   currentUserId?: number;
 }
 
-export function OrderDetail({ order, actions, userRole, currentUserId }: OrderDetailProps) {
+export function OrderDetail({ order, actions, related, userRole, currentUserId }: OrderDetailProps) {
   const queryClient = useQueryClient();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["order", order.id.toString()] });
@@ -394,6 +396,8 @@ export function OrderDetail({ order, actions, userRole, currentUserId }: OrderDe
           </div>
         )}
       </motion.section>
+
+      {related}
 
       {actions && (
         <motion.section

@@ -90,9 +90,9 @@ function AdminOrders() {
       <PageHeader
         title="Order Oversight"
         description="Full unfiltered view — every order, every creator, every status. Override edits generate audit entries."
-        crumbs={[{ label: "Administrator" }, { label: "Orders" }]}
+        crumbs={[{ label: "Automated System" }, { label: "Orders" }]}
         actions={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button variant="outline" className="rounded-xl shadow-soft" onClick={() => exportOrders({ section })}>
               <Download className="mr-2 h-4 w-4" /> Export {section === "active" ? "Active" : "Completed"}
             </Button>

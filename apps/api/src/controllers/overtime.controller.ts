@@ -54,7 +54,7 @@ async function withAudit<T>(userId: number, fn: (tx: Prisma.TransactionClient) =
 
 const otInclude = {
   user: { select: { id: true, name: true, role: true, emp_code: true } },
-  workJob: { select: { id: true, job_no: true, work_details: true } },
+  workJob: { select: { id: true, work_details: true, order: { select: { order_no: true } } } },
   csmCode: { select: { id: true, code: true } },
   creator: { select: { id: true, name: true } },
   decider: { select: { id: true, name: true } },
@@ -112,11 +112,11 @@ async function resolveOvertime(tx: Prisma.TransactionClient, input: OtInput, use
 
   let csmCodeId = input.csm_code_id ?? null;
   if (input.work_job_id) {
-    const job = await tx.workJob.findUnique({ where: { id: input.work_job_id }, include: { members: { select: { user_id: true } } } });
+    const job = await tx.workJob.findUnique({ where: { id: input.work_job_id }, include: { members: { select: { user_id: true } }, order: { select: { order_no: true } } } });
     if (!job || job.status === "CANCELLED") throw new HttpError(400, "Pick a job that is not cancelled.");
     const onJob = new Set(job.members.map((m) => m.user_id));
     const notOnJob = people.filter((p) => !onJob.has(p.id));
-    if (notOnJob.length) throw new HttpError(400, `${notOnJob.map((p) => p.name).join(", ")} is not on ${job.job_no}.`);
+    if (notOnJob.length) throw new HttpError(400, `${notOnJob.map((p) => p.name).join(", ")} is not on the job for ${job.order.order_no}.`);
     csmCodeId = csmCodeId ?? job.csm_code_id;
   }
   if (csmCodeId) {
@@ -313,7 +313,7 @@ export const myOvertime = async (req: Request, res: Response) => {
           minutes: s.minutes,
           duration: s.duration,
           past_midnight: s.past_midnight,
-          job_no: s.work_job?.job_no ?? null,
+          order_no: s.work_job?.order.order_no ?? null,
           remarks: s.remarks,
           status: s.status,
           reject_reason: s.reject_reason,

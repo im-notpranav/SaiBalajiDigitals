@@ -56,7 +56,7 @@ function SettingsPage() {
 
   return (
     <>
-      <PageHeader title="System Configuration" description="Order-number sequence and reference data management." crumbs={[{ label: "Administrator" }, { label: "Settings" }]} />
+      <PageHeader title="System Configuration" description="Order-number sequence and reference data management." crumbs={[{ label: "Automated System" }, { label: "Settings" }]} />
 
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="surface-panel p-6">

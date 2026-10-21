@@ -17,7 +17,7 @@ export const Route = createFileRoute("/_portal/admin/financial-year")({
         <PageHeader
           title="Financial Year Configuration"
           description="View the current financial year suffix and sequence number."
-          crumbs={[{ label: "Administrator" }, { label: "Financial Year" }]}
+          crumbs={[{ label: "Automated System" }, { label: "Financial Year" }]}
         />
         <div className="grid gap-6 lg:grid-cols-2">
           <div className="surface-panel p-6">

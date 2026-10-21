@@ -26,7 +26,7 @@ function ImportPage() {
   if (!user?.is_super_admin) {
     return (
       <>
-        <PageHeader title="Bulk Import" crumbs={[{ label: "Administrator" }, { label: "Bulk Import" }]} />
+        <PageHeader title="Bulk Import" crumbs={[{ label: "Automated System" }, { label: "Bulk Import" }]} />
         <div className="surface-panel p-8 flex items-center gap-3 text-muted-foreground">
           <ShieldAlert className="h-5 w-5 text-warning" />
           Only the super administrator can import orders.
@@ -69,7 +69,7 @@ function ImportPage() {
       <PageHeader
         title="Bulk Import"
         description="Create orders in bulk from a spreadsheet. The sheet's date drives each order's timeline."
-        crumbs={[{ label: "Administrator" }, { label: "Bulk Import" }]}
+        crumbs={[{ label: "Automated System" }, { label: "Bulk Import" }]}
       />
 
       <div className="space-y-6">

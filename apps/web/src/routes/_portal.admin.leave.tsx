@@ -350,7 +350,7 @@ function LeaveDialog({
               <ul className="mb-3 grid gap-1.5">
                 {jobClashes.map((j) => (
                   <li key={j.job_id} className="flex flex-wrap items-center gap-2">
-                    <span className="font-mono font-semibold">{j.job_no}</span>
+                    <span className="font-mono font-semibold">{j.order_no}</span>
                     <span>{formatJobDates(j.start_date, j.end_date)}</span>
                     <JobStatusBadge status={j.status} />
                     <span className="text-muted-foreground">{j.work_details}</span>

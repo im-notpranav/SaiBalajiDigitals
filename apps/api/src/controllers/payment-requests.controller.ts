@@ -14,7 +14,6 @@ import {
 } from "../utils/validators";
 import { sanitizeZodErrors } from "../utils/sanitize-errors";
 import { computeTotals } from "../utils/order-totals";
-import { todayIST } from "../utils/work-allocation";
 import {
   LIVE_PAYMENT_STATUSES,
   OPEN_PAYMENT_STATUSES,
@@ -93,7 +92,7 @@ type Actor = { id: number; role: string; name?: string };
 
 const requestInclude = {
   order: { select: { id: true, order_no: true, client_name: true, status: true } },
-  workJob: { select: { id: true, job_no: true, work_details: true } },
+  workJob: { select: { id: true, work_details: true, start_date: true } },
   requester: { select: { id: true, name: true, role: true, phone: true, emp_code: true } },
   payer: { select: { id: true, name: true } },
   closer: { select: { id: true, name: true } },
@@ -126,11 +125,11 @@ function serializeRequest(r: RequestRow, actor: Actor, money: OrderMoney | undef
   const timers = paymentTimers(r, files.BILL, threshold);
   return {
     id: r.id,
-    request_no: r.request_no,
     order: r.order,
-    work_job: r.workJob,
+    work_job: r.workJob && { id: r.workJob.id, work_details: r.workJob.work_details, start_date: r.workJob.start_date.toISOString().slice(0, 10) },
     requester: r.requester,
     amount: Number(r.amount),
+    upi_method: r.upi_method,
     upi_id: r.upi_id,
     category: r.category,
     purpose: r.purpose,
@@ -159,6 +158,10 @@ function serializeRequest(r: RequestRow, actor: Actor, money: OrderMoney | undef
     ...(money ? { order_money: money } : {}),
   };
 }
+
+/** "name@bank", or "UPI mobile 9876543210": where the money goes, for messages. */
+const payeeLabel = (r: { upi_method: string; upi_id: string }) =>
+  r.upi_method === "MOBILE" ? `UPI mobile ${r.upi_id}` : r.upi_id;
 
 const canSee = (r: { requested_by: number }, actor: Actor) =>
   isReviewerRole(actor.role) || r.requested_by === actor.id;
@@ -236,9 +239,11 @@ async function notifyAfter(
   note: string | null,
   paid?: { amount: number; reference: string },
 ) {
-  const no = r.request_no;
+  // A request goes by its order's number; the amount tells two on one order apart.
+  const no = r.order.order_no;
   const amount = formatRupees(Number(r.amount));
-  const about = `${no}: ${amount} for ${r.requester.name}, order ${r.order.order_no}.`;
+  const about = `${no}: ${amount} for ${r.requester.name}.`;
+  const payTo = payeeLabel(r);
   const kind = kindFor[action] ?? "info";
   const ref = { type: "payment_request" as const, id: r.id };
   // In-app and WhatsApp go out together, in this transaction: no change, no message.
@@ -251,7 +256,7 @@ async function notifyAfter(
     await notifyRole(tx, role, title, body, k);
     await queueWhatsAppRole(tx, wa[0], role, wa[1], ref, actor.id);
   };
-  const who = [no, amount, r.requester.name, r.order.order_no];
+  const who = [no, amount, r.requester.name];
 
   switch (action) {
     case "APPROVE":
@@ -260,14 +265,14 @@ async function notifyAfter(
           "PAYMENT_TO_REVIEW",
           [...who, "Approved by the Admin"],
         ]);
-        await toRequester("Payment request approved by Admin", `${no} is now with Cost Control for review.`, [
+        await toRequester("Payment request approved by Admin", `Your ${amount} request on ${no} is now with Cost Control for review.`, [
           "PAYMENT_UPDATE",
           [no, amount, "approved by the Admin", "It is now with Cost Control for review"],
         ]);
       } else {
-        await toRequester("Payment request approved", `${no}: ${amount} will be paid to ${r.upi_id}.`, [
+        await toRequester("Payment request approved", `${no}: ${amount} will be paid to ${payTo}.`, [
           "PAYMENT_UPDATE",
-          [no, amount, "approved", `It will be paid to ${r.upi_id}`],
+          [no, amount, "approved", `It will be paid to ${payTo}`],
         ]);
       }
       break;
@@ -297,8 +302,8 @@ async function notifyAfter(
     case "MARK_PAID":
       await toRequester(
         "Payment sent",
-        `${no}: ${formatRupees(paid!.amount)} paid to ${r.upi_id}. Reference ${paid!.reference}.`,
-        ["PAYMENT_PAID", [formatRupees(paid!.amount), r.upi_id, no, paid!.reference]],
+        `${no}: ${formatRupees(paid!.amount)} paid to ${payTo}. Reference ${paid!.reference}.`,
+        ["PAYMENT_PAID", [formatRupees(paid!.amount), payTo, no, paid!.reference]],
       );
       break;
     case "CLOSE":
@@ -328,7 +333,7 @@ export const orderOptions = async (req: Request, res: Response) => {
         ...eligibilityInclude,
         workJobs: {
           where: jobWhereFor(actor),
-          select: { id: true, job_no: true, work_details: true, start_date: true, status: true },
+          select: { id: true, work_details: true, start_date: true, status: true },
           orderBy: { start_date: "desc" },
           take: 10,
         },
@@ -387,19 +392,16 @@ export const createRequest = async (req: Request, res: Response) => {
         if (!job) throw new HttpError(400, "That job is not on this order, or you are not on it.");
       }
 
-      const [{ n }] = await tx.$queryRaw<{ n: bigint }[]>`SELECT nextval('payment_request_no_seq') AS n`;
-      const today = todayIST();
-      const request_no = `PR-${today.slice(2, 4)}${today.slice(5, 7)}-${String(n).padStart(4, "0")}`;
       const route = routeFor(body.bill_details_required);
       const status = firstStage(route);
 
       const row = await tx.paymentRequest.create({
         data: {
-          request_no,
           order_id: order.id,
           work_job_id: body.work_job_id ?? null,
           requested_by: actor.id,
           amount: body.amount,
+          upi_method: body.upi_method,
           upi_id: body.upi_id,
           category: body.category ?? null,
           purpose: body.purpose,
@@ -426,13 +428,13 @@ export const createRequest = async (req: Request, res: Response) => {
         tx,
         STAGE_REVIEWER[status],
         "New payment request",
-        `${request_no}: ${formatRupees(body.amount)} for ${row.requester.name}, order ${order.order_no}.`,
+        `${order.order_no}: ${formatRupees(body.amount)} for ${row.requester.name}.`,
       );
       await queueWhatsAppRole(
         tx,
         "PAYMENT_TO_REVIEW",
         STAGE_REVIEWER[status],
-        [request_no, formatRupees(body.amount), row.requester.name, order.order_no, body.bill_details_required ? "New request with bill details" : "New request without bill details"],
+        [order.order_no, formatRupees(body.amount), row.requester.name, body.bill_details_required ? "New request with bill details" : "New request without bill details"],
         { type: "payment_request", id: row.id },
         actor.id,
       );
@@ -497,6 +499,7 @@ export const listRequests = async (req: Request, res: Response) => {
     if (q) {
       and.push({
         OR: [
+          // Numbers issued before requests went by their order's number still find them.
           { request_no: { contains: q, mode: "insensitive" } },
           { purpose: { contains: q, mode: "insensitive" } },
           { order: { order_no: { contains: q, mode: "insensitive" } } },
@@ -617,12 +620,15 @@ export const transition = (action: WorkflowAction) => async (req: Request, res: 
         if (Number(r.amount) !== resubmit.amount) {
           changes.push(`amount ${formatRupees(Number(r.amount))} → ${formatRupees(resubmit.amount)}`);
         }
-        if (r.upi_id !== resubmit.upi_id) changes.push(`UPI ID ${r.upi_id} → ${resubmit.upi_id}`);
+        if (r.upi_id !== resubmit.upi_id || r.upi_method !== resubmit.upi_method) {
+          changes.push(`pay to ${payeeLabel(r)} → ${payeeLabel(resubmit)}`);
+        }
         if (r.purpose !== resubmit.purpose) changes.push("purpose");
         if ((r.category ?? null) !== (resubmit.category ?? null)) changes.push("category");
         if ((r.remarks ?? null) !== (resubmit.remarks || null)) changes.push("remarks");
         Object.assign(data, {
           amount: resubmit.amount,
+          upi_method: resubmit.upi_method,
           upi_id: resubmit.upi_id,
           purpose: resubmit.purpose,
           category: resubmit.category ?? null,
@@ -885,7 +891,6 @@ export const dashboard = async (req: Request, res: Response) => {
         where: { status: { in: WAITING } },
         select: {
           id: true,
-          request_no: true,
           amount: true,
           status: true,
           bill_details_required: true,
@@ -924,7 +929,7 @@ export const dashboard = async (req: Request, res: Response) => {
         if (!t.overdue) continue;
         if (t.kind !== "BILL") stage.overdue++;
         byKind[t.kind] = (byKind[t.kind] ?? 0) + 1;
-        overdueItems.push({ id: r.id, request_no: r.request_no, amount, status: r.status, requester: r.requester, order: r.order, timer: t } as never);
+        overdueItems.push({ id: r.id, amount, status: r.status, requester: r.requester, order: r.order, timer: t } as never);
       }
       const onYou = timers.filter((t) => t.owner === mine);
       if (onYou.length) {

@@ -92,12 +92,11 @@ function OverdueRow({ item, onOpen }: { item: OverdueRequest; onOpen: (id: numbe
     >
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
-          <span className={cn("font-mono", overdueText(true))}>{item.request_no}</span>
+          <span className={cn("font-mono", overdueText(true))}>{item.order.order_no}</span>
           <TimerChips timers={item.timers} />
         </div>
         <div className="truncate text-xs text-muted-foreground">
-          {item.requester.name} · <span className="font-mono">{item.order.order_no}</span> ·{" "}
-          {item.order.client_name}
+          {item.requester.name} · {item.order.client_name}
         </div>
       </div>
       <div className="text-sm font-semibold tabular-nums sm:text-right">

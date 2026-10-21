@@ -44,6 +44,7 @@ import { cn } from "@/lib/utils";
 import { inr } from "@/lib/format";
 import { useAuth } from "@/lib/auth-store";
 import { PaymentOverviewCard } from "@/components/payments/PaymentDashboard";
+import { AllocationOverviewCard } from "@/components/allocation/AllocationOverview";
 
 export const Route = createFileRoute("/_portal/admin/dashboard")({
   head: () => ({ meta: [{ title: "Admin Dashboard — SB OMS" }] }),
@@ -130,7 +131,7 @@ function AdminDashboard() {
       <PageHeader
         title="Administrator Dashboard"
         description="Full oversight across every portal — pipeline, revenue, and TAT."
-        crumbs={[{ label: "Administrator" }, { label: "Dashboard" }]}
+        crumbs={[{ label: "Dashboard" }]}
       />
 
       {/* Controls row */}
@@ -207,6 +208,11 @@ function AdminDashboard() {
               accent="orange"
               delay={0.2}
             />
+          </div>
+
+          {/* Work allocation: today's free people and this week's jobs */}
+          <div className="mt-6">
+            <AllocationOverviewCard />
           </div>
 
           {/* Payment requests: overdue timers (the Admin only; the Operation Manager has no part in payments) */}

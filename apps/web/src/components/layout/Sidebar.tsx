@@ -47,7 +47,42 @@ interface NavItem {
   to: string;
   label: string;
   icon: LucideIcon;
+  /** The admin portal's module the item sits under; items without one are listed plainly. */
+  group?: NavGroup;
 }
+
+/**
+ * The admin portal is four modules: the dashboard, the order system (orders, their reports
+ * and the automation around them), work allocation, and payment requests.
+ */
+type NavGroup = "Automated System" | "Work Allocation" | "Payment Request";
+
+const DASHBOARD: NavItem[] = [
+  { to: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
+];
+
+const ORDER_SYSTEM: NavItem[] = (
+  [
+    { to: "/admin/orders", label: "Orders", icon: Boxes },
+    { to: "/admin/overdue", label: "Overdue Orders", icon: AlarmClock },
+    { to: "/admin/loss-report", label: "Loss Report", icon: FileBarChart2 },
+    { to: "/admin/reports", label: "Reports", icon: FileBarChart2 },
+    { to: "/admin/financial-year", label: "Financial Year", icon: CalendarClock },
+    { to: "/admin/audit", label: "Audit Logs", icon: ShieldCheck },
+  ] as NavItem[]
+).map((i) => ({ ...i, group: "Automated System" as const }));
+
+const WORK_ALLOCATION: NavItem[] = (
+  [
+    { to: "/admin/grid", label: "Weekly Grid", icon: CalendarRange },
+    { to: "/admin/board", label: "Daily Board", icon: LayoutGrid },
+    { to: "/admin/jobs", label: "Field Jobs", icon: Truck },
+    { to: "/admin/leave", label: "Leave", icon: CalendarOff },
+    { to: "/admin/overtime", label: "Overtime", icon: Clock },
+    { to: "/admin/field-staff", label: "Field Staff", icon: HardHat },
+    { to: "/admin/masters", label: "Allocation Masters", icon: MapPinned },
+  ] as NavItem[]
+).map((i) => ({ ...i, group: "Work Allocation" as const }));
 
 const FIELD_NAV: NavItem[] = [
   { to: "/field/dashboard", label: "My Work", icon: ClipboardList },
@@ -97,42 +132,20 @@ const NAV: Record<UserRole, NavItem[]> = {
   // Operation Manager shares the admin portal read-only for orders and billing (no Users /
   // Settings / Bulk Import), but runs field staff and the allocation masters.
   OPERATION_MANAGER: [
-    { to: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { to: "/admin/jobs", label: "Field Jobs", icon: Truck },
-    { to: "/admin/board", label: "Daily Board", icon: LayoutGrid },
-    { to: "/admin/grid", label: "Weekly Grid", icon: CalendarRange },
-    { to: "/admin/leave", label: "Leave", icon: CalendarOff },
-    { to: "/admin/overtime", label: "Overtime", icon: Clock },
-    { to: "/admin/field-staff", label: "Field Staff", icon: HardHat },
-    { to: "/admin/masters", label: "Allocation Masters", icon: MapPinned },
-    { to: "/admin/orders", label: "Orders", icon: Boxes },
-    { to: "/admin/loss-report", label: "Loss Report", icon: FileBarChart2 },
-    { to: "/admin/overdue", label: "Overdue Orders", icon: AlarmClock },
-    { to: "/admin/audit", label: "Audit Logs", icon: ShieldCheck },
-    { to: "/admin/reports", label: "Reports", icon: FileBarChart2 },
-    { to: "/admin/financial-year", label: "Financial Year", icon: CalendarClock },
+    ...DASHBOARD,
+    ...ORDER_SYSTEM,
+    ...WORK_ALLOCATION,
     { to: "/profile", label: "Profile", icon: UserCircle },
   ],
   ADMIN: [
-    { to: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { to: "/admin/users", label: "Users", icon: Users },
-    { to: "/admin/payments", label: "Payment Requests", icon: Wallet },
-    { to: "/admin/jobs", label: "Field Jobs", icon: Truck },
-    { to: "/admin/board", label: "Daily Board", icon: LayoutGrid },
-    { to: "/admin/grid", label: "Weekly Grid", icon: CalendarRange },
-    { to: "/admin/leave", label: "Leave", icon: CalendarOff },
-    { to: "/admin/overtime", label: "Overtime", icon: Clock },
-    { to: "/admin/field-staff", label: "Field Staff", icon: HardHat },
-    { to: "/admin/masters", label: "Allocation Masters", icon: MapPinned },
-    { to: "/admin/orders", label: "Orders", icon: Boxes },
-    { to: "/admin/loss-report", label: "Loss Report", icon: FileBarChart2 },
-    { to: "/admin/overdue", label: "Overdue Orders", icon: AlarmClock },
-    { to: "/admin/audit", label: "Audit Logs", icon: ShieldCheck },
-    { to: "/admin/reports", label: "Reports", icon: FileBarChart2 },
-    { to: "/admin/financial-year", label: "Financial Year", icon: CalendarClock },
-    { to: "/admin/import", label: "Bulk Import", icon: Upload },
-    { to: "/admin/whatsapp", label: "WhatsApp", icon: MessageCircle },
-    { to: "/admin/settings", label: "Settings", icon: Settings },
+    ...DASHBOARD,
+    ...ORDER_SYSTEM,
+    { to: "/admin/import", label: "Bulk Import", icon: Upload, group: "Automated System" },
+    { to: "/admin/users", label: "Users", icon: Users, group: "Automated System" },
+    { to: "/admin/whatsapp", label: "WhatsApp", icon: MessageCircle, group: "Automated System" },
+    { to: "/admin/settings", label: "Settings", icon: Settings, group: "Automated System" },
+    ...WORK_ALLOCATION,
+    { to: "/admin/payments", label: "Payment Requests", icon: Wallet, group: "Payment Request" },
     { to: "/profile", label: "Profile", icon: UserCircle },
   ],
 };
@@ -199,10 +212,13 @@ function SidebarBody({
       <div className="shrink-0 px-5 pt-5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
         {roleLabels[role]}
       </div>
-      {/* Scrolls on its own so a long nav (admin has eleven items) stays reachable on a
+      {/* Scrolls on its own so a long nav (admin has four modules) stays reachable on a
           short screen without pushing the sign-out block off the bottom. */}
       <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto p-3">
         {items.map((item, i) => {
+          const heading = item.group && item.group !== items[i - 1]?.group ? item.group : null;
+          // Profile after the modules belongs to none of them, so it gets a rule above it.
+          const ruled = !item.group && !!items[i - 1]?.group;
           const active =
             location.pathname === item.to || location.pathname.startsWith(item.to + "/");
           const Icon = item.icon;
@@ -211,8 +227,14 @@ function SidebarBody({
               key={item.to}
               initial={{ opacity: 0, x: -8 }}
               animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.03 * i, duration: 0.3 }}
+              transition={{ delay: 0.02 * i, duration: 0.3 }}
             >
+              {ruled && <div className="mx-3 my-2 border-t" />}
+              {heading && (
+                <div className="px-3 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  {heading}
+                </div>
+              )}
               <Link
                 to={item.to}
                 onClick={onNavigate}

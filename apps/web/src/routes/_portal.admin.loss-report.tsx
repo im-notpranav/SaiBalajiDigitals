@@ -54,7 +54,7 @@ function LossReportPage() {
       <PageHeader
         title="Loss Report"
         description="Track financial loss from line items marked with loss remarks."
-        crumbs={[{ label: "Administrator" }, { label: "Reports" }, { label: "Loss Report" }]}
+        crumbs={[{ label: "Automated System" }, { label: "Reports" }, { label: "Loss Report" }]}
       />
       
       <div className="space-y-6">

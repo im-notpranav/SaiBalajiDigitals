@@ -44,7 +44,9 @@ import {
   type PaymentOrderOption,
   type PaymentRequestInput,
   type PaymentStatus,
+  type UpiMethod,
 } from "@/api/payments";
+import { formatJobDates } from "@/api/allocation";
 
 /** Shared pieces of the payment-request pages: status badge, request form, new-request dialog. */
 
@@ -80,25 +82,71 @@ export function PaymentStatusBadge({
   );
 }
 
+/** The same checks as the API (normaliseUpi in utils/validators.ts). */
 export const UPI_PATTERN = /^[a-z0-9][a-z0-9._-]{1,255}@[a-z][a-z0-9.-]{1,63}$/;
+const UPI_MOBILE_PATTERN = /^[6-9]\d{9}$/;
 const NONE = "__none__";
 
-/** The editable details of a request, as typed. */
+/** "+91 98765 43210", "098765-43210" → "9876543210". */
+const mobileDigits = (raw: string) =>
+  raw.replace(/[\s()-]/g, "").replace(/^(\+91|91|0)(?=\d{10}$)/, "");
+
+/** What is wrong with this UPI ID or mobile number, or null when it is fine. */
+export function upiProblem(method: UpiMethod, raw: string): string | null {
+  if (method === "MOBILE") {
+    return UPI_MOBILE_PATTERN.test(mobileDigits(raw))
+      ? null
+      : "Enter the 10-digit mobile number linked to UPI, e.g. 98765 43210.";
+  }
+  return UPI_PATTERN.test(raw.trim().toLowerCase()) ? null : "Enter a UPI ID like name@bank.";
+}
+
+/** "name@bank", or "98765 43210" for a UPI-linked mobile number. */
+export const payeeText = (p: { upi_method: UpiMethod; upi_id: string }) =>
+  p.upi_method === "MOBILE" && p.upi_id.length === 10
+    ? `${p.upi_id.slice(0, 5)} ${p.upi_id.slice(5)}`
+    : p.upi_id;
+
+export const UPI_METHOD_LABELS: Record<UpiMethod, string> = {
+  UPI_ID: "UPI ID",
+  MOBILE: "UPI mobile number",
+};
+
+/**
+ * The editable details of a request, as typed. The UPI ID and the mobile number are kept
+ * apart so switching between them never loses what was typed in the other.
+ */
 export interface RequestDraft {
   amount: string;
+  upi_method: UpiMethod;
   upi_id: string;
+  upi_mobile: string;
   category: string;
   purpose: string;
   remarks: string;
 }
 
-export const draftFrom = (r?: Partial<PaymentRequestInput> | null, upi = ""): RequestDraft => ({
-  amount: r?.amount != null ? String(r.amount) : "",
-  upi_id: r?.upi_id ?? upi,
-  category: r?.category ?? NONE,
-  purpose: r?.purpose ?? "",
-  remarks: r?.remarks ?? "",
-});
+type Payee = { upi_method: UpiMethod; upi_id: string };
+
+/** A draft from an existing request, or a blank one that reuses the last payee. */
+export const draftFrom = (
+  r?: Partial<PaymentRequestInput> | null,
+  lastPayee?: Payee | null,
+): RequestDraft => {
+  const payee: Payee | null | undefined = r?.upi_id
+    ? { upi_method: r.upi_method ?? "UPI_ID", upi_id: r.upi_id }
+    : lastPayee;
+  const method = payee?.upi_method ?? "UPI_ID";
+  return {
+    amount: r?.amount != null ? String(r.amount) : "",
+    upi_method: method,
+    upi_id: method === "UPI_ID" ? (payee?.upi_id ?? "") : "",
+    upi_mobile: method === "MOBILE" ? (payee?.upi_id ?? "") : "",
+    category: r?.category ?? NONE,
+    purpose: r?.purpose ?? "",
+    remarks: r?.remarks ?? "",
+  };
+};
 
 /** Check a draft; returns the API body or a message to show. */
 export function readDraft(d: RequestDraft): { input: PaymentRequestInput } | { error: string } {
@@ -107,13 +155,15 @@ export function readDraft(d: RequestDraft): { input: PaymentRequestInput } | { e
     return { error: "Enter an amount above zero." };
   if (Math.abs(amount * 100 - Math.round(amount * 100)) > 1e-6)
     return { error: "Use at most 2 decimals in the amount." };
-  const upi = d.upi_id.trim().toLowerCase();
-  if (!UPI_PATTERN.test(upi)) return { error: "Enter a UPI ID like name@bank." };
+  const raw = d.upi_method === "MOBILE" ? d.upi_mobile : d.upi_id;
+  const problem = upiProblem(d.upi_method, raw);
+  if (problem) return { error: problem };
   if (d.purpose.trim().length < 3) return { error: "Say what the money is for." };
   return {
     input: {
       amount,
-      upi_id: upi,
+      upi_method: d.upi_method,
+      upi_id: d.upi_method === "MOBILE" ? mobileDigits(raw) : raw.trim().toLowerCase(),
       category: d.category === NONE ? null : (d.category as PaymentCategory),
       purpose: d.purpose.trim(),
       remarks: d.remarks.trim() || null,
@@ -121,7 +171,7 @@ export function readDraft(d: RequestDraft): { input: PaymentRequestInput } | { e
   };
 }
 
-/** Amount, UPI ID, category, purpose, remarks: used to raise and to correct a request. */
+/** Amount, where to pay, category, purpose, remarks: used to raise and to correct a request. */
 export function RequestFields({
   draft,
   onChange,
@@ -130,30 +180,89 @@ export function RequestFields({
   onChange: (d: RequestDraft) => void;
 }) {
   const set = (patch: Partial<RequestDraft>) => onChange({ ...draft, ...patch });
+  const [touched, setTouched] = useState(false);
+  const mobile = draft.upi_method === "MOBILE";
+  const value = mobile ? draft.upi_mobile : draft.upi_id;
+  const problem = touched && value.trim() ? upiProblem(draft.upi_method, value) : null;
   return (
     <>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div className="grid gap-1.5">
-          <Label htmlFor="pr-amount">Amount (₹)</Label>
-          <Input
-            id="pr-amount"
-            inputMode="decimal"
-            value={draft.amount}
-            onChange={(e) => set({ amount: e.target.value.replace(/[^\d.]/g, "") })}
-            placeholder="0"
-          />
+      <div className="grid gap-1.5 sm:max-w-[12rem]">
+        <Label htmlFor="pr-amount">Amount (₹)</Label>
+        <Input
+          id="pr-amount"
+          inputMode="decimal"
+          value={draft.amount}
+          onChange={(e) => set({ amount: e.target.value.replace(/[^\d.]/g, "") })}
+          placeholder="0"
+        />
+      </div>
+      <div className="grid gap-1.5">
+        <Label id="pr-payto-label">Pay to</Label>
+        <div
+          role="radiogroup"
+          aria-labelledby="pr-payto-label"
+          className="grid grid-cols-2 gap-1 rounded-xl border bg-muted/40 p-1"
+        >
+          {(["UPI_ID", "MOBILE"] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              role="radio"
+              aria-checked={draft.upi_method === m}
+              onClick={() => {
+                set({ upi_method: m });
+                setTouched(false);
+              }}
+              className={cn(
+                "min-h-9 rounded-lg px-2 text-sm font-medium transition-colors",
+                draft.upi_method === m
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {UPI_METHOD_LABELS[m]}
+            </button>
+          ))}
         </div>
-        <div className="grid gap-1.5">
-          <Label htmlFor="pr-upi">Your UPI ID</Label>
+        {mobile ? (
+          <div className="flex items-center gap-2">
+            <span className="shrink-0 rounded-lg border bg-muted/40 px-2.5 py-2 text-sm text-muted-foreground">
+              +91
+            </span>
+            <Input
+              id="pr-upi"
+              aria-label="UPI mobile number"
+              type="tel"
+              inputMode="numeric"
+              autoComplete="tel-national"
+              maxLength={16}
+              value={draft.upi_mobile}
+              onChange={(e) => set({ upi_mobile: e.target.value.replace(/[^\d\s+()-]/g, "") })}
+              onBlur={() => setTouched(true)}
+              aria-invalid={!!problem}
+              placeholder="98765 43210"
+            />
+          </div>
+        ) : (
           <Input
             id="pr-upi"
+            aria-label="UPI ID"
             autoCapitalize="none"
             autoCorrect="off"
+            spellCheck={false}
             value={draft.upi_id}
             onChange={(e) => set({ upi_id: e.target.value.trim() })}
+            onBlur={() => setTouched(true)}
+            aria-invalid={!!problem}
             placeholder="name@bank"
           />
-        </div>
+        )}
+        <p className={cn("text-xs", problem ? "text-destructive" : "text-muted-foreground")}>
+          {problem ??
+            (mobile
+              ? "The mobile number your UPI app is registered on."
+              : "Shown in your UPI app, e.g. ravi.kumar@okaxis.")}
+        </p>
       </div>
       <div className="grid gap-1.5">
         <Label>Category</Label>
@@ -199,12 +308,12 @@ export function RequestFields({
 export function NewPaymentRequestDialog({
   open,
   onClose,
-  lastUpi,
+  lastPayee,
 }: {
   open: boolean;
   onClose: () => void;
-  /** The UPI ID from this person's last request, to save retyping it. */
-  lastUpi?: string;
+  /** Where this person's last request was paid, to save retyping it. */
+  lastPayee?: { upi_method: UpiMethod; upi_id: string } | null;
 }) {
   const qc = useQueryClient();
   const [order, setOrder] = useState<PaymentOrderOption | null>(null);
@@ -222,12 +331,13 @@ export function NewPaymentRequestDialog({
     setUploading(null);
     setOrder(null);
     setJobId(NONE);
-    setDraft(draftFrom(null, lastUpi ?? ""));
+    setDraft(draftFrom(null, lastPayee));
     setBill(null);
     setError(null);
     // One key per form: a double click or a retry after a timeout cannot create two.
     setKey(crypto.randomUUID());
-  }, [open, lastUpi]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only when the dialog opens
+  }, [open]);
 
   const save = useMutation({
     mutationFn: createPaymentRequest,
@@ -248,7 +358,7 @@ export function NewPaymentRequestDialog({
         }
       }
       setUploading(null);
-      toast.success(`${res.request.request_no} sent for review`);
+      toast.success(`Request on ${res.request.order.order_no} sent for review`);
       if (res.warning) toast.warning(res.warning);
       if (failed.length)
         toast.error(
@@ -282,8 +392,8 @@ export function NewPaymentRequestDialog({
         <DialogHeader>
           <DialogTitle>New payment request</DialogTitle>
           <DialogDescription>
-            The company pays this to your UPI ID once it is approved. Orders open for requests once
-            production is finished, and close when billing starts.
+            The company pays this to your UPI ID or UPI mobile number once it is approved. Orders
+            open for requests once production is finished, and close when billing starts.
           </DialogDescription>
         </DialogHeader>
 
@@ -315,7 +425,7 @@ export function NewPaymentRequestDialog({
                   <SelectItem value={NONE}>Not for a particular job</SelectItem>
                   {order.jobs.map((j) => (
                     <SelectItem key={j.id} value={String(j.id)}>
-                      {j.job_no} · {j.start_date} · {j.work_details.slice(0, 40)}
+                      {formatJobDates(j.start_date, j.start_date)} · {j.work_details.slice(0, 40)}
                     </SelectItem>
                   ))}
                 </SelectContent>

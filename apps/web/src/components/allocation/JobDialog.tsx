@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Check, ChevronsUpDown, Loader2, Search } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, ChevronsUpDown, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -55,10 +55,15 @@ import {
   type WorkJobInput,
 } from "@/api/allocation";
 import { LocalityTag } from "./JobBits";
+import {
+  DEFAULT_NEEDED,
+  TEAM_LIMITS,
+  TEAM_ROLES,
+  TeamStepper,
+  teamComplete,
+  teamShortfall,
+} from "./TeamStepper";
 
-/** Mirrors TEAM_LIMITS in the API (utils/work-allocation.ts). */
-const TEAM_LIMITS: Record<FieldRole, number> = { PASTER: 2, HELPER: 2, DRIVER: 1 };
-const ROLES: FieldRole[] = ["PASTER", "HELPER", "DRIVER"];
 const NONE = "__none__";
 
 interface Form {
@@ -72,6 +77,8 @@ interface Form {
   csm_code_id: number | null;
   csm2_code_id: number | null;
   member_ids: number[];
+  /** How many of each role the job needs; the team step asks for exactly this many. */
+  needed: Record<FieldRole, number>;
   route: string;
   extra_tag: string;
   instructions: string;
@@ -89,6 +96,7 @@ const blankForm = (start: string, members: number[] = []): Form => ({
   csm_code_id: null,
   csm2_code_id: null,
   member_ids: members,
+  needed: { ...DEFAULT_NEEDED },
   route: "",
   extra_tag: "",
   instructions: "",
@@ -111,6 +119,11 @@ const formFromJob = (job: WorkJob): Form => ({
   csm_code_id: job.csm_code?.id ?? null,
   csm2_code_id: job.csm2_code?.id ?? null,
   member_ids: job.members.map((m) => m.user_id),
+  needed: {
+    PASTER: job.members.filter((m) => m.slot_role === "PASTER").length,
+    HELPER: job.members.filter((m) => m.slot_role === "HELPER").length,
+    DRIVER: job.members.filter((m) => m.slot_role === "DRIVER").length,
+  },
   route: job.route ?? "",
   extra_tag: job.extra_tag ?? "",
   instructions: job.instructions ?? "",
@@ -128,11 +141,14 @@ export function JobDialog({
   job,
   defaultDate,
   defaultMemberIds,
+  defaultOrderNo,
 }: {
   open: boolean;
   onClose: () => void;
   job?: WorkJob | null;
   defaultDate?: string;
+  /** Starts a new job on this order (e.g. from the order's own page). */
+  defaultOrderNo?: string;
   /** Pre-ticks these people on a new job (e.g. from an empty grid cell). */
   defaultMemberIds?: number[];
 }) {
@@ -142,12 +158,26 @@ export function JobDialog({
   );
   const [conflicts, setConflicts] = useState<JobConflict[]>([]);
   const [leaveConflicts, setLeaveConflicts] = useState<LeaveClash[]>([]);
+  const [showMore, setShowMore] = useState(false);
+  // Remounts the team steps with each opening, so they start on the first unfinished role.
+  const [opened, setOpened] = useState(0);
 
   useEffect(() => {
     if (!open) return;
     setForm(job ? formFromJob(job) : blankForm(defaultDate ?? todayIST(), defaultMemberIds));
     setConflicts([]);
     setLeaveConflicts([]);
+    setShowMore(
+      !!job &&
+        !!(
+          job.route ||
+          job.extra_tag ||
+          job.instructions ||
+          job.csm2_code ||
+          job.allow_double_booking
+        ),
+    );
+    setOpened((n) => n + 1);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only when the dialog opens
   }, [open, job, defaultDate]);
 
@@ -175,16 +205,34 @@ export function JobDialog({
     enabled: open,
   });
 
-  // An edited job only carries the stores it covers; fetch the order for the full list.
+  // An edited job only carries the stores it covers; fetch the order for the full list. A
+  // new job started from an order page fetches that order the same way.
+  const lookupNo = job?.order.order_no ?? defaultOrderNo;
   const { data: editOrder } = useQuery({
-    queryKey: ["work-jobs", "order-options", job?.order.order_no],
-    queryFn: () => fetchOrderOptions(job!.order.order_no),
-    enabled: open && !!job,
+    queryKey: ["work-jobs", "order-options", lookupNo],
+    queryFn: () => fetchOrderOptions(lookupNo!),
+    enabled: open && !!lookupNo,
   });
   useEffect(() => {
-    const full = editOrder?.orders.find((o) => o.id === job?.order.id);
-    if (full) setForm((f) => (f.order?.id === full.id ? { ...f, order: full } : f));
-  }, [editOrder, job]);
+    if (!open) return;
+    if (job) {
+      const full = editOrder?.orders.find((o) => o.id === job.order.id);
+      if (full) setForm((f) => (f.order?.id === full.id ? { ...f, order: full } : f));
+      return;
+    }
+    const preset = editOrder?.orders.find((o) => o.order_no === defaultOrderNo);
+    if (preset)
+      setForm((f) =>
+        f.order
+          ? f
+          : {
+              ...f,
+              order: preset,
+              store_ids: preset.stores.length === 1 ? [preset.stores[0].id] : [],
+              csm_code_id: f.csm_code_id ?? preset.csm_code?.id ?? null,
+            },
+      );
+  }, [editOrder, job, open, defaultOrderNo]);
 
   const end = form.end_date || form.start_date;
   const datesValid = !!form.start_date && end >= form.start_date;
@@ -202,7 +250,7 @@ export function JobDialog({
       for (const m of j.members)
         map.set(m.user_id, [
           ...(map.get(m.user_id) ?? []),
-          `${j.job_no} (${formatJobDates(j.start_date, j.end_date)})`,
+          `${j.order.order_no} (${formatJobDates(j.start_date, j.end_date)})`,
         ]);
     }
     return map;
@@ -260,8 +308,8 @@ export function JobDialog({
     onSuccess: (saved) => {
       toast.success(
         job
-          ? `${saved.job_no} updated`
-          : `${saved.job_no} assigned to ${saved.members.length} ${saved.members.length === 1 ? "person" : "people"}`,
+          ? `Job on ${saved.order.order_no} updated`
+          : `Job on ${saved.order.order_no} assigned to ${saved.members.length} ${saved.members.length === 1 ? "person" : "people"}`,
       );
       qc.invalidateQueries({ queryKey: ["work-jobs"] });
       onClose();
@@ -278,12 +326,43 @@ export function JobDialog({
     },
   });
 
+  const teamDone = teamComplete(form.needed, roleCount);
   const canSave =
     !!form.order &&
     datesValid &&
     form.work_details.trim().length >= 3 &&
     !!form.area_id &&
-    form.member_ids.length > 0;
+    teamDone;
+  // What is still missing, said next to the save button rather than left to guess.
+  const missing = !form.order
+    ? "Pick the order."
+    : !datesValid
+      ? "Fix the dates."
+      : form.work_details.trim().length < 3
+        ? "Describe the work."
+        : !form.area_id
+          ? "Pick the area."
+          : teamShortfall(form.needed, roleCount);
+
+  /** A lower count than people picked drops the ones picked last. */
+  const changeNeeded = (role: FieldRole, n: number) => {
+    const n2 = Math.max(0, Math.min(TEAM_LIMITS[role], n));
+    const ofRole = form.member_ids.filter((id) => staff.find((s) => s.id === id)?.role === role);
+    const drop = ofRole.slice(n2);
+    if (drop.length) {
+      const names = drop.map((id) => staff.find((s) => s.id === id)?.name).join(", ");
+      toast.info(`${names} taken off the team.`);
+    }
+    setForm((f) => ({
+      ...f,
+      needed: { ...f.needed, [role]: n2 },
+      member_ids: f.member_ids.filter((id) => !drop.includes(id)),
+    }));
+    if (drop.length) {
+      setConflicts([]);
+      setLeaveConflicts([]);
+    }
+  };
 
   const toggleMember = (id: number, role: FieldRole, on: boolean) => {
     if (on && roleCount(role) >= TEAM_LIMITS[role]) {
@@ -301,7 +380,9 @@ export function JobDialog({
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[92vh] max-w-3xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{job ? `Edit ${job.job_no}` : "New field job"}</DialogTitle>
+          <DialogTitle className="break-words">
+            {job ? `Edit the job on ${job.order.order_no}` : "New field job"}
+          </DialogTitle>
           <DialogDescription>
             {job
               ? "Changes are recorded in the audit log, and anyone added or removed is told."
@@ -430,35 +511,12 @@ export function JobDialog({
               )}
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="job-route">
-                Route <span className="font-normal text-muted-foreground">(optional)</span>
-              </Label>
-              <Input
-                id="job-route"
-                value={form.route}
-                onChange={(e) => set("route", e.target.value)}
-                placeholder="e.g. Hyd → Kurnool → Nandyal"
-              />
-            </div>
-            <div className="grid gap-2">
               <Label>CSM code</Label>
               <CodeSelect
                 codes={codes}
                 value={form.csm_code_id}
                 onChange={(v) => set("csm_code_id", v)}
                 placeholder="Order creator's code"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label>
-                Second CSM code{" "}
-                <span className="font-normal text-muted-foreground">(optional)</span>
-              </Label>
-              <CodeSelect
-                codes={codes.filter((c) => c.id !== form.csm_code_id)}
-                value={form.csm2_code_id}
-                onChange={(v) => set("csm2_code_id", v)}
-                placeholder="None"
               />
             </div>
             <div className="grid gap-2">
@@ -483,46 +541,20 @@ export function JobDialog({
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="job-tag">
-                Grid tag <span className="font-normal text-muted-foreground">(optional)</span>
-              </Label>
-              <Input
-                id="job-tag"
-                value={form.extra_tag}
-                maxLength={20}
-                onChange={(e) => set("extra_tag", e.target.value.toUpperCase())}
-                placeholder="e.g. CN"
-              />
-            </div>
           </section>
 
-          {/* Team */}
+          {/* Team: one role at a time */}
           <section className="grid gap-2">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <Label>Team</Label>
-              <div className="flex gap-2 text-xs">
-                {ROLES.map((r) => (
-                  <span
-                    key={r}
-                    className={cn(
-                      "rounded-full border px-2 py-0.5",
-                      roleCount(r) > 0
-                        ? "border-primary/40 bg-primary/10 text-primary"
-                        : "text-muted-foreground",
-                    )}
-                  >
-                    {FIELD_ROLE_LABELS[r]}s {roleCount(r)}/{TEAM_LIMITS[r]}
-                  </span>
-                ))}
-              </div>
-            </div>
-            <TeamPicker
+            <Label>Team</Label>
+            <TeamStepper
+              key={opened}
               staff={staff}
               selected={form.member_ids}
+              needed={form.needed}
               busy={busy}
               onLeave={onLeave}
               onToggle={toggleMember}
+              onNeededChange={changeNeeded}
             />
             {chosenOnLeave.length > 0 && (
               <p className="flex items-start gap-1.5 text-xs text-destructive">
@@ -536,38 +568,91 @@ export function JobDialog({
                 <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 {clashing.map((s) => s.name).join(", ")} already{" "}
                 {clashing.length === 1 ? "has" : "have"} work on these dates. Pick someone else or
-                turn on "Allow 2nd job".
+                turn on "Allow 2nd job" under More options.
               </p>
             )}
           </section>
 
           <section className="grid gap-3">
-            <div className="grid gap-2">
-              <Label htmlFor="job-instructions">
-                Instructions for the team{" "}
-                <span className="font-normal text-muted-foreground">(optional)</span>
-              </Label>
-              <Textarea
-                id="job-instructions"
-                rows={2}
-                value={form.instructions}
-                maxLength={1000}
-                onChange={(e) => set("instructions", e.target.value)}
+            <button
+              type="button"
+              onClick={() => setShowMore((v) => !v)}
+              aria-expanded={showMore}
+              className="flex items-center gap-1.5 justify-self-start text-sm font-medium text-muted-foreground hover:text-foreground"
+            >
+              <ChevronDown
+                className={cn("h-4 w-4 transition-transform", showMore && "rotate-180")}
               />
-            </div>
-            <div className="flex items-center justify-between gap-4 rounded-xl border p-3">
-              <div>
-                <div className="text-sm font-medium">Allow 2nd job</div>
-                <div className="text-xs text-muted-foreground">
-                  Lets this team be on another job over the same dates. Use only for short or
-                  same-route work.
+              More options
+              <span className="font-normal">(route, 2nd CSM, grid tag, instructions, 2nd job)</span>
+            </button>
+            {showMore && (
+              <div className="grid gap-3">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="grid gap-2">
+                    <Label htmlFor="job-route">
+                      Route <span className="font-normal text-muted-foreground">(optional)</span>
+                    </Label>
+                    <Input
+                      id="job-route"
+                      value={form.route}
+                      onChange={(e) => set("route", e.target.value)}
+                      placeholder="e.g. Hyd → Kurnool → Nandyal"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>
+                      Second CSM code{" "}
+                      <span className="font-normal text-muted-foreground">(optional)</span>
+                    </Label>
+                    <CodeSelect
+                      codes={codes.filter((c) => c.id !== form.csm_code_id)}
+                      value={form.csm2_code_id}
+                      onChange={(v) => set("csm2_code_id", v)}
+                      placeholder="None"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="job-tag">
+                      Grid tag <span className="font-normal text-muted-foreground">(optional)</span>
+                    </Label>
+                    <Input
+                      id="job-tag"
+                      value={form.extra_tag}
+                      maxLength={20}
+                      onChange={(e) => set("extra_tag", e.target.value.toUpperCase())}
+                      placeholder="e.g. CN"
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="job-instructions">
+                    Instructions for the team{" "}
+                    <span className="font-normal text-muted-foreground">(optional)</span>
+                  </Label>
+                  <Textarea
+                    id="job-instructions"
+                    rows={2}
+                    value={form.instructions}
+                    maxLength={1000}
+                    onChange={(e) => set("instructions", e.target.value)}
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-4 rounded-xl border p-3">
+                  <div>
+                    <div className="text-sm font-medium">Allow 2nd job</div>
+                    <div className="text-xs text-muted-foreground">
+                      Lets this team be on another job over the same dates. Use only for short or
+                      same-route work.
+                    </div>
+                  </div>
+                  <Switch
+                    checked={form.allow_double_booking}
+                    onCheckedChange={(v) => set("allow_double_booking", v)}
+                  />
                 </div>
               </div>
-              <Switch
-                checked={form.allow_double_booking}
-                onCheckedChange={(v) => set("allow_double_booking", v)}
-              />
-            </div>
+            )}
           </section>
 
           {leaveConflicts.length > 0 && (
@@ -595,7 +680,7 @@ export function JobDialog({
               <ul className="mb-3 grid gap-1">
                 {conflicts.map((c) => (
                   <li key={`${c.user_id}-${c.job_id}`}>
-                    <span className="font-medium">{c.name}</span> is on {c.job_no} (
+                    <span className="font-medium">{c.name}</span> is on {c.order_no} (
                     {formatJobDates(c.start_date, c.end_date)}) — {c.work_details}
                   </li>
                 ))}
@@ -615,7 +700,12 @@ export function JobDialog({
           )}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="items-center gap-2 sm:gap-2">
+          {!canSave && missing && (
+            <p className="mr-auto text-xs text-muted-foreground" aria-live="polite">
+              {missing}
+            </p>
+          )}
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
@@ -810,98 +900,5 @@ function CodeSelect({
         ))}
       </SelectContent>
     </Select>
-  );
-}
-
-function TeamPicker({
-  staff,
-  selected,
-  busy,
-  onLeave,
-  onToggle,
-}: {
-  staff: { id: number; name: string; role: FieldRole; emp_code: string | null }[];
-  selected: number[];
-  busy: Map<number, string[]>;
-  onLeave: Map<number, string>;
-  onToggle: (id: number, role: FieldRole, on: boolean) => void;
-}) {
-  const [q, setQ] = useState("");
-  const match = (s: { name: string; emp_code: string | null }) =>
-    `${s.name} ${s.emp_code ?? ""}`.toLowerCase().includes(q.toLowerCase());
-
-  return (
-    <div className="rounded-xl border">
-      <div className="relative border-b p-2">
-        <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Search staff by name or employee code"
-          className="h-9 border-0 pl-8 shadow-none focus-visible:ring-0"
-        />
-      </div>
-      <div className="grid max-h-72 gap-3 overflow-y-auto p-2 md:grid-cols-3">
-        {ROLES.map((role) => {
-          const people = staff.filter(
-            (s) => s.role === role && (selected.includes(s.id) || match(s)),
-          );
-          // Free people first, then busy, then on leave, so the obvious picks are on top.
-          const rank = (id: number) => (onLeave.has(id) ? 2 : busy.has(id) ? 1 : 0);
-          people.sort((a, b) => rank(a.id) - rank(b.id) || a.name.localeCompare(b.name));
-          return (
-            <div key={role} className="min-w-0">
-              <div className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                {FIELD_ROLE_LABELS[role]}s
-              </div>
-              {people.length === 0 && (
-                <div className="px-2 py-1 text-xs text-muted-foreground">Nobody matches.</div>
-              )}
-              {people.map((s) => {
-                const on = selected.includes(s.id);
-                const jobs = busy.get(s.id);
-                const leave = onLeave.get(s.id);
-                // Someone already on the team can still be taken off while on leave.
-                const locked = !!leave && !on;
-                return (
-                  <label
-                    key={s.id}
-                    className={cn(
-                      "flex items-start gap-2 rounded-lg px-2 py-1.5 text-sm",
-                      locked ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:bg-muted/50",
-                      on && "bg-primary/5",
-                    )}
-                  >
-                    <Checkbox
-                      className="mt-0.5"
-                      checked={on}
-                      disabled={locked}
-                      onCheckedChange={(c) => onToggle(s.id, role, !!c)}
-                    />
-                    <span className="min-w-0">
-                      <span className="block truncate font-medium">{s.name}</span>
-                      {leave ? (
-                        <span className="block truncate text-xs text-destructive">
-                          On leave · {leave}
-                        </span>
-                      ) : jobs ? (
-                        <span
-                          className="block truncate text-xs text-amber-600"
-                          title={jobs.join(", ")}
-                        >
-                          Busy · {jobs.join(", ")}
-                        </span>
-                      ) : (
-                        <span className="block text-xs text-success">Free</span>
-                      )}
-                    </span>
-                  </label>
-                );
-              })}
-            </div>
-          );
-        })}
-      </div>
-    </div>
   );
 }

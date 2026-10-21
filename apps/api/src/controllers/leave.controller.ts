@@ -111,12 +111,12 @@ async function resolveLeaveInput(tx: Prisma.TransactionClient, body: unknown, ex
       start_date: { lte: parseDay(to) },
       end_date: { gte: parseDay(from) },
     },
-    include: { job: { select: { id: true, job_no: true, work_details: true, start_date: true, end_date: true, status: true } } },
+    include: { job: { select: { id: true, work_details: true, start_date: true, end_date: true, status: true, order: { select: { order_no: true } } } } },
     orderBy: { start_date: "asc" },
   });
   const jobs = slots.map((s) => ({
     job_id: s.job.id,
-    job_no: s.job.job_no,
+    order_no: s.job.order.order_no,
     work_details: s.job.work_details,
     status: s.job.status,
     start_date: dayKey(s.job.start_date),
@@ -125,7 +125,7 @@ async function resolveLeaveInput(tx: Prisma.TransactionClient, body: unknown, ex
   if (jobs.length && !input.acknowledge_jobs) {
     throw new HttpError(
       409,
-      `${person.name} is on ${jobs.length === 1 ? "a job" : `${jobs.length} jobs`} over these dates (${jobs.map((j) => j.job_no).join(", ")}). Change the team first, or save the leave anyway.`,
+      `${person.name} is on ${jobs.length === 1 ? "a job" : `${jobs.length} jobs`} over these dates (${jobs.map((j) => j.order_no).join(", ")}). Change the team first, or save the leave anyway.`,
       { job_conflicts: jobs },
     );
   }

@@ -325,7 +325,11 @@ function OvertimePage() {
                     {e.duration}
                   </TableCell>
                   <TableCell className="text-sm">
-                    {e.work_job ? <span className="font-mono">{e.work_job.job_no}</span> : "—"}
+                    {e.work_job ? (
+                      <span className="font-mono">{e.work_job.order.order_no}</span>
+                    ) : (
+                      "—"
+                    )}
                     {e.csm_code && (
                       <div className="text-xs text-muted-foreground">CSM {e.csm_code.code}</div>
                     )}
@@ -645,7 +649,7 @@ function OvertimeDialog({
                   </SelectItem>
                   {jobs.map((j) => (
                     <SelectItem key={j.id} value={String(j.id)}>
-                      {j.job_no} · {j.label}
+                      {j.order.order_no} · {j.label}
                     </SelectItem>
                   ))}
                 </SelectContent>

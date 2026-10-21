@@ -405,8 +405,9 @@ model Vehicle {
 /// of the old "Task Log" sheet; the weekly grid and the daily board are derived from these.
 model WorkJob {
   id                   Int             @id @default(autoincrement())
-  /// W00001, W00002 … from the work_job_no_seq sequence (see the migration).
-  job_no               String          @unique @default(dbgenerated("('W'::text || lpad((nextval('work_job_no_seq'::regclass))::text, 5, '0'::text))"))
+  /// Legacy W00001… number, only on jobs made before 2026-10-29. A job is referred to by
+  /// its order's number; new jobs leave this empty.
+  job_no               String?         @unique
   order_id             Int
   order                Order           @relation(fields: [order_id], references: [id], onDelete: Restrict)
   start_date           DateTime        @db.Date
@@ -591,11 +592,17 @@ enum PaymentAction {
   DETACH
 }
 
+enum PaymentUpiMethod {
+  UPI_ID
+  MOBILE
+}
+
 /// Money the company pays out to the requester by UPI. Never order revenue.
 model PaymentRequest {
   id                    Int                   @id @default(autoincrement())
-  /// PR-YYMM-0001, minted from payment_request_no_seq (see the migration).
-  request_no            String                @unique
+  /// Legacy PR-YYMM-0001 number, only on requests made before 2026-10-29. A request is
+  /// referred to by its order's number; new requests leave this empty.
+  request_no            String?               @unique
   order_id              Int
   order                 Order                 @relation(fields: [order_id], references: [id], onDelete: Restrict)
   work_job_id           Int?
@@ -604,6 +611,8 @@ model PaymentRequest {
   requested_by          Int
   requester             User                  @relation("PaymentRequester", fields: [requested_by], references: [id], onDelete: Restrict)
   amount                Decimal               @db.Decimal(10, 2)
+  /// Whether upi_id holds a UPI ID (name@bank) or a 10-digit UPI-linked mobile number.
+  upi_method            PaymentUpiMethod      @default(UPI_ID)
   upi_id                String
   category              PaymentCategory?
   purpose               String

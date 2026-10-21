@@ -71,7 +71,7 @@ export function MyPaymentRequests({ crumbs }: { crumbs: Crumbs }) {
     <>
       <PageHeader
         title="Payment Requests"
-        description="Ask to be paid back for work expenses on your orders. The company pays to your UPI ID once it is approved."
+        description="Ask to be paid back for work expenses on your orders. The company pays to your UPI ID or UPI mobile number once it is approved."
         crumbs={crumbs}
         actions={
           <Button className="rounded-xl" onClick={() => setCreating(true)}>
@@ -135,7 +135,7 @@ export function MyPaymentRequests({ crumbs }: { crumbs: Crumbs }) {
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <span className={cn("font-mono font-semibold", overdueText(r.overdue))}>
-                    {r.request_no}
+                    {r.order.order_no}
                   </span>
                   <PaymentStatusBadge status={r.status} />
                 </div>
@@ -143,8 +143,7 @@ export function MyPaymentRequests({ crumbs }: { crumbs: Crumbs }) {
               </div>
               <div className="text-sm">{r.purpose}</div>
               <div className="text-xs text-muted-foreground">
-                <span className="font-mono">{r.order.order_no}</span> · {r.order.client_name} ·{" "}
-                {formatWhen(r.created_at)}
+                {r.order.client_name} · {formatWhen(r.created_at)}
               </div>
               <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-muted-foreground">
                 {nextStepFor(r)}
@@ -159,7 +158,7 @@ export function MyPaymentRequests({ crumbs }: { crumbs: Crumbs }) {
       <NewPaymentRequestDialog
         open={creating}
         onClose={() => setCreating(false)}
-        lastUpi={all[0]?.upi_id}
+        lastPayee={all[0]}
       />
       <PaymentRequestSheet
         requestId={openId}
@@ -331,9 +330,8 @@ export function PaymentReviewQueue({
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
-              <TableHead>Request</TableHead>
-              <TableHead>Requested by</TableHead>
               <TableHead>Order</TableHead>
+              <TableHead>Requested by</TableHead>
               <TableHead>For</TableHead>
               <TableHead className="text-right">Amount</TableHead>
               <TableHead>Bill</TableHead>
@@ -343,13 +341,13 @@ export function PaymentReviewQueue({
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={7} className="p-8 text-center text-muted-foreground">
+                <TableCell colSpan={6} className="p-8 text-center text-muted-foreground">
                   Loading…
                 </TableCell>
               </TableRow>
             ) : rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="p-8 text-center text-muted-foreground">
+                <TableCell colSpan={6} className="p-8 text-center text-muted-foreground">
                   {overdueOnly
                     ? "Nothing here is overdue."
                     : tab === "queue"
@@ -361,7 +359,10 @@ export function PaymentReviewQueue({
               rows.map((r) => (
                 <TableRow
                   key={r.id}
-                  className={cn("cursor-pointer", r.overdue && "bg-destructive/5 hover:bg-destructive/10")}
+                  className={cn(
+                    "cursor-pointer",
+                    r.overdue && "bg-destructive/5 hover:bg-destructive/10",
+                  )}
                   tabIndex={0}
                   onClick={() => setOpenId(r.id)}
                   onKeyDown={(e) => {
@@ -372,8 +373,19 @@ export function PaymentReviewQueue({
                   }}
                 >
                   <TableCell>
-                    <div className={cn("whitespace-nowrap font-mono font-semibold", overdueText(r.overdue))}>
-                      {r.request_no}
+                    <div
+                      className={cn(
+                        "whitespace-nowrap font-mono font-semibold",
+                        overdueText(r.overdue),
+                      )}
+                    >
+                      {r.order.order_no}
+                    </div>
+                    <div
+                      className="max-w-[12rem] truncate text-xs text-muted-foreground"
+                      title={r.order.client_name}
+                    >
+                      {r.order.client_name}
                     </div>
                     <div className="whitespace-nowrap text-xs text-muted-foreground">
                       {formatWhen(r.created_at)}
@@ -383,12 +395,6 @@ export function PaymentReviewQueue({
                     <div className="whitespace-nowrap">{r.requester.name}</div>
                     <div className="text-xs text-muted-foreground">
                       {roleLabel(r.requester.role)}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="font-mono text-sm">{r.order.order_no}</div>
-                    <div className="max-w-[12rem] truncate text-xs text-muted-foreground">
-                      {r.order.client_name}
                     </div>
                   </TableCell>
                   <TableCell className="max-w-[16rem]">

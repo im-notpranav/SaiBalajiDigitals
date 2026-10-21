@@ -414,16 +414,41 @@ const rupees = z
   .max(99_999_999.99, "Amount is too large")
   .refine((n) => Math.abs(n * 100 - Math.round(n * 100)) < 1e-6, "Use at most 2 decimals");
 
-const upiId = z
-  .string()
-  .trim()
-  .toLowerCase()
-  .regex(/^[a-z0-9][a-z0-9._-]{1,255}@[a-z][a-z0-9.-]{1,63}$/, "Enter a UPI ID like name@bank");
+export const UPI_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{1,255}@[a-z][a-z0-9.-]{1,63}$/;
+/** Indian mobile numbers, the only kind UPI links to: 10 digits starting 6–9. */
+export const UPI_MOBILE_PATTERN = /^[6-9]\d{9}$/;
+
+/**
+ * A payee is paid to a UPI ID (name@bank) or to a UPI-linked mobile number. Returns the
+ * value as stored: a lower-cased UPI ID, or the bare 10 digits with any +91 / 0 dropped.
+ */
+export function normaliseUpi(method: "UPI_ID" | "MOBILE", raw: string): { ok: true; value: string } | { ok: false; error: string } {
+  if (method === "MOBILE") {
+    const digits = raw.replace(/[\s()-]/g, "").replace(/^(\+91|91|0)(?=\d{10}$)/, "");
+    return UPI_MOBILE_PATTERN.test(digits)
+      ? { ok: true, value: digits }
+      : { ok: false, error: "Enter the 10-digit mobile number linked to UPI, e.g. 98765 43210" };
+  }
+  const id = raw.trim().toLowerCase();
+  return UPI_ID_PATTERN.test(id) ? { ok: true, value: id } : { ok: false, error: "Enter a UPI ID like name@bank" };
+}
+
+/** Checks upi_id against the chosen method and stores it in its normal form. */
+function withUpi<T extends { upi_method: "UPI_ID" | "MOBILE"; upi_id: string }>(v: T, ctx: z.RefinementCtx): T {
+  const r = normaliseUpi(v.upi_method, v.upi_id);
+  if (!r.ok) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["upi_id"], message: r.error });
+    return z.NEVER;
+  }
+  return { ...v, upi_id: r.value };
+}
 
 /** The parts of a request the requester fills in, and may correct when it is returned. */
 const paymentRequestFields = {
   amount: rupees,
-  upi_id: upiId,
+  /** Older clients send only upi_id, which was always a UPI ID. */
+  upi_method: z.enum(["UPI_ID", "MOBILE"]).default("UPI_ID"),
+  upi_id: z.string({ required_error: "Enter where to pay" }).trim().min(1, "Enter where to pay").max(300),
   category: z.enum(["TRAVEL", "MATERIAL", "LABOUR", "FOOD", "ADVANCE", "OTHER"]).optional().nullable(),
   purpose: z.string().trim().min(3, "Say what the money is for").max(300),
   remarks: z.string().trim().max(1000).optional().nullable(),
@@ -436,7 +461,7 @@ export const paymentRequestSchema = z.object({
   bill_details_required: z.boolean(),
   /** A fresh value per form, so a double click or a retry creates one request. */
   idempotency_key: z.string().trim().min(8).max(100),
-});
+}).transform(withUpi);
 
 export const paymentNoteSchema = z.object({
   note: z.string().trim().max(500).optional().nullable(),
@@ -446,7 +471,7 @@ export const paymentNoteSchema = z.object({
 export const paymentResubmitSchema = z.object({
   ...paymentRequestFields,
   note: z.string().trim().max(500).optional().nullable(),
-});
+}).transform(withUpi);
 
 export const paymentMarkPaidSchema = z.object({
   /** Defaults to the amount asked for. */

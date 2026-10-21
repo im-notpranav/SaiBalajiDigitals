@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { OrderDetail } from "@/components/orders/OrderDetail";
+import { OrderLinkedWork } from "@/components/orders/OrderLinkedWork";
 import { fetchOrder, forceCloseOrder, closeOrder } from "@/api/orders";
 import { Loader2, AlertOctagon, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -141,9 +142,22 @@ function OrderDetailAdmin() {
       <PageHeader
         title={`Order ${data.order.order_no}`}
         description="Full administrative view of order details."
-        crumbs={[{ label: "Administrator" }, { label: "Orders", to: "/admin/orders" }, { label: "Details" }]}
+        crumbs={[{ label: "Automated System" }, { label: "Orders", to: "/admin/orders" }, { label: "Details" }]}
       />
-      <OrderDetail order={data.order} actions={actions} userRole={user?.role} currentUserId={user?.id} />
+      <OrderDetail
+        order={data.order}
+        actions={actions}
+        userRole={user?.role}
+        currentUserId={user?.id}
+        // Field jobs and payment requests go by this same order number.
+        related={
+          <OrderLinkedWork
+            orderId={data.order.id}
+            orderNo={data.order.order_no}
+            showPayments={user?.role === "ADMIN"}
+          />
+        }
+      />
     </>
   );
 }

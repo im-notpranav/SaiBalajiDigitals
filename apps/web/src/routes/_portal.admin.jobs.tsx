@@ -89,7 +89,7 @@ function JobsPage() {
           <Input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Job no, order no, client or work"
+            placeholder="Order no, client or work"
             className="pl-9"
           />
         </div>
@@ -142,9 +142,8 @@ function JobsPage() {
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
-              <TableHead>Job</TableHead>
-              <TableHead>Dates</TableHead>
               <TableHead>Order</TableHead>
+              <TableHead>Dates</TableHead>
               <TableHead>Work</TableHead>
               <TableHead>Area</TableHead>
               <TableHead>Team</TableHead>
@@ -155,13 +154,13 @@ function JobsPage() {
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={8} className="p-8 text-center text-muted-foreground">
+                <TableCell colSpan={7} className="p-8 text-center text-muted-foreground">
                   Loading…
                 </TableCell>
               </TableRow>
             ) : jobs.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="p-8 text-center text-muted-foreground">
+                <TableCell colSpan={7} className="p-8 text-center text-muted-foreground">
                   No jobs in this window. Use “New job” to assign one.
                 </TableCell>
               </TableRow>
@@ -169,8 +168,16 @@ function JobsPage() {
               jobs.map((j) => (
                 <TableRow key={j.id} className={j.status === "CANCELLED" ? "opacity-60" : ""}>
                   <TableCell>
-                    <div className="font-mono font-semibold">{j.job_no}</div>
-                    <div className="whitespace-nowrap font-mono text-xs text-muted-foreground">
+                    <div className="whitespace-nowrap font-mono font-semibold">
+                      {j.order.order_no}
+                    </div>
+                    <div
+                      className="max-w-[12rem] truncate text-xs text-muted-foreground"
+                      title={j.order.client_name}
+                    >
+                      {j.order.client_name}
+                    </div>
+                    <div className="whitespace-nowrap font-mono text-[11px] text-muted-foreground">
                       {j.label}
                     </div>
                   </TableCell>
@@ -179,12 +186,6 @@ function JobsPage() {
                     <div className="text-xs text-muted-foreground">
                       {j.days} day{j.days === 1 ? "" : "s"}
                       {j.allow_double_booking ? " · 2nd job" : ""}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="font-mono text-sm">{j.order.order_no}</div>
-                    <div className="max-w-[12rem] truncate text-xs text-muted-foreground">
-                      {j.order.client_name}
                     </div>
                   </TableCell>
                   <TableCell className="max-w-[16rem]">
@@ -234,7 +235,7 @@ function JobsPage() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      aria-label={`Edit ${j.job_no}`}
+                      aria-label={`Edit the job on ${j.order.order_no}`}
                       disabled={!JOB_EDITABLE.includes(j.status)}
                       onClick={() => setDialog({ job: j })}
                     >

@@ -99,7 +99,9 @@ export function JobStatusMenu({ job }: { job: WorkJob }) {
     mutationFn: ({ status, reason }: { status: WorkJobStatus; reason?: string }) =>
       setWorkJobStatus(job.id, status, reason),
     onSuccess: (updated) => {
-      toast.success(`${updated.job_no} is now ${JOB_STATUS_LABELS[updated.status].toLowerCase()}`);
+      toast.success(
+        `Job on ${updated.order.order_no} is now ${JOB_STATUS_LABELS[updated.status].toLowerCase()}`,
+      );
       setCancelOpen(false);
       setReason("");
       qc.invalidateQueries({ queryKey: ["work-jobs"] });
@@ -146,7 +148,9 @@ export function JobStatusMenu({ job }: { job: WorkJob }) {
       <Dialog open={cancelOpen} onOpenChange={setCancelOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Cancel {job.job_no}?</DialogTitle>
+            <DialogTitle className="break-words">
+              Cancel the job on {job.order.order_no}?
+            </DialogTitle>
             <DialogDescription>
               The team is told and their dates become free. A cancelled job cannot be reopened.
             </DialogDescription>

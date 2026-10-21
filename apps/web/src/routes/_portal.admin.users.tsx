@@ -115,7 +115,7 @@ function UsersPage() {
       <PageHeader
         title="User Management"
         description="Deactivate rather than delete — historical audit attribution stays intact."
-        crumbs={[{ label: "Administrator" }, { label: "Users" }]}
+        crumbs={[{ label: "Automated System" }, { label: "Users" }]}
         actions={
           currentUser?.is_super_admin ? (
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>

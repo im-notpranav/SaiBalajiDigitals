@@ -83,7 +83,7 @@ export interface Conflict {
   user_id: number;
   name: string;
   job_id: number;
-  job_no: string;
+  order_no: string;
   work_details: string;
   start_date: string;
   end_date: string;
@@ -108,7 +108,7 @@ export async function findConflicts(
     },
     include: {
       user: { select: { name: true } },
-      job: { select: { id: true, job_no: true, work_details: true, start_date: true, end_date: true } },
+      job: { select: { id: true, work_details: true, start_date: true, end_date: true, order: { select: { order_no: true } } } },
     },
     orderBy: { start_date: "asc" },
   });
@@ -116,7 +116,7 @@ export async function findConflicts(
     user_id: r.user_id,
     name: r.user.name,
     job_id: r.job.id,
-    job_no: r.job.job_no,
+    order_no: r.job.order.order_no,
     work_details: r.job.work_details,
     start_date: dayKey(r.job.start_date),
     end_date: dayKey(r.job.end_date),

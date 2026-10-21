@@ -6,7 +6,7 @@
  */
 import { prisma } from "../utils/prisma";
 import { getSetting } from "../utils/app-settings";
-import { OPEN_PAYMENT_STATUSES } from "../utils/payment-workflow";
+import { OPEN_PAYMENT_STATUSES, formatRupees } from "../utils/payment-workflow";
 import { paymentTimers, type PaymentTimer } from "../utils/payment-timers";
 
 export const DIGEST_TITLE = "Overdue payment requests";
@@ -23,8 +23,9 @@ export async function sendOverdueDigests(now = new Date()): Promise<number> {
   const open = await prisma.paymentRequest.findMany({
     where: { status: { in: OPEN_PAYMENT_STATUSES } },
     select: {
-      request_no: true,
+      amount: true,
       requested_by: true,
+      order: { select: { order_no: true } },
       status: true,
       bill_details_required: true,
       status_changed_at: true,
@@ -33,10 +34,11 @@ export async function sendOverdueDigests(now = new Date()): Promise<number> {
     },
   });
 
-  const overdue: { request_no: string; requested_by: number; timer: PaymentTimer }[] = [];
+  // A request goes by its order's number; the amount tells two on one order apart.
+  const overdue: { ref: string; requested_by: number; timer: PaymentTimer }[] = [];
   for (const r of open) {
     for (const t of paymentTimers(r, r._count.attachments, threshold, now)) {
-      if (t.overdue) overdue.push({ request_no: r.request_no, requested_by: r.requested_by, timer: t });
+      if (t.overdue) overdue.push({ ref: `${r.order.order_no} ${formatRupees(Number(r.amount))}`, requested_by: r.requested_by, timer: t });
     }
   }
   if (!overdue.length) return 0;
@@ -70,7 +72,7 @@ export async function sendOverdueDigests(now = new Date()): Promise<number> {
       const sorted = [...items].sort((a, b) => b.timer.days - a.timer.days);
       const listed = sorted
         .slice(0, SHOWN)
-        .map((o) => `${o.request_no} (${o.timer.label.toLowerCase()}, ${o.timer.days} days)`)
+        .map((o) => `${o.ref} (${o.timer.label.toLowerCase()}, ${o.timer.days} days)`)
         .join("; ");
       const more = sorted.length > SHOWN ? `; and ${sorted.length - SHOWN} more` : "";
       const n = sorted.length;

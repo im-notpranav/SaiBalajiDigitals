@@ -38,7 +38,7 @@ function OverduePage() {
       <PageHeader
         title="Overdue Orders"
         description="Open orders stuck at their current stage longer than the threshold."
-        crumbs={[{ label: "Administrator" }, { label: "Reports" }, { label: "Overdue" }]}
+        crumbs={[{ label: "Automated System" }, { label: "Reports" }, { label: "Overdue" }]}
       />
 
       <div className="space-y-6">

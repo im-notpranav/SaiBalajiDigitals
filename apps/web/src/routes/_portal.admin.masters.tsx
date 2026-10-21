@@ -48,7 +48,7 @@ function MastersPage() {
       <PageHeader
         title="Allocation Masters"
         description="The lists the work-allocation portal picks from. Deactivate entries instead of deleting them so past jobs keep their history."
-        crumbs={[{ label: "Work Allocation" }, { label: "Masters" }]}
+        crumbs={[{ label: "Work Allocation" }, { label: "Allocation Masters" }]}
       />
       <Tabs defaultValue="csm-codes">
         <TabsList className="mb-4">

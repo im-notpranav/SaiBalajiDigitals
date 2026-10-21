@@ -150,7 +150,7 @@ function DailyBoardPage() {
               <span key={p.id}>
                 {i > 0 && "; "}
                 <span className="font-medium">{p.name}</span> is on{" "}
-                {p.jobs.map((j) => j.job_no).join(" and ")}
+                {p.jobs.map((j) => j.order_no).join(" and ")}
               </span>
             ))}
             . Both jobs allow a 2nd job, so this was booked on purpose.
@@ -181,7 +181,7 @@ function DailyBoardPage() {
                       onClick={() => setDialog({ job: j })}
                     >
                       <div className="font-mono text-sm font-semibold enabled:hover:underline">
-                        {j.job_no} · {j.label}
+                        {j.order.order_no} · {j.label}
                       </div>
                       <div className="truncate text-xs text-muted-foreground">
                         {j.order.order_no} · {j.order.client_name}
@@ -281,7 +281,7 @@ function DailyBoardPage() {
                     {p.jobs.length > 0 && (
                       <div className="mt-0.5 flex items-start gap-1 text-xs text-destructive">
                         <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
-                        Still on {p.jobs.map((j) => j.job_no).join(", ")}
+                        Still on {p.jobs.map((j) => j.order_no).join(", ")}
                       </div>
                     )}
                   </li>

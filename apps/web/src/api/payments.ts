@@ -52,11 +52,14 @@ export interface OrderMoney {
   over_value: boolean;
 }
 
+/** Where the money goes: a UPI ID (name@bank) or a UPI-linked mobile number. */
+export type UpiMethod = "UPI_ID" | "MOBILE";
+
+/** A request has no number of its own; it goes by its order's number. */
 export interface PaymentRequest {
   id: number;
-  request_no: string;
   order: { id: number; order_no: string; client_name: string; status: string };
-  work_job: { id: number; job_no: string; work_details: string } | null;
+  work_job: { id: number; work_details: string; start_date: string } | null;
   requester: {
     id: number;
     name: string;
@@ -65,6 +68,8 @@ export interface PaymentRequest {
     emp_code: string | null;
   };
   amount: number;
+  upi_method: UpiMethod;
+  /** The UPI ID or the 10-digit mobile number, per upi_method. */
   upi_id: string;
   category: PaymentCategory | null;
   purpose: string;
@@ -157,7 +162,7 @@ export interface PaymentOrderOption {
   client_name: string;
   status: string;
   eligibility: { eligible: boolean; reason: string };
-  jobs: { id: number; job_no: string; work_details: string; start_date: string; status: string }[];
+  jobs: { id: number; work_details: string; start_date: string; status: string }[];
 }
 
 export interface PaymentList {
@@ -172,7 +177,7 @@ export interface PaymentList {
 }
 
 export const fetchPaymentRequests = (
-  params: { scope?: "queue"; status?: string; q?: string; overdue?: "1" } = {},
+  params: { scope?: "queue"; status?: string; q?: string; overdue?: "1"; order_id?: string } = {},
 ) => apiFetch<PaymentList>("/payment-requests", { params });
 
 export type WaitingStatus = "ADMIN_REVIEW" | "CCM_REVIEW" | "INFO_REQUESTED" | "PAYMENT_PENDING" | "PAID";
@@ -186,7 +191,6 @@ export const WAITING_STATUSES: WaitingStatus[] = [
 
 export interface OverdueItem {
   id: number;
-  request_no: string;
   amount: number;
   status: PaymentStatus;
   requester: { id: number; name: string; role: string };
@@ -237,6 +241,7 @@ export const fetchPaymentOrderOptions = (q: string) =>
 
 export interface PaymentRequestInput {
   amount: number;
+  upi_method: UpiMethod;
   upi_id: string;
   category: PaymentCategory | null;
   purpose: string;

@@ -22,7 +22,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { apiErrorMessage } from "@/api/allocation";
+import { apiErrorMessage, formatJobDates } from "@/api/allocation";
 import {
   CATEGORY_LABELS,
   PAYMENT_STATUS_LABELS,
@@ -39,7 +39,9 @@ import {
 import {
   PaymentStatusBadge,
   RequestFields,
+  UPI_METHOD_LABELS,
   draftFrom,
+  payeeText,
   readDraft,
   type RequestDraft,
 } from "./PaymentBits";
@@ -110,7 +112,9 @@ export function PaymentRequestSheet({
           <>
             <SheetHeader className="text-left">
               <SheetTitle className="flex flex-wrap items-center gap-2">
-                <span className={cn("font-mono", overdueText(r.overdue))}>{r.request_no}</span>
+                <span className={cn("break-all font-mono", overdueText(r.overdue))}>
+                  {r.order.order_no}
+                </span>
                 <PaymentStatusBadge status={r.status} />
               </SheetTitle>
               <SheetDescription>{nextStepFor(r)}</SheetDescription>
@@ -146,8 +150,11 @@ export function PaymentRequestSheet({
                 </Row>
                 {r.work_job && (
                   <Row label="Field job">
-                    <span className="font-mono">{r.work_job.job_no}</span> ·{" "}
                     {r.work_job.work_details}
+                    <span className="text-muted-foreground">
+                      {" "}
+                      · {formatJobDates(r.work_job.start_date, r.work_job.start_date)}
+                    </span>
                   </Row>
                 )}
                 <Row label="Requested by">
@@ -158,16 +165,19 @@ export function PaymentRequestSheet({
                     {r.requester.phone ? ` · ${r.requester.phone}` : ""}
                   </span>
                 </Row>
-                <Row label="Pay to UPI">
-                  <span className="inline-flex items-center gap-1.5 font-mono">
-                    {r.upi_id}
+                <Row label="Pay to">
+                  <span className="block text-xs text-muted-foreground">
+                    {UPI_METHOD_LABELS[r.upi_method]}
+                  </span>
+                  <span className="inline-flex max-w-full items-start gap-1.5 font-mono">
+                    <span className="break-all">{payeeText(r)}</span>
                     <button
                       type="button"
-                      aria-label="Copy UPI ID"
-                      className="rounded p-0.5 text-muted-foreground hover:text-foreground"
+                      aria-label={`Copy ${UPI_METHOD_LABELS[r.upi_method]}`}
+                      className="shrink-0 rounded p-0.5 text-muted-foreground hover:text-foreground"
                       onClick={() => {
                         void navigator.clipboard?.writeText(r.upi_id);
-                        toast.success("UPI ID copied");
+                        toast.success(`${UPI_METHOD_LABELS[r.upi_method]} copied`);
                       }}
                     >
                       <Copy className="h-3.5 w-3.5" />
@@ -329,7 +339,9 @@ function ActionDialog({
   const run = useMutation({
     mutationFn: (data: Record<string, unknown>) => paymentAction(request.id, action!, data),
     onSuccess: (res) => {
-      toast.success(`${res.request.request_no}: ${PAYMENT_STATUS_LABELS[res.request.status]}`);
+      toast.success(
+        `Request on ${res.request.order.order_no}: ${PAYMENT_STATUS_LABELS[res.request.status]}`,
+      );
       qc.invalidateQueries({ queryKey: ["payment-requests"] });
       onClose();
     },
@@ -374,7 +386,7 @@ function ActionDialog({
     CANCEL: request.is_mine
       ? "Withdraw this request."
       : "Cancel this request. The requester is told why.",
-    MARK_PAID: `Record the payment to ${request.upi_id}.`,
+    MARK_PAID: `Record the payment to ${payeeText(request)}.`,
     CLOSE: "Close the request once the payment and paperwork are settled.",
   };
 
@@ -383,7 +395,7 @@ function ActionDialog({
       <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {ACTION_LABELS[action]} · {request.request_no}
+            {ACTION_LABELS[action]} · {request.order.order_no}
           </DialogTitle>
           <DialogDescription>{descriptions[action]}</DialogDescription>
         </DialogHeader>

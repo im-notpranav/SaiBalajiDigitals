@@ -208,7 +208,9 @@ function MyOvertime() {
                     {o.start_time}–{o.end_time}
                     {o.past_midnight ? " (+1)" : ""}
                   </span>
-                  {o.job_no && <span className="text-xs text-muted-foreground"> · {o.job_no}</span>}
+                  {o.order_no && (
+                    <span className="text-xs text-muted-foreground"> · {o.order_no}</span>
+                  )}
                   {o.reject_reason && (
                     <span className="block text-xs text-destructive">{o.reject_reason}</span>
                   )}
@@ -269,9 +271,9 @@ function JobCard({ job, highlight, muted }: { job: MyJob; highlight?: boolean; m
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <div className="font-mono text-sm font-semibold">{job.job_no}</div>
-          <div className="truncate text-xs text-muted-foreground">
-            {job.order.order_no} · {job.order.client_name}
+          <div className="font-mono text-sm font-semibold">{job.order.order_no}</div>
+          <div className="truncate text-xs text-muted-foreground" title={job.order.client_name}>
+            {job.order.client_name}
           </div>
         </div>
         <JobStatusBadge status={job.status} />
@@ -371,7 +373,9 @@ function JobActions({ job }: { job: MyJob }) {
       setMyJobStatus(job.id, v.status, v.note),
     onSuccess: (saved) => {
       toast.success(
-        saved.status === "STARTED" ? `${saved.job_no} started` : `${saved.job_no} marked completed`,
+        saved.status === "STARTED"
+          ? `Job on ${saved.order.order_no} started`
+          : `Job on ${saved.order.order_no} marked completed`,
       );
       setCompleting(false);
       setNote("");
@@ -439,7 +443,7 @@ function JobActions({ job }: { job: MyJob }) {
       <Dialog open={completing} onOpenChange={setCompleting}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Mark {job.job_no} completed?</DialogTitle>
+            <DialogTitle>Mark the job on {job.order.order_no} completed?</DialogTitle>
             <DialogDescription>
               The CSM and the Operations Manager are told straight away.
             </DialogDescription>

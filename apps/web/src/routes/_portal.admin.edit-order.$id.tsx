@@ -61,7 +61,7 @@ function EditOrderAdmin() {
       <PageHeader
         title={`Edit Order ${order.order_no} (Admin)`}
         description="Update the line items or order details."
-        crumbs={[{ label: "Admin" }, { label: "Orders" }, { label: "Edit" }]}
+        crumbs={[{ label: "Automated System" }, { label: "Orders", to: "/admin/orders" }, { label: "Edit" }]}
       />
 
       <OrderForm defaultValues={order} onSubmit={submit} isSubmitting={saving} userRole={user?.role} />
