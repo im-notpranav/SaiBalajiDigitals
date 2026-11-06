@@ -42,6 +42,7 @@ import { Route as PortalAdminWhatsappRouteImport } from './routes/_portal.admin.
 import { Route as PortalCostControlDashboardRouteImport } from './routes/_portal.cost-control.dashboard'
 import { Route as PortalCostControlNotificationsRouteImport } from './routes/_portal.cost-control.notifications'
 import { Route as PortalEmployeeDashboardRouteImport } from './routes/_portal.employee.dashboard'
+import { Route as PortalEmployeeJobsRouteImport } from './routes/_portal.employee.jobs'
 import { Route as PortalEmployeeNewOrderRouteImport } from './routes/_portal.employee.new-order'
 import { Route as PortalEmployeeNotificationsRouteImport } from './routes/_portal.employee.notifications'
 import { Route as PortalEmployeeOrdersRouteImport } from './routes/_portal.employee.orders'
@@ -233,6 +234,11 @@ const PortalEmployeeDashboardRoute = PortalEmployeeDashboardRouteImport.update({
   path: '/employee/dashboard',
   getParentRoute: () => PortalRoute,
 } as any)
+const PortalEmployeeJobsRoute = PortalEmployeeJobsRouteImport.update({
+  id: '/employee/jobs',
+  path: '/employee/jobs',
+  getParentRoute: () => PortalRoute,
+} as any)
 const PortalEmployeeNewOrderRoute = PortalEmployeeNewOrderRouteImport.update({
   id: '/employee/new-order',
   path: '/employee/new-order',
@@ -376,6 +382,7 @@ export interface FileRoutesByFullPath {
   '/cost-control/dashboard': typeof PortalCostControlDashboardRoute
   '/cost-control/notifications': typeof PortalCostControlNotificationsRoute
   '/employee/dashboard': typeof PortalEmployeeDashboardRoute
+  '/employee/jobs': typeof PortalEmployeeJobsRoute
   '/employee/new-order': typeof PortalEmployeeNewOrderRoute
   '/employee/notifications': typeof PortalEmployeeNotificationsRoute
   '/employee/orders': typeof PortalEmployeeOrdersRoute
@@ -430,6 +437,7 @@ export interface FileRoutesByTo {
   '/cost-control/dashboard': typeof PortalCostControlDashboardRoute
   '/cost-control/notifications': typeof PortalCostControlNotificationsRoute
   '/employee/dashboard': typeof PortalEmployeeDashboardRoute
+  '/employee/jobs': typeof PortalEmployeeJobsRoute
   '/employee/new-order': typeof PortalEmployeeNewOrderRoute
   '/employee/notifications': typeof PortalEmployeeNotificationsRoute
   '/employee/orders': typeof PortalEmployeeOrdersRoute
@@ -486,6 +494,7 @@ export interface FileRoutesById {
   '/_portal/cost-control/dashboard': typeof PortalCostControlDashboardRoute
   '/_portal/cost-control/notifications': typeof PortalCostControlNotificationsRoute
   '/_portal/employee/dashboard': typeof PortalEmployeeDashboardRoute
+  '/_portal/employee/jobs': typeof PortalEmployeeJobsRoute
   '/_portal/employee/new-order': typeof PortalEmployeeNewOrderRoute
   '/_portal/employee/notifications': typeof PortalEmployeeNotificationsRoute
   '/_portal/employee/orders': typeof PortalEmployeeOrdersRoute
@@ -542,6 +551,7 @@ export interface FileRouteTypes {
     | '/cost-control/dashboard'
     | '/cost-control/notifications'
     | '/employee/dashboard'
+    | '/employee/jobs'
     | '/employee/new-order'
     | '/employee/notifications'
     | '/employee/orders'
@@ -596,6 +606,7 @@ export interface FileRouteTypes {
     | '/cost-control/dashboard'
     | '/cost-control/notifications'
     | '/employee/dashboard'
+    | '/employee/jobs'
     | '/employee/new-order'
     | '/employee/notifications'
     | '/employee/orders'
@@ -651,6 +662,7 @@ export interface FileRouteTypes {
     | '/_portal/cost-control/dashboard'
     | '/_portal/cost-control/notifications'
     | '/_portal/employee/dashboard'
+    | '/_portal/employee/jobs'
     | '/_portal/employee/new-order'
     | '/_portal/employee/notifications'
     | '/_portal/employee/orders'
@@ -913,6 +925,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PortalEmployeeDashboardRouteImport
       parentRoute: typeof PortalRoute
     }
+    '/_portal/employee/jobs': {
+      id: '/_portal/employee/jobs'
+      path: '/employee/jobs'
+      fullPath: '/employee/jobs'
+      preLoaderRoute: typeof PortalEmployeeJobsRouteImport
+      parentRoute: typeof PortalRoute
+    }
     '/_portal/employee/new-order': {
       id: '/_portal/employee/new-order'
       path: '/employee/new-order'
@@ -1086,6 +1105,7 @@ interface PortalRouteChildren {
   PortalCostControlDashboardRoute: typeof PortalCostControlDashboardRoute
   PortalCostControlNotificationsRoute: typeof PortalCostControlNotificationsRoute
   PortalEmployeeDashboardRoute: typeof PortalEmployeeDashboardRoute
+  PortalEmployeeJobsRoute: typeof PortalEmployeeJobsRoute
   PortalEmployeeNewOrderRoute: typeof PortalEmployeeNewOrderRoute
   PortalEmployeeNotificationsRoute: typeof PortalEmployeeNotificationsRoute
   PortalEmployeeOrdersRoute: typeof PortalEmployeeOrdersRoute
@@ -1138,6 +1158,7 @@ const PortalRouteChildren: PortalRouteChildren = {
   PortalCostControlDashboardRoute: PortalCostControlDashboardRoute,
   PortalCostControlNotificationsRoute: PortalCostControlNotificationsRoute,
   PortalEmployeeDashboardRoute: PortalEmployeeDashboardRoute,
+  PortalEmployeeJobsRoute: PortalEmployeeJobsRoute,
   PortalEmployeeNewOrderRoute: PortalEmployeeNewOrderRoute,
   PortalEmployeeNotificationsRoute: PortalEmployeeNotificationsRoute,
   PortalEmployeeOrdersRoute: PortalEmployeeOrdersRoute,

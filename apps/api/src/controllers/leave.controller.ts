@@ -132,7 +132,7 @@ async function findJobClashes(tx: Prisma.TransactionClient, userId: number, from
   });
   return slots.map((s) => ({
     job_id: s.job.id,
-    order_no: s.job.order.order_no,
+    order_no: s.job.order?.order_no ?? null,
     work_details: s.job.work_details,
     status: s.job.status,
     start_date: dayKey(s.job.start_date),
@@ -145,7 +145,7 @@ async function refuseJobClashes(tx: Prisma.TransactionClient, person: { id: numb
   if (jobs.length) {
     throw new HttpError(
       409,
-      `${person.name} is on ${jobs.length === 1 ? "a job" : `${jobs.length} jobs`} over these dates (${jobs.map((j) => j.order_no).join(", ")}). Change the team first, or ${verb} the leave anyway.`,
+      `${person.name} is on ${jobs.length === 1 ? "a job" : `${jobs.length} jobs`} over these dates (${jobs.map((j) => j.order_no ?? "no order yet").join(", ")}). Change the team first, or ${verb} the leave anyway.`,
       { job_conflicts: jobs },
     );
   }

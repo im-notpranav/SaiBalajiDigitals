@@ -117,7 +117,7 @@ async function resolveOvertime(tx: Prisma.TransactionClient, input: OtInput, use
     if (!job || job.status === "CANCELLED") throw new HttpError(400, "Pick a job that is not cancelled.");
     const onJob = new Set(job.members.map((m) => m.user_id));
     const notOnJob = people.filter((p) => !onJob.has(p.id));
-    if (notOnJob.length) throw new HttpError(400, `${notOnJob.map((p) => p.name).join(", ")} is not on the job for ${job.order.order_no}.`);
+    if (notOnJob.length) throw new HttpError(400, `${notOnJob.map((p) => p.name).join(", ")} is not on the job${job.order ? ` for ${job.order.order_no}` : ""}.`);
     csmCodeId = csmCodeId ?? job.csm_code_id;
   }
   if (csmCodeId) {
@@ -317,7 +317,7 @@ export const myOvertime = async (req: Request, res: Response) => {
           minutes: s.minutes,
           duration: s.duration,
           past_midnight: s.past_midnight,
-          order_no: s.work_job?.order.order_no ?? null,
+          order_no: s.work_job?.order?.order_no ?? null,
           remarks: s.remarks,
           status: s.status,
           reject_reason: s.reject_reason,

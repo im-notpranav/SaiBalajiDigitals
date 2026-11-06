@@ -325,15 +325,17 @@ const optionalId = z.number().int().positive().optional().nullable();
 
 export const workJobSchema = z
   .object({
-    order_id: z.number().int().positive(),
+    order_id: optionalId,
     store_ids: z.array(z.number().int().positive()).max(50).default([]),
     start_date: dayString,
     end_date: dayString.optional().nullable(),
-    csm_code_id: optionalId,
+    /** The CSM the job is for; an order raised by a CSM supplies it when left out. */
+    csm_user_id: optionalId,
     csm2_code_id: optionalId,
-    work_details: z.string().trim().min(3).max(500),
-    area_id: z.number().int().positive(),
-    vehicle_id: optionalId,
+    work_details: z.string().trim().max(500).optional().nullable(),
+    locality: z.enum(["LOCAL", "NON_LOCAL"]).optional().nullable(),
+    /** Typed or picked; a new name joins the area list. */
+    area_name: z.string().trim().max(100).optional().nullable(),
     route: z.string().trim().max(200).optional().nullable(),
     extra_tag: z.string().trim().max(20).optional().nullable(),
     instructions: z.string().trim().max(1000).optional().nullable(),
@@ -341,8 +343,14 @@ export const workJobSchema = z
     member_ids: z.array(z.number().int().positive()).min(1, "Pick at least one person").max(5),
   })
   .refine((j) => !j.end_date || j.end_date >= j.start_date, { message: "End date cannot be before start date", path: ["end_date"] })
-  .refine((j) => !j.csm2_code_id || j.csm2_code_id !== j.csm_code_id, { message: "CSM 2 must differ from the first CSM", path: ["csm2_code_id"] })
+  .refine((j) => !j.area_name || !!j.locality, { message: "Choose Hyderabad or Non-local for this area", path: ["locality"] })
   .refine((j) => new Set(j.member_ids).size === j.member_ids.length, { message: "The same person is listed twice", path: ["member_ids"] });
+
+/** What a CSM may change on a job they own: its work details, and which of their orders it is on. */
+export const csmJobSchema = z.object({
+  work_details: z.string().trim().max(500).optional().nullable(),
+  order_id: z.number().int().positive().optional(),
+});
 
 export const workJobStatusSchema = z
   .object({

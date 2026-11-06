@@ -69,7 +69,7 @@ export const cellStyles: Record<WorkJobStatus, string> = {
   CANCELLED: "bg-muted text-muted-foreground border-border",
 };
 
-export function LocalityTag({ locality }: { locality: "LOCAL" | "NON_LOCAL" }) {
+export function LocalityTag({ locality }: { locality: "LOCAL" | "NON_LOCAL" | null }) {
   return locality === "NON_LOCAL" ? (
     <span className="rounded-md border border-brand-orange/40 bg-brand-orange/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-orange">
       NL
@@ -100,7 +100,7 @@ export function JobStatusMenu({ job }: { job: WorkJob }) {
       setWorkJobStatus(job.id, status, reason),
     onSuccess: (updated) => {
       toast.success(
-        `Job on ${updated.order.order_no} is now ${JOB_STATUS_LABELS[updated.status].toLowerCase()}`,
+        `Job${updated.order ? ` on ${updated.order.order_no}` : ""} is now ${JOB_STATUS_LABELS[updated.status].toLowerCase()}`,
       );
       setCancelOpen(false);
       setReason("");
@@ -149,7 +149,7 @@ export function JobStatusMenu({ job }: { job: WorkJob }) {
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="break-words">
-              Cancel the job on {job.order.order_no}?
+              Cancel the job{job.order ? ` on ${job.order.order_no}` : ""}?
             </DialogTitle>
             <DialogDescription>
               The team is told and their dates become free. A cancelled job cannot be reopened.

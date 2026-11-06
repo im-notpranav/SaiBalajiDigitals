@@ -10,7 +10,6 @@ import {
   Phone,
   PlayCircle,
   Store,
-  Truck,
   Users,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -37,6 +36,7 @@ import {
   apiErrorMessage,
   fetchMyJobs,
   formatJobDates,
+  jobPlace,
   setMyJobStatus,
   todayIST,
   type MyJob,
@@ -174,15 +174,19 @@ function JobCard({ job, highlight, muted }: { job: MyJob; highlight?: boolean; m
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <div className="font-mono text-sm font-semibold">{job.order.order_no}</div>
-          <div className="truncate text-xs text-muted-foreground" title={job.order.client_name}>
-            {job.order.client_name}
+          <div className="font-mono text-sm font-semibold">
+            {job.order?.order_no ?? "Order to be confirmed"}
           </div>
+          {job.order && (
+            <div className="truncate text-xs text-muted-foreground" title={job.order.client_name}>
+              {job.order.client_name}
+            </div>
+          )}
         </div>
         <JobStatusBadge status={job.status} />
       </div>
 
-      <p className="text-sm font-medium">{job.work_details}</p>
+      <p className="text-sm font-medium">{job.work_details ?? "Work details to follow"}</p>
 
       <dl className="grid gap-2 text-sm">
         <Row icon={CalendarDays}>
@@ -190,7 +194,7 @@ function JobCard({ job, highlight, muted }: { job: MyJob; highlight?: boolean; m
         </Row>
         <Row icon={MapPin}>
           <span className="flex items-center gap-1.5">
-            {job.area.name} <LocalityTag locality={job.locality} />
+            {jobPlace(job) ?? "Location to be confirmed"} <LocalityTag locality={job.locality} />
           </span>
           {job.route && <span className="block text-xs text-muted-foreground">{job.route}</span>}
         </Row>
@@ -219,11 +223,6 @@ function JobCard({ job, highlight, muted }: { job: MyJob; highlight?: boolean; m
                 {m.phone && <CallLink phone={m.phone} name={m.name} />}
               </span>
             ))}
-          </Row>
-        )}
-        {job.vehicle && (
-          <Row icon={Truck}>
-            {job.vehicle.reg_no} · {job.vehicle.type}
           </Row>
         )}
       </dl>
@@ -275,11 +274,8 @@ function JobActions({ job }: { job: MyJob }) {
     mutationFn: (v: { status: "STARTED" | "COMPLETED"; note?: string }) =>
       setMyJobStatus(job.id, v.status, v.note),
     onSuccess: (saved) => {
-      toast.success(
-        saved.status === "STARTED"
-          ? `Job on ${saved.order.order_no} started`
-          : `Job on ${saved.order.order_no} marked completed`,
-      );
+      const on = saved.order ? ` on ${saved.order.order_no}` : "";
+      toast.success(saved.status === "STARTED" ? `Job${on} started` : `Job${on} marked completed`);
       setCompleting(false);
       setNote("");
       qc.invalidateQueries({ queryKey: ["my", "work-jobs"] });
@@ -346,7 +342,9 @@ function JobActions({ job }: { job: MyJob }) {
       <Dialog open={completing} onOpenChange={setCompleting}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Mark the job on {job.order.order_no} completed?</DialogTitle>
+            <DialogTitle>
+              Mark the job{job.order ? ` on ${job.order.order_no}` : ""} completed?
+            </DialogTitle>
             <DialogDescription>
               The CSM and the Operations Manager are told straight away.
             </DialogDescription>

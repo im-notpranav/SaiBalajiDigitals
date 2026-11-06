@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import type { Prisma, WorkJobStatus } from "@prisma/client";
 import { prisma } from "../utils/prisma";
-import { workJobSchema, workJobStatusSchema, myJobStatusSchema, dayQuery } from "../utils/validators";
+import { csmJobSchema, workJobSchema, workJobStatusSchema, myJobStatusSchema, dayQuery } from "../utils/validators";
 import { sanitizeZodErrors } from "../utils/sanitize-errors";
 import { FIELD_ROLES, isFieldRole } from "../utils/roles";
 import { notifyUser } from "../services/notifications.service";
@@ -18,8 +18,10 @@ import {
   findLeaveClashes,
   gridLabel,
   isOverlapViolation,
+  jobPlace,
   lockPeople,
   lockRows,
+  onOrder,
   parseDay,
   teamLimitErrors,
   todayIST,
@@ -28,10 +30,10 @@ import {
 /**
  * Field work jobs: the Operation Manager's replacement for the old Task Log sheet.
  *
- * A job belongs to one order, runs over whole days, and carries a team of Pasters,
- * Helpers and a Driver. Nobody may be booked on two overlapping jobs unless the job says
- * "Allow 2nd job" — checked here for a readable answer, and enforced again by an exclusion
- * constraint in the database so two managers saving at once cannot both win.
+ * A job runs over whole days and carries a team of Pasters, Helpers and a Driver. Its order,
+ * location and work details may come later. Nobody may be booked on two overlapping jobs
+ * unless the job says "Allow 2nd job" — checked here for a readable answer, and enforced again
+ * by an exclusion constraint in the database so two managers saving at once cannot both win.
  */
 
 class HttpError extends Error {
@@ -43,7 +45,7 @@ class HttpError extends Error {
 const jobInclude = {
   order: { select: { id: true, order_no: true, client_name: true, status: true, created_by: true, creator_name: true } },
   area: { select: { id: true, name: true, locality: true } },
-  vehicle: { select: { id: true, reg_no: true, type: true } },
+  csmUser:{ select: { id: true, name: true } },
   csmCode: { select: { id: true, code: true, kind: true, label: true, user: { select: { id: true, name: true } } } },
   csm2Code: { select: { id: true, code: true, kind: true, label: true, user: { select: { id: true, name: true } } } },
   creator: { select: { id: true, name: true } },
@@ -74,7 +76,7 @@ export function serializeJob(job: JobRow) {
     label: gridLabel(job),
     order: job.order,
     area: job.area,
-    vehicle: job.vehicle,
+    csm: job.csmUser,
     csm_code: job.csmCode,
     csm2_code: job.csm2Code,
     creator: job.creator,
@@ -114,6 +116,26 @@ async function withAudit<T>(userId: number, fn: (tx: Prisma.TransactionClient) =
   });
 }
 
+/** A payment request belongs to both a job and its order, so such a job stays on that order. */
+async function assertOrderCanChange(tx: Prisma.TransactionClient, jobId: number, from: number | null, to: number | null) {
+  if (!from || from === to) return;
+  const requests = await tx.paymentRequest.count({ where: { work_job_id: jobId } });
+  if (requests) throw new HttpError(400, "This job has payment requests on its order, so it cannot move to another order.");
+}
+
+/**
+ * The area with this name whatever its case, added to the list when new. A name no longer in
+ * use comes back into the list, since someone is using it again.
+ */
+async function areaNamed(tx: Prisma.TransactionClient, name: string, locality: "LOCAL" | "NON_LOCAL") {
+  const find = () => tx.area.findFirst({ where: { name: { equals: name, mode: "insensitive" } } });
+  const found = await find();
+  if (found) return found.is_active ? found : tx.area.update({ where: { id: found.id }, data: { is_active: true } });
+  // skipDuplicates: two managers typing the same new name at once share one row.
+  await tx.area.createMany({ data: [{ name, locality }], skipDuplicates: true });
+  return (await find())!;
+}
+
 /**
  * Check a create/edit payload against the database and turn it into the values to store.
  * Throws HttpError with a message a manager can act on.
@@ -133,31 +155,34 @@ async function resolveJobInput(
     throw new HttpError(400, `A job can run at most ${MAX_JOB_DAYS} days. Split longer work into several jobs.`);
   }
 
-  const order = await tx.order.findUnique({ where: { id: input.order_id }, select: { id: true, order_no: true, client_name: true, created_by: true } });
-  if (!order) throw new HttpError(400, "That order does not exist.");
+  const order = input.order_id
+    ? await tx.order.findUnique({ where: { id: input.order_id }, select: { id: true, order_no: true, client_name: true, created_by: true } })
+    : null;
+  if (input.order_id && !order) throw new HttpError(400, "That order does not exist.");
 
   if (input.store_ids.length) {
+    if (!order) throw new HttpError(400, "Pick the order before choosing its stores.");
     const stores = await tx.orderStore.findMany({ where: { id: { in: input.store_ids }, order_id: order.id }, select: { id: true } });
     if (stores.length !== new Set(input.store_ids).size) throw new HttpError(400, "Some of the chosen stores are not on this order.");
   }
 
-  const area = await tx.area.findUnique({ where: { id: input.area_id } });
-  if (!area || !area.is_active) throw new HttpError(400, "Pick an active area.");
+  const area = input.area_name ? await areaNamed(tx, input.area_name, input.locality!) : null;
 
-  if (input.vehicle_id) {
-    const vehicle = await tx.vehicle.findUnique({ where: { id: input.vehicle_id } });
-    if (!vehicle || !vehicle.is_active) throw new HttpError(400, "Pick an active vehicle.");
+  // The CSM chosen on the form, else the CSM who raised the order.
+  let csmUserId = input.csm_user_id ?? null;
+  if (!csmUserId && order?.created_by) {
+    const creator = await tx.user.findUnique({ where: { id: order.created_by }, select: { role: true } });
+    if (creator?.role === "CSM") csmUserId = order.created_by;
   }
+  if (!csmUserId) throw new HttpError(400, "Pick the CSM for this job.");
+  const csm = await tx.user.findUnique({ where: { id: csmUserId }, select: { role: true, is_active: true } });
+  if (csm?.role !== "CSM" || !csm.is_active) throw new HttpError(400, "Pick an active CSM.");
+  const ownCode = await tx.csmCode.findFirst({ where: { user_id: csmUserId, kind: "CSM", is_active: true }, orderBy: { code: "asc" } });
 
-  // Default the CSM code to the one linked to the CSM who raised the order.
-  let csmCodeId = input.csm_code_id ?? null;
-  if (!csmCodeId && order.created_by) {
-    const own = await tx.csmCode.findFirst({ where: { user_id: order.created_by, kind: "CSM", is_active: true }, orderBy: { code: "asc" } });
-    csmCodeId = own?.id ?? null;
-  }
-  for (const id of [csmCodeId, input.csm2_code_id].filter(Boolean) as number[]) {
-    const code = await tx.csmCode.findUnique({ where: { id } });
+  if (input.csm2_code_id) {
+    const code = await tx.csmCode.findUnique({ where: { id: input.csm2_code_id } });
     if (!code || !code.is_active) throw new HttpError(400, "Pick an active CSM code.");
+    if (code.id === ownCode?.id) throw new HttpError(400, "The second CSM code must differ from the first CSM's.");
   }
 
   const people = await tx.user.findMany({
@@ -192,7 +217,7 @@ async function resolveJobInput(
     const conflicts = await findConflicts(tx, { userIds: input.member_ids, start, end, excludeJobId });
     if (conflicts.length) {
       const names = [...new Set(conflicts.map((c) => c.name))].join(", ");
-      throw new HttpError(409, `${names} already ${conflicts.length === 1 ? "has" : "have"} work on these dates. Change the team or dates, or tick "Allow 2nd job".`, { conflicts });
+      throw new HttpError(409, `${names} already ${conflicts.length === 1 ? "has" : "have"} work on these dates. Change the team or dates, or book them anyway.`, { conflicts });
     }
   }
 
@@ -203,15 +228,15 @@ async function resolveJobInput(
     start,
     end,
     data: {
-      order_id: order.id,
+      order_id: order?.id ?? null,
       start_date: parseDay(start),
       end_date: parseDay(end),
-      csm_code_id: csmCodeId,
+      csm_user_id: csmUserId,
+      csm_code_id: ownCode?.id ?? null,
       csm2_code_id: input.csm2_code_id ?? null,
-      work_details: input.work_details,
-      area_id: area.id,
-      locality: area.locality,
-      vehicle_id: input.vehicle_id ?? null,
+      work_details: input.work_details || null,
+      area_id: area?.id ?? null,
+      locality: input.locality ?? null,
       route: input.route || null,
       extra_tag: input.extra_tag ? input.extra_tag.toUpperCase() : null,
       instructions: input.instructions || null,
@@ -223,10 +248,10 @@ async function resolveJobInput(
 
 /** Plain-language summary for notifications: "ORD260123 · Big C Kurnool board fixing · Kurnool · 21–23 Oct". */
 function jobSummary(job: JobBrief) {
-  return `${job.order.order_no} · ${job.work_details} · ${job.area.name} · ${jobWhen(job)}`;
+  return [job.order?.order_no, job.work_details, jobPlace(job), jobWhen(job)].filter(Boolean).join(" · ");
 }
 
-type JobBrief = { id: number; work_details: string; area: { name: string }; start_date: Date; end_date: Date; order: { id: number; order_no: string } };
+type JobBrief = { id: number; work_details: string | null; area: { name: string } | null; locality: string | null; start_date: Date; end_date: Date; order: { id: number; order_no: string } | null };
 
 /** "21 Oct" or "21 Oct – 23 Oct". */
 function jobWhen(job: Pick<JobBrief, "start_date" | "end_date">) {
@@ -235,16 +260,19 @@ function jobWhen(job: Pick<JobBrief, "start_date" | "end_date">) {
 }
 
 /** Order number, work, area and dates: the shared variables of the field-staff WhatsApp templates. */
-const jobVars = (job: JobBrief) => [job.order.order_no, job.work_details, job.area.name, jobWhen(job)];
-const jobRef = (job: JobBrief) => ({ type: "work_job" as const, id: job.id, orderId: job.order.id });
+const jobVars = (job: JobBrief) => [orderVar(job), workVar(job), placeVar(job), jobWhen(job)];
+const jobRef = (job: JobBrief) => ({ type: "work_job" as const, id: job.id, orderId: job.order?.id ?? null });
+const orderVar = (job: JobBrief) => job.order?.order_no ?? "order to be confirmed";
+const workVar = (job: JobBrief) => job.work_details ?? "details to follow";
+const placeVar = (job: JobBrief) => jobPlace(job) ?? "location to be confirmed";
 
 /** Tell field staff about their jobs (no order link: they have no order page to open). */
 async function notifyPeople(userIds: number[], title: string, body: string, kind = "info") {
   await Promise.all(userIds.map((id) => notifyUser(id, title, body, kind, null).catch((e) => console.error("notify failed", e))));
 }
 
-/** The CSM who should hear about a job: the code's linked user, else whoever raised the order. */
-const csmUserOf = (job: JobRow) => job.csmCode?.user?.id ?? job.order.created_by ?? null;
+/** The CSM who should hear about a job: the one on the job, else the code's user, else whoever raised the order. */
+const csmUserOf = (job: JobRow) => job.csm_user_id ?? job.csmCode?.user?.id ?? job.order?.created_by ?? null;
 
 // ---------------------------------------------------------------------------
 // List / read
@@ -269,6 +297,8 @@ export const listJobs = async (req: Request, res: Response) => {
       where.OR = [{ csm_code_id: id }, { csm2_code_id: id }];
     }
     if (req.query.locality === "LOCAL" || req.query.locality === "NON_LOCAL") where.locality = req.query.locality;
+    if (req.query.locality === "NOT_SET") where.locality = null;
+    if (req.query.area) where.area = { name: { equals: String(req.query.area), mode: "insensitive" } };
     if (req.query.order_id) where.order_id = parseId(req.query.order_id);
     if (req.query.q) {
       const q = String(req.query.q);
@@ -333,16 +363,16 @@ export const createJob = async (req: Request, res: Response) => {
       });
     });
 
-    await notifyPeople(job.members.map((m) => m.user_id), `New job on ${job.order.order_no}`, jobSummary(job));
+    await notifyPeople(job.members.map((m) => m.user_id), `New job${onOrder(job)}`, jobSummary(job));
     await queueWhatsAppAfter("JOB_ASSIGNED", job.members.map((m) => m.user_id), jobVars(job), jobRef(job));
     const csm = csmUserOf(job);
     if (csm) {
       const team = job.members.map((m) => m.user.name).join(", ");
-      await notifyUser(csm, `Team assigned for ${job.order.order_no}`, `${jobSummary(job)} — ${team}`, "info", job.order.id).catch(() => {});
+      await notifyUser(csm, `Team assigned${job.order ? ` for ${job.order.order_no}` : ""}`, `${jobSummary(job)} — ${team}`, "info", job.order?.id ?? null).catch(() => {});
       await queueWhatsAppAfter(
         "JOB_UPDATE",
         [csm],
-        [job.order.order_no, job.work_details, "assigned", `${job.area.name}, ${jobWhen(job)}. Team: ${team || "none yet"}`],
+        [orderVar(job), workVar(job), "assigned", `${placeVar(job)}, ${jobWhen(job)}. Team: ${team || "none yet"}`],
         jobRef(job),
       );
     }
@@ -388,16 +418,17 @@ export const updateJob = async (req: Request, res: Response) => {
       await tx.workJobStore.deleteMany({ where: { job_id: id } });
       if (r.store_ids.length) await tx.workJobStore.createMany({ data: r.store_ids.map((order_store_id) => ({ job_id: id, order_store_id })) });
 
+      await assertOrderCanChange(tx, id, current.order_id, r.data.order_id);
       const job = await tx.workJob.update({ where: { id }, data: r.data, include: jobInclude });
       return { job, added, removed };
     });
 
     if (added.length) {
-      await notifyPeople(added, `New job on ${job.order.order_no}`, jobSummary(job));
+      await notifyPeople(added, `New job${onOrder(job)}`, jobSummary(job));
       await queueWhatsAppAfter("JOB_ASSIGNED", added, jobVars(job), jobRef(job));
     }
     if (removed.length) {
-      await notifyPeople(removed, `Removed from the job on ${job.order.order_no}`, `You are no longer on ${jobSummary(job)}.`, "warning");
+      await notifyPeople(removed, `Removed from the job${onOrder(job)}`, `You are no longer on ${jobSummary(job)}.`, "warning");
       await queueWhatsAppAfter("JOB_REMOVED", removed, jobVars(job), jobRef(job));
     }
     return res.status(200).json(serializeJob(job));
@@ -463,16 +494,16 @@ export const setJobStatus = async (req: Request, res: Response) => {
     });
 
     if (status === "CANCELLED") {
-      await notifyPeople(job.members.map((m) => m.user_id), `Job on ${job.order.order_no} cancelled`, `${jobSummary(job)}. Reason: ${reason}`, "warning");
+      await notifyPeople(job.members.map((m) => m.user_id), `Job${onOrder(job)} cancelled`, `${jobSummary(job)}. Reason: ${reason}`, "warning");
       await queueWhatsAppAfter("JOB_CANCELLED", job.members.map((m) => m.user_id), [...jobVars(job), reason], jobRef(job));
     }
     const csm = csmUserOf(job);
     if (csm && (status === "COMPLETED" || status === "HOLD" || status === "CANCELLED" || (status === "STARTED" && from === "ASSIGNED"))) {
-      await notifyUser(csm, `Job on ${job.order.order_no} ${status === "HOLD" ? "on hold" : status.toLowerCase()}`, jobSummary(job), status === "COMPLETED" ? "success" : "info", job.order.id).catch(() => {});
+      await notifyUser(csm, `Job${onOrder(job)} ${status === "HOLD" ? "on hold" : status.toLowerCase()}`, jobSummary(job), status === "COMPLETED" ? "success" : "info", job.order?.id ?? null).catch(() => {});
       await queueWhatsAppAfter(
         "JOB_UPDATE",
         [csm],
-        [job.order.order_no, job.work_details, status === "HOLD" ? "on hold" : status.toLowerCase(), reason || `${job.area.name}, ${jobWhen(job)}`],
+        [orderVar(job), workVar(job), status === "HOLD" ? "on hold" : status.toLowerCase(), reason || `${placeVar(job)}, ${jobWhen(job)}`],
         jobRef(job),
       );
     }
@@ -527,6 +558,96 @@ export const orderOptions = async (req: Request, res: Response) => {
 
 const staffSelect = { id: true, name: true, role: true, phone: true, emp_code: true } as const;
 
+/** Active CSMs, for the job form's dropdown. */
+export const csmOptions = async (_req: Request, res: Response) => {
+  try {
+    const csms = await prisma.user.findMany({ where: { role: "CSM", is_active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } });
+    return res.status(200).json({ csms });
+  } catch (err) {
+    return sendError(res, err);
+  }
+};
+
+/**
+ * The Operation Manager's dashboard. Over a date range: how many jobs run in Hyderabad, in
+ * non-local areas, or with no location yet, optionally within one area; and who is free on
+ * every one of those days. Everyone on any job in the range counts as busy, whatever its area.
+ */
+export const overview = async (req: Request, res: Response) => {
+  try {
+    const from = dayQuery.safeParse(req.query.from).success ? String(req.query.from) : todayIST();
+    const to = dayQuery.safeParse(req.query.to).success && String(req.query.to) >= from ? String(req.query.to) : from;
+    const area = String(req.query.area ?? "").trim().toLowerCase();
+    const [staff, jobs, leave] = await Promise.all([
+      prisma.user.findMany({ where: { role: { in: [...FIELD_ROLES] }, is_active: true }, select: { id: true, name: true, role: true, emp_code: true }, orderBy: { name: "asc" } }),
+      prisma.workJob.findMany({
+        where: { status: { not: "CANCELLED" }, start_date: { lte: parseDay(to) }, end_date: { gte: parseDay(from) } },
+        select: { locality: true, area: { select: { name: true } }, members: { select: { user_id: true } } },
+      }),
+      prisma.leaveRecord.findMany({
+        where: { cancelled_at: null, status: "APPROVED", from_date: { lte: parseDay(to) }, to_date: { gte: parseDay(from) } },
+        select: { user_id: true },
+      }),
+    ]);
+    const unavailable = new Set([...leave.map((l) => l.user_id), ...jobs.flatMap((j) => j.members.map((m) => m.user_id))]);
+    const free = (role: string) => staff.filter((s) => s.role === role && !unavailable.has(s.id));
+    const shown = area ? jobs.filter((j) => j.area?.name.toLowerCase() === area) : jobs;
+    return res.status(200).json({
+      from,
+      to,
+      jobs: {
+        total: shown.length,
+        LOCAL: shown.filter((j) => j.locality === "LOCAL").length,
+        NON_LOCAL: shown.filter((j) => j.locality === "NON_LOCAL").length,
+        NOT_SET: shown.filter((j) => !j.locality).length,
+      },
+      free: { PASTER: free("PASTER"), HELPER: free("HELPER"), DRIVER: free("DRIVER") },
+      areas: [...new Set(jobs.flatMap((j) => (j.area ? [j.area.name] : [])))].sort((a, b) => a.localeCompare(b)),
+    });
+  } catch (err) {
+    return sendError(res, err);
+  }
+};
+
+/** A job with its order's stores and items, for reading from the grid. Rates and amounts stay out. */
+export const jobDetails = async (req: Request, res: Response) => {
+  try {
+    const job = await prisma.workJob.findUnique({ where: { id: parseId(req.params.id) }, include: jobInclude });
+    if (!job) return res.status(404).json({ message: "Job not found" });
+    const stores = job.order_id
+      ? await prisma.orderStore.findMany({
+          where: { order_id: job.order_id },
+          orderBy: { s_no: "asc" },
+          select: {
+            id: true,
+            s_no: true,
+            store_name: true,
+            location: true,
+            items: {
+              orderBy: { s_no: "asc" },
+              select: { id: true, s_no: true, media: true, width_inches: true, height_inches: true, qty: true, total_sft: true },
+            },
+          },
+        })
+      : [];
+    return res.status(200).json({
+      job: serializeJob(job),
+      order_stores: stores.map((s) => ({
+        ...s,
+        items: s.items.map((i) => ({
+          ...i,
+          width_inches: Number(i.width_inches),
+          height_inches: Number(i.height_inches),
+          qty: Number(i.qty),
+          total_sft: Number(i.total_sft),
+        })),
+      })),
+    });
+  } catch (err) {
+    return sendError(res, err);
+  }
+};
+
 /** One day: who is free, who is on which job, and every job running that day. */
 export const dailyBoard = async (req: Request, res: Response) => {
   try {
@@ -542,11 +663,11 @@ export const dailyBoard = async (req: Request, res: Response) => {
       prisma.leaveRecord.findMany({ where: { cancelled_at: null, status: "APPROVED", from_date: { lte: day }, to_date: { gte: day } } }),
     ]);
     const leaveByUser = new Map(leave.map((l) => [l.user_id, { id: l.id, from_date: dayKey(l.from_date), to_date: dayKey(l.to_date), reason: l.reason }]));
-    const jobsByUser = new Map<number, { job_id: number; order_no: string; label: string }[]>();
+    const jobsByUser = new Map<number, { job_id: number; order_no: string | null; label: string }[]>();
     for (const j of jobs) {
       for (const m of j.members) {
         const list = jobsByUser.get(m.user_id) ?? [];
-        list.push({ job_id: j.id, order_no: j.order.order_no, label: gridLabel(j) });
+        list.push({ job_id: j.id, order_no: j.order?.order_no ?? null, label: gridLabel(j) });
         jobsByUser.set(m.user_id, list);
       }
     }
@@ -586,7 +707,13 @@ export const weeklyGrid = async (req: Request, res: Response) => {
       prisma.user.findMany({ where: { role: { in: [...FIELD_ROLES] }, is_active: true }, select: staffSelect, orderBy: { name: "asc" } }),
       prisma.workJob.findMany({
         where: { status: { not: "CANCELLED" }, start_date: { lte: parseDay(to) }, end_date: { gte: parseDay(from) } },
-        include: { csmCode: { select: { code: true } }, csm2Code: { select: { code: true } }, order: { select: { order_no: true } }, members: { select: { user_id: true } } },
+        include: {
+          csmCode: { select: { code: true } },
+          csm2Code: { select: { code: true } },
+          csmUser: { select: { name: true } },
+          order: { select: { order_no: true } },
+          members: { select: { user_id: true, slot_role: true, user: { select: { name: true } } } },
+        },
       }),
       prisma.leaveRecord.findMany({ where: { cancelled_at: null, status: "APPROVED", from_date: { lte: parseDay(to) }, to_date: { gte: parseDay(from) } } }),
     ]);
@@ -597,7 +724,7 @@ export const weeklyGrid = async (req: Request, res: Response) => {
       }
     }
 
-    type Cell = { job_id: number; order_no: string; label: string; status: WorkJobStatus };
+    type Cell = { job_id: number; order_no: string | null; label: string; status: WorkJobStatus };
     const cells = new Map<string, Cell[]>(); // `${user}|${date}`
     for (const j of jobs) {
       const s = dayKey(j.start_date) < from ? from : dayKey(j.start_date);
@@ -606,7 +733,7 @@ export const weeklyGrid = async (req: Request, res: Response) => {
         for (const m of j.members) {
           const key = `${m.user_id}|${d}`;
           const list = cells.get(key) ?? [];
-          list.push({ job_id: j.id, order_no: j.order.order_no, label: gridLabel(j), status: j.status });
+          list.push({ job_id: j.id, order_no: j.order?.order_no ?? null, label: gridLabel(j), status: j.status });
           cells.set(key, list);
         }
       }
@@ -628,6 +755,13 @@ export const weeklyGrid = async (req: Request, res: Response) => {
       dates,
       rows,
       free: dates.map((_, i) => ({ PASTER: freeCount("PASTER", i), HELPER: freeCount("HELPER", i), DRIVER: freeCount("DRIVER", i) })),
+      // What a cell's box shows, once per job: a person's every day repeats the same job.
+      jobs: Object.fromEntries(
+        jobs.map((j) => {
+          const names = (role: string) => j.members.filter((m) => m.slot_role === role).map((m) => m.user.name);
+          return [j.id, { order_no: j.order?.order_no ?? null, csm: j.csmUser?.name ?? null, pasters: names("PASTER"), helpers: names("HELPER"), drivers: names("DRIVER") }];
+        }),
+      ),
     });
   } catch (err) {
     return sendError(res, err);
@@ -658,7 +792,7 @@ export const myJobs = async (req: Request, res: Response) => {
         const csmId = csmUserOf(j);
         return {
           ...s,
-          order: { order_no: j.order.order_no, client_name: j.order.client_name },
+          order: j.order ? { order_no: j.order.order_no, client_name: j.order.client_name } : null,
           csm: csmId ? (csmById.get(csmId) ?? null) : null,
         };
       }),
@@ -705,17 +839,101 @@ export const myJobStatus = async (req: Request, res: Response) => {
 
     // The CSM and whoever assigned the job hear about it; the order link is for them.
     const who = job.members.find((m) => m.user_id === me)?.user.name ?? "A team member";
-    const title = `Job on ${job.order.order_no} ${status === "STARTED" ? "started" : "completed"} by ${who}`;
+    const title = `Job${onOrder(job)} ${status === "STARTED" ? "started" : "completed"} by ${who}`;
     const body = `${jobSummary(job)}${status === "COMPLETED" && note ? ` — "${note}"` : ""}`;
     const tell = [...new Set([csmUserOf(job), job.created_by].filter((u): u is number => !!u && u !== me))];
-    await Promise.all(tell.map((u) => notifyUser(u, title, body, status === "COMPLETED" ? "success" : "info", job.order.id).catch(() => {})));
+    await Promise.all(tell.map((u) => notifyUser(u, title, body, status === "COMPLETED" ? "success" : "info", job.order?.id ?? null).catch(() => {})));
     await queueWhatsAppAfter(
       "JOB_UPDATE",
       tell,
-      [job.order.order_no, job.work_details, status === "STARTED" ? "started" : "completed", `Marked by ${who}${status === "COMPLETED" && note ? `: ${note}` : ""}`],
+      [orderVar(job), workVar(job), status === "STARTED" ? "started" : "completed", `Marked by ${who}${status === "COMPLETED" && note ? `: ${note}` : ""}`],
       jobRef(job),
     );
 
+    return res.status(200).json(serializeJob(job));
+  } catch (err) {
+    return sendError(res, err);
+  }
+};
+
+// ---------------------------------------------------------------------------
+// CSMs: the jobs they are the CSM for
+// ---------------------------------------------------------------------------
+
+/** Jobs for this CSM: named on the job, or on an order they raised. */
+const csmJobsWhere = (userId: number): Prisma.WorkJobWhereInput => ({
+  OR: [{ csm_user_id: userId }, { csm_user_id: null, order: { created_by: userId } }],
+});
+
+/** Everything not cancelled from two weeks back on. */
+export const csmJobs = async (req: Request, res: Response) => {
+  try {
+    const jobs = await prisma.workJob.findMany({
+      where: { AND: [csmJobsWhere(req.user!.id), { status: { not: "CANCELLED" }, end_date: { gte: parseDay(addDays(todayIST(), -14)) } }] },
+      include: jobInclude,
+      orderBy: [{ start_date: "asc" }, { id: "asc" }],
+    });
+    return res.status(200).json({ jobs: jobs.map(serializeJob) });
+  } catch (err) {
+    return sendError(res, err);
+  }
+};
+
+/** The CSM's own orders, to link a job to. */
+export const csmOrderOptions = async (req: Request, res: Response) => {
+  try {
+    const q = String(req.query.q ?? "").trim().slice(0, 60);
+    const orders = await prisma.order.findMany({
+      where: {
+        created_by: req.user!.id,
+        ...(q ? { OR: [{ order_no: { contains: q, mode: "insensitive" } }, { client_name: { contains: q, mode: "insensitive" } }] } : {}),
+      },
+      select: { id: true, order_no: true, client_name: true },
+      orderBy: { id: "desc" },
+      take: 20,
+    });
+    return res.status(200).json({ orders });
+  } catch (err) {
+    return sendError(res, err);
+  }
+};
+
+/**
+ * A CSM adds a job's work details, or links it to one of their own orders. Anyone else, and
+ * any job that is not theirs, gets a 404, so job ids cannot be probed.
+ */
+export const updateCsmJob = async (req: Request, res: Response) => {
+  try {
+    const id = parseId(req.params.id);
+    const parsed = csmJobSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parsed.error) });
+    const { work_details, order_id } = parsed.data;
+    const me = req.user!.id;
+
+    const { job, detailsChanged } = await withAudit(me, async (tx) => {
+      await lockRows(tx, "WorkJob", [id]);
+      const current = await tx.workJob.findFirst({ where: { AND: [{ id }, csmJobsWhere(me)] } });
+      if (!current) throw new HttpError(404, "Job not found");
+      if (!EDITABLE_STATUSES.includes(current.status)) {
+        throw new HttpError(400, `A ${current.status.toLowerCase()} job cannot be edited.`);
+      }
+      const data: Prisma.WorkJobUncheckedUpdateInput = {};
+      if (work_details !== undefined) data.work_details = work_details || null;
+      if (order_id !== undefined && order_id !== current.order_id) {
+        const order = await tx.order.findFirst({ where: { id: order_id, created_by: me }, select: { id: true } });
+        if (!order) throw new HttpError(400, "Pick one of your own orders.");
+        await assertOrderCanChange(tx, id, current.order_id, order.id);
+        data.order_id = order.id;
+        // The stores covered belonged to the old order.
+        await tx.workJobStore.deleteMany({ where: { job_id: id } });
+      }
+      const job = await tx.workJob.update({ where: { id }, data, include: jobInclude });
+      return { job, detailsChanged: work_details !== undefined && (work_details || null) !== current.work_details };
+    });
+
+    if (detailsChanged) {
+      await notifyPeople(job.members.map((m) => m.user_id), `Work details updated${onOrder(job)}`, jobSummary(job));
+    }
     return res.status(200).json(serializeJob(job));
   } catch (err) {
     return sendError(res, err);

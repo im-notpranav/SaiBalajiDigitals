@@ -8,6 +8,9 @@ import {
   orderOptions,
   dailyBoard,
   weeklyGrid,
+  csmOptions,
+  overview,
+  jobDetails,
 } from "../controllers/work-jobs.controller";
 import { authenticate, authorize } from "../middlewares/auth.middleware";
 import { ALLOCATION_MANAGER_ROLES } from "../utils/roles";
@@ -22,10 +25,13 @@ router.use(authorize(...ALLOCATION_MANAGER_ROLES));
 router.get("/order-options", orderOptions);
 router.get("/board", dailyBoard);
 router.get("/grid", weeklyGrid);
+router.get("/csm-options", csmOptions);
+router.get("/overview", overview);
 
 router.get("/", listJobs);
 router.post("/", createJob);
 router.get("/:id", getJob);
+router.get("/:id/details", jobDetails);
 router.put("/:id", updateJob);
 router.put("/:id/status", setJobStatus);
 

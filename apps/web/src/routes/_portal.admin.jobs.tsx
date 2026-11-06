@@ -29,6 +29,7 @@ import {
   addDays,
   fetchWorkJobs,
   formatJobDates,
+  jobPlace,
   todayIST,
   type WorkJob,
   type WorkJobStatus,
@@ -75,7 +76,7 @@ function JobsPage() {
     <>
       <PageHeader
         title="Field Jobs"
-        description="Assign installation work to Pasters, Helpers and Drivers. Nobody can be double-booked unless the job allows a 2nd job."
+        description="Assign installation work to Pasters, Helpers and Drivers. Someone already booked can be picked, with a warning."
         crumbs={[{ label: "Work Allocation" }, { label: "Field Jobs" }]}
         actions={
           <Button className="rounded-xl" onClick={() => setDialog({ job: null })}>
@@ -133,9 +134,10 @@ function JobsPage() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL}>Local + NL</SelectItem>
-            <SelectItem value="LOCAL">Local only</SelectItem>
-            <SelectItem value="NON_LOCAL">Non-local only</SelectItem>
+            <SelectItem value={ALL}>All locations</SelectItem>
+            <SelectItem value="LOCAL">Hyderabad</SelectItem>
+            <SelectItem value="NON_LOCAL">Non-local</SelectItem>
+            <SelectItem value="NOT_SET">Not set</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -167,14 +169,21 @@ function JobsPage() {
                 <TableRow key={j.id} className={j.status === "CANCELLED" ? "opacity-60" : ""}>
                   <TableCell>
                     <div className="whitespace-nowrap font-mono font-semibold">
-                      {j.order.order_no}
+                      {j.order?.order_no ?? "No order"}
                     </div>
-                    <div
-                      className="max-w-[12rem] truncate text-xs text-muted-foreground"
-                      title={j.order.client_name}
-                    >
-                      {j.order.client_name}
-                    </div>
+                    {j.order && (
+                      <div
+                        className="max-w-[12rem] truncate text-xs text-muted-foreground"
+                        title={j.order.client_name}
+                      >
+                        {j.order.client_name}
+                      </div>
+                    )}
+                    {j.csm && (
+                      <div className="max-w-[12rem] truncate text-xs text-muted-foreground">
+                        CSM: {j.csm.name}
+                      </div>
+                    )}
                     <div className="whitespace-nowrap font-mono text-[11px] text-muted-foreground">
                       {j.label}
                     </div>
@@ -187,7 +196,9 @@ function JobsPage() {
                     </div>
                   </TableCell>
                   <TableCell className="max-w-[16rem]">
-                    <div className="line-clamp-2 text-sm">{j.work_details}</div>
+                    <div className="line-clamp-2 text-sm">
+                      {j.work_details ?? <span className="text-muted-foreground">To follow</span>}
+                    </div>
                     {j.stores.length > 0 && (
                       <div className="text-xs text-muted-foreground">
                         {j.stores.length} store{j.stores.length === 1 ? "" : "s"}
@@ -196,11 +207,9 @@ function JobsPage() {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1.5 whitespace-nowrap">
-                      {j.area.name} <LocalityTag locality={j.locality} />
+                      {jobPlace(j) ?? <span className="text-muted-foreground">Not set</span>}{" "}
+                      <LocalityTag locality={j.locality} />
                     </div>
-                    {j.vehicle && (
-                      <div className="text-xs text-muted-foreground">{j.vehicle.reg_no}</div>
-                    )}
                   </TableCell>
                   <TableCell className="max-w-[14rem] text-sm">
                     <div className="line-clamp-2">{teamLine(j.members)}</div>
@@ -233,7 +242,7 @@ function JobsPage() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      aria-label={`Edit the job on ${j.order.order_no}`}
+                      aria-label={`Edit the job${j.order ? ` on ${j.order.order_no}` : ""}`}
                       disabled={!JOB_EDITABLE.includes(j.status)}
                       onClick={() => setDialog({ job: j })}
                     >

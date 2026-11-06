@@ -11,6 +11,7 @@ import {
   JOB_EDITABLE,
   fetchWorkJobs,
   formatJobDates,
+  jobPlace,
   type FieldRole,
   type WorkJob,
 } from "@/api/allocation";
@@ -100,7 +101,7 @@ export function OrderLinkedWork({
                     <div className="break-words text-sm">{j.work_details}</div>
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1">
-                        {j.area.name} <LocalityTag locality={j.locality} />
+                        {jobPlace(j) ?? "Location not set"} <LocalityTag locality={j.locality} />
                       </span>
                       <span>· {teamCounts(j.members) || "No team"}</span>
                     </div>

@@ -111,6 +111,7 @@ model User {
   workJobsCreated WorkJob[]       @relation("WorkJobCreator")
   workJobsStarted WorkJob[]       @relation("WorkJobStarter")
   workJobsCompleted WorkJob[]     @relation("WorkJobCompleter")
+  workJobsAsCsm   WorkJob[]       @relation("WorkJobCsmUser")
   workJobSlots    WorkJobMember[]
   leaveRecords    LeaveRecord[]   @relation("LeavePerson")
   leaveEntered    LeaveRecord[]   @relation("LeaveCreator")
@@ -412,8 +413,12 @@ model WorkJob {
   /// Legacy W00001… number, only on jobs made before 2026-10-29. A job is referred to by
   /// its order's number; new jobs leave this empty.
   job_no               String?         @unique
-  order_id             Int
-  order                Order           @relation(fields: [order_id], references: [id], onDelete: Restrict)
+  /// Optional: work can be assigned first and linked to its order later.
+  order_id             Int?
+  order                Order?          @relation(fields: [order_id], references: [id], onDelete: Restrict)
+  /// The CSM this job is for. They see it on their job screen and can add work details.
+  csm_user_id          Int?
+  csmUser              User?           @relation("WorkJobCsmUser", fields: [csm_user_id], references: [id], onDelete: SetNull)
   start_date           DateTime        @db.Date
   /// Same as start_date for a one-day job.
   end_date             DateTime        @db.Date
@@ -422,12 +427,13 @@ model WorkJob {
   /// Work shared with a second CSM on the same day.
   csm2_code_id         Int?
   csm2Code             CsmCode?        @relation("WorkJobCsm2", fields: [csm2_code_id], references: [id], onDelete: SetNull)
-  work_details         String
-  area_id              Int
-  area                 Area            @relation(fields: [area_id], references: [id], onDelete: Restrict)
-  /// Copied from the area when the job is saved, so re-classifying an area later does
-  /// not rewrite history.
-  locality             AreaLocality
+  /// Optional: the manager or the CSM may add it later.
+  work_details         String?
+  area_id              Int?
+  area                 Area?           @relation(fields: [area_id], references: [id], onDelete: Restrict)
+  /// Chosen on the job and kept here, so re-classifying an area later does not rewrite
+  /// history. Empty until someone says whether the work is in Hyderabad.
+  locality             AreaLocality?
   vehicle_id           Int?
   vehicle              Vehicle?        @relation(fields: [vehicle_id], references: [id], onDelete: SetNull)
   route                String?
@@ -457,6 +463,7 @@ model WorkJob {
   updated_at           DateTime        @updatedAt
 
   @@index([order_id])
+  @@index([csm_user_id])
   @@index([start_date, end_date])
   @@index([status])
 }

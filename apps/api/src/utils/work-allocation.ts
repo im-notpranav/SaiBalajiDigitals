@@ -46,14 +46,26 @@ export const EDITABLE_STATUSES: WorkJobStatus[] = ["ASSIGNED", "STARTED", "HOLD"
 export const blocksCalendar = (job: { status: WorkJobStatus; allow_double_booking: boolean }) =>
   job.status !== "CANCELLED" && !job.allow_double_booking;
 
-/** Count each role in a team and report any role over its limit. */
+/** Count each role in a team and report any role over its limit, or a missing Paster or Driver. */
 export function teamLimitErrors(roles: string[]): string[] {
   const errors: string[] = [];
   for (const [role, max] of Object.entries(TEAM_LIMITS)) {
     const n = roles.filter((r) => r === role).length;
     if (n > max) errors.push(`A job can have at most ${max} ${role.toLowerCase()}${max === 1 ? "" : "s"} (got ${n}).`);
   }
+  if (!roles.includes("PASTER")) errors.push("Pick a Paster.");
+  if (!roles.includes("DRIVER")) errors.push("Pick a Driver.");
   return errors;
+}
+
+/** " on ORD260123", or nothing for a job with no order yet: "New job on ORD260123". */
+export const onOrder = (job: { order?: { order_no: string } | null }) => (job.order ? ` on ${job.order.order_no}` : "");
+
+/** Where a job is, in words: its area, else Hyderabad or Non-local, else null. */
+export function jobPlace(job: { area?: { name: string } | null; locality?: string | null }): string | null {
+  if (job.area) return job.area.name;
+  if (job.locality) return job.locality === "LOCAL" ? "Hyderabad" : "Non-local";
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -65,7 +77,7 @@ export function gridLabel(job: {
   csmCode?: { code: string } | null;
   csm2Code?: { code: string } | null;
   order?: { order_no: string } | null;
-  locality: string;
+  locality: string | null;
   extra_tag?: string | null;
 }): string {
   let label = job.csmCode?.code ?? job.order?.order_no ?? "Job";
@@ -83,8 +95,8 @@ export interface Conflict {
   user_id: number;
   name: string;
   job_id: number;
-  order_no: string;
-  work_details: string;
+  order_no: string | null;
+  work_details: string | null;
   start_date: string;
   end_date: string;
 }
@@ -116,7 +128,7 @@ export async function findConflicts(
     user_id: r.user_id,
     name: r.user.name,
     job_id: r.job.id,
-    order_no: r.job.order.order_no,
+    order_no: r.job.order?.order_no ?? null,
     work_details: r.job.work_details,
     start_date: dayKey(r.job.start_date),
     end_date: dayKey(r.job.end_date),

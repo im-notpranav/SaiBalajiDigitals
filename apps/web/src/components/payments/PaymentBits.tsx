@@ -425,7 +425,8 @@ export function NewPaymentRequestDialog({
                   <SelectItem value={NONE}>Not for a particular job</SelectItem>
                   {order.jobs.map((j) => (
                     <SelectItem key={j.id} value={String(j.id)}>
-                      {formatJobDates(j.start_date, j.start_date)} · {j.work_details.slice(0, 40)}
+                      {formatJobDates(j.start_date, j.start_date)}
+                      {j.work_details ? ` · ${j.work_details.slice(0, 40)}` : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>

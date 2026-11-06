@@ -59,7 +59,7 @@ export type UpiMethod = "UPI_ID" | "MOBILE";
 export interface PaymentRequest {
   id: number;
   order: { id: number; order_no: string; client_name: string; status: string };
-  work_job: { id: number; work_details: string; start_date: string } | null;
+  work_job: { id: number; work_details: string | null; start_date: string } | null;
   requester: {
     id: number;
     name: string;
@@ -166,7 +166,7 @@ export interface PaymentOrderOption {
   client_name: string;
   status: string;
   eligibility: { eligible: boolean; reason: string };
-  jobs: { id: number; work_details: string; start_date: string; status: string }[];
+  jobs: { id: number; work_details: string | null; start_date: string; status: string }[];
 }
 
 export interface PaymentList {

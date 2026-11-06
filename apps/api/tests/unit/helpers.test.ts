@@ -43,8 +43,14 @@ describe("deriveYY in India time (GAP-D05)", () => {
 describe("work allocation helpers", () => {
   it("caps each role in a team", () => {
     expect(teamLimitErrors(["PASTER", "PASTER", "HELPER", "DRIVER"])).toEqual([]);
-    expect(teamLimitErrors(["DRIVER", "DRIVER"])).toEqual(["A job can have at most 1 driver (got 2)."]);
+    expect(teamLimitErrors(["PASTER", "DRIVER", "DRIVER"])).toEqual(["A job can have at most 1 driver (got 2)."]);
     expect(teamLimitErrors(["PASTER", "PASTER", "PASTER"])[0]).toMatch(/at most 2 pasters \(got 3\)/);
+  });
+
+  it("needs a Paster and a Driver, but no Helper", () => {
+    expect(teamLimitErrors(["PASTER", "DRIVER"])).toEqual([]);
+    expect(teamLimitErrors(["DRIVER"])).toEqual(["Pick a Paster."]);
+    expect(teamLimitErrors(["PASTER", "HELPER"])).toEqual(["Pick a Driver."]);
   });
 
   it("labels grid cells like the old sheet", () => {

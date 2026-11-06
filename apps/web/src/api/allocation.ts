@@ -164,13 +164,14 @@ export interface WorkJob {
   start_date: string;
   end_date: string;
   days: number;
-  work_details: string;
-  locality: AreaLocality;
+  work_details: string | null;
+  locality: AreaLocality | null;
   route: string | null;
   extra_tag: string | null;
   instructions: string | null;
   allow_double_booking: boolean;
   label: string;
+  /** Null until the job is linked to an order. */
   order: {
     id: number;
     order_no: string;
@@ -178,9 +179,9 @@ export interface WorkJob {
     status: string;
     created_by: number | null;
     creator_name: string | null;
-  };
-  area: { id: number; name: string; locality: AreaLocality };
-  vehicle: { id: number; reg_no: string; type: string } | null;
+  } | null;
+  area: { id: number; name: string; locality: AreaLocality } | null;
+  csm: { id: number; name: string } | null;
   csm_code: CodeRef | null;
   csm2_code: CodeRef | null;
   creator: { id: number; name: string } | null;
@@ -201,23 +202,24 @@ export interface JobConflict {
   user_id: number;
   name: string;
   job_id: number;
-  /** A job goes by its order's number. */
-  order_no: string;
-  work_details: string;
+  /** A job goes by its order's number, once it has one. */
+  order_no: string | null;
+  work_details: string | null;
   start_date: string;
   end_date: string;
 }
 
 export interface WorkJobInput {
-  order_id: number;
+  order_id: number | null;
   store_ids: number[];
   start_date: string;
   end_date?: string;
-  csm_code_id?: number | null;
+  csm_user_id: number | null;
   csm2_code_id?: number | null;
-  work_details: string;
-  area_id: number;
-  vehicle_id?: number | null;
+  work_details: string | null;
+  locality: AreaLocality | null;
+  /** Typed or picked; a new name joins the area list. */
+  area_name: string | null;
   route?: string | null;
   extra_tag?: string | null;
   instructions?: string | null;
@@ -243,7 +245,7 @@ export interface StaffBrief {
   phone: string | null;
   emp_code: string | null;
 }
-type JobRef = { job_id: number; order_no: string; label: string };
+type JobRef = { job_id: number; order_no: string | null; label: string };
 
 export interface DailyBoard {
   date: string;
@@ -271,11 +273,50 @@ export interface WeeklyGrid {
   dates: string[];
   rows: (StaffBrief & { days: (JobRef & { status: WorkJobStatus })[][]; leave: boolean[] })[];
   free: Record<FieldRole, number>[];
+  /** What a cell's box shows, by job id. */
+  jobs: Record<number, GridJob>;
 }
 
-export interface MyJob extends Omit<WorkJob, "order"> {
-  order: { order_no: string; client_name: string };
+export interface GridJob {
+  order_no: string | null;
+  csm: string | null;
+  pasters: string[];
+  helpers: string[];
+  drivers: string[];
+}
+
+export interface MyJob extends Omit<WorkJob, "order" | "csm"> {
+  order: { order_no: string; client_name: string } | null;
   csm: { id: number; name: string; phone: string | null } | null;
+}
+
+/** The Operation Manager's dashboard over a date range. */
+export interface JobOverview {
+  from: string;
+  to: string;
+  jobs: { total: number; LOCAL: number; NON_LOCAL: number; NOT_SET: number };
+  free: Record<FieldRole, Pick<StaffBrief, "id" | "name" | "role" | "emp_code">[]>;
+  areas: string[];
+}
+
+/** A job and what its order asks for. Rates and amounts are not sent. */
+export interface JobDetails {
+  job: WorkJob;
+  order_stores: {
+    id: number;
+    s_no: number;
+    store_name: string;
+    location: string | null;
+    items: {
+      id: number;
+      s_no: number;
+      media: string;
+      width_inches: number;
+      height_inches: number;
+      qty: number;
+      total_sft: number;
+    }[];
+  }[];
 }
 
 export type JobFilters = Partial<
@@ -287,6 +328,7 @@ export type JobFilters = Partial<
     | "area_id"
     | "csm_code_id"
     | "locality"
+    | "area"
     | "order_id"
     | "q",
     string
@@ -315,6 +357,19 @@ export const fetchDailyBoard = (date?: string) =>
   apiFetch<DailyBoard>(`/work-jobs/board${qs({ date })}`);
 export const fetchWeeklyGrid = (from?: string, days = 7) =>
   apiFetch<WeeklyGrid>(`/work-jobs/grid${qs({ from, days: String(days) })}`);
+export const fetchCsmOptions = () =>
+  apiFetch<{ csms: { id: number; name: string }[] }>("/work-jobs/csm-options");
+export const fetchJobOverview = (filters: { from: string; to: string; area?: string }) =>
+  apiFetch<JobOverview>(`/work-jobs/overview${qs(filters)}`);
+export const fetchJobDetails = (id: number) => apiFetch<JobDetails>(`/work-jobs/${id}/details`);
+/** A CSM's own jobs: the ones they are the CSM for. */
+export const fetchCsmJobs = () => apiFetch<{ jobs: WorkJob[] }>("/csm-jobs");
+export const fetchCsmOrderOptions = (q: string) =>
+  apiFetch<{ orders: { id: number; order_no: string; client_name: string }[] }>(
+    `/csm-jobs/order-options${qs({ q })}`,
+  );
+export const updateCsmJob = (id: number, data: { work_details?: string | null; order_id?: number }) =>
+  apiFetch<WorkJob>(`/csm-jobs/${id}`, { method: "PATCH", data });
 export const fetchMyJobs = () => apiFetch<{ today: string; jobs: MyJob[] }>("/my/work-jobs");
 /** Field staff: mark their own job started, or completed with an optional note. */
 export const setMyJobStatus = (id: number, status: "STARTED" | "COMPLETED", note?: string) =>
@@ -330,6 +385,17 @@ export function addDays(day: string, n: number): string {
   d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
 }
+
+/** Where a job is, in words: its area, else Hyderabad or Non-local, else null. */
+export function jobPlace(job: Pick<WorkJob, "area" | "locality">): string | null {
+  if (job.area) return job.area.name;
+  return job.locality ? PLACE_LABELS[job.locality] : null;
+}
+
+export const PLACE_LABELS: Record<AreaLocality, string> = {
+  LOCAL: "Hyderabad",
+  NON_LOCAL: "Non-local",
+};
 
 /** "21 Oct" or "21 – 23 Oct" for a job's dates; the year is added outside the current year. */
 export function formatJobDates(start: string, end: string): string {
@@ -391,8 +457,8 @@ export interface LeaveInput {
 /** A job the person is already on, returned when leave would overlap it. */
 export interface LeaveJobClash {
   job_id: number;
-  order_no: string;
-  work_details: string;
+  order_no: string | null;
+  work_details: string | null;
   status: WorkJobStatus;
   start_date: string;
   end_date: string;
@@ -460,7 +526,7 @@ export interface OvertimeEntry {
   hours: number;
   duration: string;
   past_midnight: boolean;
-  work_job: { id: number; work_details: string; order: { order_no: string } } | null;
+  work_job: { id: number; work_details: string | null; order: { order_no: string } | null } | null;
   csm_code: { id: number; code: string } | null;
   remarks: string | null;
   status: OvertimeStatus;

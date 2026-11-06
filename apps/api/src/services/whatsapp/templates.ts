@@ -10,23 +10,23 @@
 export const WA_TEMPLATES = {
   JOB_ASSIGNED: {
     template: "sbd_job_assigned",
-    body: "Hi {{1}}, you are on a new job for order {{2}}: {{3}} at {{4}}, {{5}}. Open My Work in the Sai Balaji app for the details.",
-    vars: ["Order number", "Work", "Area", "Dates"],
+    body: "Hi {{1}}, you are on a new job. Order: {{2}}. Work: {{3}}. Location: {{4}}. Dates: {{5}}. Open My Work in the Sai Balaji app for the details.",
+    vars: ["Order number or 'order to be confirmed'", "Work", "Area", "Dates"],
   },
   JOB_REMOVED: {
     template: "sbd_job_removed",
-    body: "Hi {{1}}, you are no longer on the job for order {{2}}: {{3}} at {{4}}, {{5}}. Please check My Work for your current jobs.",
-    vars: ["Order number", "Work", "Area", "Dates"],
+    body: "Hi {{1}}, you are no longer on this job. Order: {{2}}. Work: {{3}}. Location: {{4}}. Dates: {{5}}. Please check My Work for your current jobs.",
+    vars: ["Order number or 'order to be confirmed'", "Work", "Area", "Dates"],
   },
   JOB_CANCELLED: {
     template: "sbd_job_cancelled",
-    body: "Hi {{1}}, the job for order {{2}}: {{3}} at {{4}}, {{5}} has been cancelled. Reason: {{6}}. Please check My Work for your current jobs.",
-    vars: ["Order number", "Work", "Area", "Dates", "Reason"],
+    body: "Hi {{1}}, this job has been cancelled. Order: {{2}}. Work: {{3}}. Location: {{4}}. Dates: {{5}}. Reason: {{6}}. Please check My Work for your current jobs.",
+    vars: ["Order number or 'order to be confirmed'", "Work", "Area", "Dates", "Reason"],
   },
   JOB_UPDATE: {
     template: "sbd_job_update",
-    body: "Hi {{1}}, the job for order {{2}} ({{3}}) is now {{4}}. Details: {{5}}. Open the Sai Balaji app for more.",
-    vars: ["Order number", "Work", "Status", "Details"],
+    body: "Hi {{1}}, a job is now {{4}}. Order: {{2}}. Work: {{3}}. Details: {{5}}. Open the Sai Balaji app for more.",
+    vars: ["Order number or 'order to be confirmed'", "Work", "Status", "Details"],
   },
   PAYMENT_TO_REVIEW: {
     template: "sbd_payment_to_review",

@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Check, ChevronDown, ChevronsUpDown, Loader2 } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, ChevronsUpDown, Loader2, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -34,19 +33,20 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  FIELD_ROLE_LABELS,
+  PLACE_LABELS,
   apiErrorMessage,
   createWorkJob,
   fetchAreas,
   fetchCsmCodes,
+  fetchCsmOptions,
   fetchFieldStaff,
   fetchOrderOptions,
-  fetchVehicles,
   fetchLeave,
   fetchWorkJobs,
   formatJobDates,
   todayIST,
   updateWorkJob,
+  type AreaLocality,
   type FieldRole,
   type JobConflict,
   type LeaveClash,
@@ -54,15 +54,7 @@ import {
   type WorkJob,
   type WorkJobInput,
 } from "@/api/allocation";
-import { LocalityTag } from "./JobBits";
-import {
-  DEFAULT_NEEDED,
-  TEAM_LIMITS,
-  TEAM_ROLES,
-  TeamStepper,
-  teamComplete,
-  teamShortfall,
-} from "./TeamStepper";
+import { TeamPicker, teamShortfall } from "./TeamPicker";
 
 const NONE = "__none__";
 
@@ -72,17 +64,15 @@ interface Form {
   start_date: string;
   end_date: string;
   work_details: string;
-  area_id: number | null;
-  vehicle_id: number | null;
-  csm_code_id: number | null;
+  locality: AreaLocality | null;
+  area_name: string;
+  csm_user_id: number | null;
   csm2_code_id: number | null;
   member_ids: number[];
-  /** How many of each role the job needs; the team step asks for exactly this many. */
-  needed: Record<FieldRole, number>;
+  helpers_required: boolean;
   route: string;
   extra_tag: string;
   instructions: string;
-  allow_double_booking: boolean;
 }
 
 const blankForm = (start: string, members: number[] = []): Form => ({
@@ -91,20 +81,19 @@ const blankForm = (start: string, members: number[] = []): Form => ({
   start_date: start,
   end_date: start,
   work_details: "",
-  area_id: null,
-  vehicle_id: null,
-  csm_code_id: null,
+  locality: null,
+  area_name: "",
+  csm_user_id: null,
   csm2_code_id: null,
   member_ids: members,
-  needed: { ...DEFAULT_NEEDED },
+  helpers_required: false,
   route: "",
   extra_tag: "",
   instructions: "",
-  allow_double_booking: false,
 });
 
 const formFromJob = (job: WorkJob): Form => ({
-  order: {
+  order: job.order && {
     id: job.order.id,
     order_no: job.order.order_no,
     client_name: job.order.client_name,
@@ -113,27 +102,23 @@ const formFromJob = (job: WorkJob): Form => ({
   store_ids: job.stores.map((s) => s.id),
   start_date: job.start_date,
   end_date: job.end_date,
-  work_details: job.work_details,
-  area_id: job.area.id,
-  vehicle_id: job.vehicle?.id ?? null,
-  csm_code_id: job.csm_code?.id ?? null,
+  work_details: job.work_details ?? "",
+  locality: job.locality,
+  area_name: job.area?.name ?? "",
+  csm_user_id: job.csm?.id ?? null,
   csm2_code_id: job.csm2_code?.id ?? null,
   member_ids: job.members.map((m) => m.user_id),
-  needed: {
-    PASTER: job.members.filter((m) => m.slot_role === "PASTER").length,
-    HELPER: job.members.filter((m) => m.slot_role === "HELPER").length,
-    DRIVER: job.members.filter((m) => m.slot_role === "DRIVER").length,
-  },
+  helpers_required: job.members.some((m) => m.slot_role === "HELPER"),
   route: job.route ?? "",
   extra_tag: job.extra_tag ?? "",
   instructions: job.instructions ?? "",
-  allow_double_booking: job.allow_double_booking,
 });
 
 /**
- * Create or edit a field job. Shows who is already booked over the chosen dates while the
- * team is being picked, and if the API still refuses with a clash (someone else booked them
- * a moment ago) lists the clashes with a one-click "book anyway".
+ * Create or edit a field job. The order, location and work details may all come later. Shows
+ * who is already booked over the chosen dates while the team is being picked; picking them
+ * books both jobs, with a warning. If the API still refuses with a clash (someone else booked
+ * them a moment ago) lists the clashes with a one-click "book anyway".
  */
 export function JobDialog({
   open,
@@ -159,25 +144,13 @@ export function JobDialog({
   const [conflicts, setConflicts] = useState<JobConflict[]>([]);
   const [leaveConflicts, setLeaveConflicts] = useState<LeaveClash[]>([]);
   const [showMore, setShowMore] = useState(false);
-  // Remounts the team steps with each opening, so they start on the first unfinished role.
-  const [opened, setOpened] = useState(0);
 
   useEffect(() => {
     if (!open) return;
     setForm(job ? formFromJob(job) : blankForm(defaultDate ?? todayIST(), defaultMemberIds));
     setConflicts([]);
     setLeaveConflicts([]);
-    setShowMore(
-      !!job &&
-        !!(
-          job.route ||
-          job.extra_tag ||
-          job.instructions ||
-          job.csm2_code ||
-          job.allow_double_booking
-        ),
-    );
-    setOpened((n) => n + 1);
+    setShowMore(!!job && !!(job.route || job.extra_tag || job.instructions || job.csm2_code));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only when the dialog opens
   }, [open, job, defaultDate]);
 
@@ -189,14 +162,14 @@ export function JobDialog({
     queryFn: fetchAreas,
     enabled: open,
   });
-  const { data: vehicleData } = useQuery({
-    queryKey: ["masters", "vehicles"],
-    queryFn: fetchVehicles,
-    enabled: open,
-  });
   const { data: codeData } = useQuery({
     queryKey: ["masters", "csm-codes"],
     queryFn: fetchCsmCodes,
+    enabled: open,
+  });
+  const { data: csmData } = useQuery({
+    queryKey: ["work-jobs", "csm-options"],
+    queryFn: fetchCsmOptions,
     enabled: open,
   });
   const { data: staffData } = useQuery({
@@ -205,9 +178,14 @@ export function JobDialog({
     enabled: open,
   });
 
+  const csms = csmData?.csms ?? [];
+  /** The order's creator, when a CSM: the order fills the CSM dropdown with them. */
+  const csmOfOrder = (createdBy: number | null, current: number | null) =>
+    csms.some((c) => c.id === createdBy) ? createdBy : current;
+
   // An edited job only carries the stores it covers; fetch the order for the full list. A
   // new job started from an order page fetches that order the same way.
-  const lookupNo = job?.order.order_no ?? defaultOrderNo;
+  const lookupNo = job?.order?.order_no ?? defaultOrderNo;
   const { data: editOrder } = useQuery({
     queryKey: ["work-jobs", "order-options", lookupNo],
     queryFn: () => fetchOrderOptions(lookupNo!),
@@ -216,7 +194,7 @@ export function JobDialog({
   useEffect(() => {
     if (!open) return;
     if (job) {
-      const full = editOrder?.orders.find((o) => o.id === job.order.id);
+      const full = editOrder?.orders.find((o) => o.id === job.order?.id);
       if (full) setForm((f) => (f.order?.id === full.id ? { ...f, order: full } : f));
       return;
     }
@@ -224,15 +202,18 @@ export function JobDialog({
     if (preset)
       setForm((f) =>
         f.order
-          ? f
+          ? f.order.id === preset.id
+            ? { ...f, csm_user_id: f.csm_user_id ?? csmOfOrder(preset.created_by, null) }
+            : f
           : {
               ...f,
               order: preset,
               store_ids: preset.stores.length === 1 ? [preset.stores[0].id] : [],
-              csm_code_id: f.csm_code_id ?? preset.csm_code?.id ?? null,
+              csm_user_id: csmOfOrder(preset.created_by, f.csm_user_id),
             },
       );
-  }, [editOrder, job, open, defaultOrderNo]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- csmOfOrder only reads csmData
+  }, [editOrder, job, open, defaultOrderNo, csmData]);
 
   const end = form.end_date || form.start_date;
   const datesValid = !!form.start_date && end >= form.start_date;
@@ -246,20 +227,20 @@ export function JobDialog({
   const busy = useMemo(() => {
     const map = new Map<number, string[]>();
     for (const j of overlapData?.jobs ?? []) {
-      if (j.id === job?.id || j.status === "CANCELLED" || j.allow_double_booking) continue;
+      if (j.id === job?.id || j.status === "CANCELLED") continue;
       for (const m of j.members)
         map.set(m.user_id, [
           ...(map.get(m.user_id) ?? []),
-          `${j.order.order_no} (${formatJobDates(j.start_date, j.end_date)})`,
+          `${j.order?.order_no ?? "a job with no order"} (${formatJobDates(j.start_date, j.end_date)})`,
         ]);
     }
     return map;
   }, [overlapData, job?.id]);
 
-  // Who is on leave over these dates. Leave is a hard stop, so they cannot be ticked.
+  // Who is on approved leave over these dates. Leave is a hard stop, so they cannot be picked.
   const { data: leaveData } = useQuery({
-    queryKey: ["leave", "list", { from: form.start_date, to: end }],
-    queryFn: () => fetchLeave({ from: form.start_date, to: end }),
+    queryKey: ["leave", "list", { from: form.start_date, to: end, status: "APPROVED" }],
+    queryFn: () => fetchLeave({ from: form.start_date, to: end, status: "APPROVED" }),
     enabled: open && datesValid,
   });
   const onLeave = useMemo(() => {
@@ -269,14 +250,8 @@ export function JobDialog({
     return map;
   }, [leaveData]);
 
-  const areas = (areaData?.areas ?? []).filter((a) => a.is_active || a.id === form.area_id);
-  const area = areas.find((a) => a.id === form.area_id);
-  const vehicles = (vehicleData?.vehicles ?? []).filter(
-    (v) => v.is_active || v.id === form.vehicle_id,
-  );
-  const codes = (codeData?.codes ?? []).filter(
-    (c) => c.is_active || c.id === form.csm_code_id || c.id === form.csm2_code_id,
-  );
+  const areas = (areaData?.areas ?? []).filter((a) => a.is_active && a.locality === form.locality);
+  const codes = (codeData?.codes ?? []).filter((c) => c.is_active || c.id === form.csm2_code_id);
   const staff = (staffData?.staff ?? []).filter(
     (s) => s.is_active || form.member_ids.includes(s.id),
   );
@@ -284,34 +259,39 @@ export function JobDialog({
   const roleCount = (r: FieldRole) => chosen.filter((s) => s.role === r).length;
   const clashing = chosen.filter((s) => busy.has(s.id));
   const chosenOnLeave = chosen.filter((s) => onLeave.has(s.id));
+  // A grid cell can start a job with a Helper already on it.
+  const helpersRequired = form.helpers_required || roleCount("HELPER") > 0;
 
   const save = useMutation({
     mutationFn: (allowOverride?: boolean) => {
       const body: WorkJobInput = {
-        order_id: form.order!.id,
+        order_id: form.order?.id ?? null,
         store_ids: form.store_ids,
         start_date: form.start_date,
         end_date: end,
-        csm_code_id: form.csm_code_id,
+        csm_user_id: form.csm_user_id,
         csm2_code_id: form.csm2_code_id,
-        work_details: form.work_details.trim(),
-        area_id: form.area_id!,
-        vehicle_id: form.vehicle_id,
+        work_details: form.work_details.trim() || null,
+        locality: form.locality,
+        area_name: form.area_name.trim() || null,
         route: form.route.trim() || null,
         extra_tag: form.extra_tag.trim() || null,
         instructions: form.instructions.trim() || null,
-        allow_double_booking: allowOverride ?? form.allow_double_booking,
+        // Picking someone already booked is the go-ahead to book both jobs.
+        allow_double_booking: allowOverride ?? clashing.length > 0,
         member_ids: form.member_ids,
       };
       return job ? updateWorkJob(job.id, body) : createWorkJob(body);
     },
     onSuccess: (saved) => {
+      const on = saved.order ? ` on ${saved.order.order_no}` : "";
       toast.success(
         job
-          ? `Job on ${saved.order.order_no} updated`
-          : `Job on ${saved.order.order_no} assigned to ${saved.members.length} ${saved.members.length === 1 ? "person" : "people"}`,
+          ? `Job${on} updated`
+          : `Job${on} assigned to ${saved.members.length} ${saved.members.length === 1 ? "person" : "people"}`,
       );
       qc.invalidateQueries({ queryKey: ["work-jobs"] });
+      qc.invalidateQueries({ queryKey: ["masters", "areas"] });
       onClose();
     },
     onError: (err: unknown) => {
@@ -326,62 +306,47 @@ export function JobDialog({
     },
   });
 
-  const teamDone = teamComplete(form.needed, roleCount);
-  const canSave =
-    !!form.order &&
-    datesValid &&
-    form.work_details.trim().length >= 3 &&
-    !!form.area_id &&
-    teamDone;
   // What is still missing, said next to the save button rather than left to guess.
-  const missing = !form.order
-    ? "Pick the order."
+  const missing = !form.csm_user_id
+    ? "Pick the CSM."
     : !datesValid
       ? "Fix the dates."
-      : form.work_details.trim().length < 3
-        ? "Describe the work."
-        : !form.area_id
-          ? "Pick the area."
-          : teamShortfall(form.needed, roleCount);
+      : teamShortfall(roleCount, helpersRequired);
+  const canSave = !missing;
 
-  /** A lower count than people picked drops the ones picked last. */
-  const changeNeeded = (role: FieldRole, n: number) => {
-    const n2 = Math.max(0, Math.min(TEAM_LIMITS[role], n));
-    const ofRole = form.member_ids.filter((id) => staff.find((s) => s.id === id)?.role === role);
-    const drop = ofRole.slice(n2);
-    if (drop.length) {
-      const names = drop.map((id) => staff.find((s) => s.id === id)?.name).join(", ");
-      toast.info(`${names} taken off the team.`);
-    }
-    setForm((f) => ({
-      ...f,
-      needed: { ...f.needed, [role]: n2 },
-      member_ids: f.member_ids.filter((id) => !drop.includes(id)),
-    }));
-    if (drop.length) {
-      setConflicts([]);
-      setLeaveConflicts([]);
-    }
-  };
-
-  const toggleMember = (id: number, role: FieldRole, on: boolean) => {
-    if (on && roleCount(role) >= TEAM_LIMITS[role]) {
-      toast.error(
-        `A job can have at most ${TEAM_LIMITS[role]} ${FIELD_ROLE_LABELS[role].toLowerCase()}${TEAM_LIMITS[role] > 1 ? "s" : ""}.`,
-      );
-      return;
-    }
-    set("member_ids", on ? [...form.member_ids, id] : form.member_ids.filter((m) => m !== id));
+  const setTeam = (ids: number[]) => {
+    set("member_ids", ids);
     setConflicts([]);
     setLeaveConflicts([]);
   };
+
+  /** Saying Helpers are not required takes any Helpers off the team. */
+  const setHelpersRequired = (on: boolean) => {
+    set("helpers_required", on);
+    if (!on)
+      setTeam(form.member_ids.filter((id) => staff.find((s) => s.id === id)?.role !== "HELPER"));
+  };
+
+  /** Pressing the chosen location again clears it, since the location is optional. */
+  const pickLocality = (l: AreaLocality) =>
+    setForm((f) =>
+      f.locality === l ? { ...f, locality: null, area_name: "" } : { ...f, locality: l },
+    );
+
+  const changeOrder = (o: OrderOption | null) =>
+    setForm((f) => ({
+      ...f,
+      order: o,
+      store_ids: o?.stores.length === 1 ? [o.stores[0].id] : [],
+      csm_user_id: o ? csmOfOrder(o.created_by, f.csm_user_id) : f.csm_user_id,
+    }));
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[92vh] max-w-3xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="break-words">
-            {job ? `Edit the job on ${job.order.order_no}` : "New field job"}
+            {job ? `Edit the job${job.order ? ` on ${job.order.order_no}` : ""}` : "New field job"}
           </DialogTitle>
           <DialogDescription>
             {job
@@ -391,27 +356,37 @@ export function JobDialog({
         </DialogHeader>
 
         <div className="grid gap-5 py-1">
-          {/* Order and stores */}
+          {/* Order and CSM */}
           <section className="grid gap-3">
-            <div className="grid gap-2">
-              <Label>Order</Label>
-              <OrderPicker
-                value={form.order}
-                disabled={!!job}
-                onChange={(o) => {
-                  setForm((f) => ({
-                    ...f,
-                    order: o,
-                    store_ids: o.stores.length === 1 ? [o.stores[0].id] : [],
-                    csm_code_id: f.csm_code_id ?? o.csm_code?.id ?? null,
-                  }));
-                }}
-              />
-              {job && (
-                <p className="text-xs text-muted-foreground">
-                  A job stays on its order. Cancel it and create a new one to move the work.
-                </p>
-              )}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <Label>
+                  Order <span className="font-normal text-muted-foreground">(optional)</span>
+                </Label>
+                <OrderPicker value={form.order} onChange={changeOrder} />
+              </div>
+              <div className="grid gap-2">
+                <Label>CSM</Label>
+                <Select
+                  value={form.csm_user_id ? String(form.csm_user_id) : undefined}
+                  onValueChange={(v) => set("csm_user_id", Number(v))}
+                >
+                  <SelectTrigger aria-label="CSM">
+                    <SelectValue placeholder="Pick the CSM" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {/* A CSM since made inactive still shows on their old job. */}
+                    {job?.csm && !csms.some((c) => c.id === job.csm!.id) && (
+                      <SelectItem value={String(job.csm.id)}>{job.csm.name}</SelectItem>
+                    )}
+                    {csms.map((c) => (
+                      <SelectItem key={c.id} value={String(c.id)}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             {form.order && form.order.stores.length > 0 && (
               <div className="grid gap-2">
@@ -454,7 +429,7 @@ export function JobDialog({
             )}
           </section>
 
-          {/* When, what, where */}
+          {/* When */}
           <section className="grid gap-3 sm:grid-cols-2">
             <div className="grid gap-2">
               <Label htmlFor="job-start">Start date</Label>
@@ -486,75 +461,18 @@ export function JobDialog({
                 </p>
               )}
             </div>
-            <div className="grid gap-2 sm:col-span-2">
-              <Label htmlFor="job-work">Work details</Label>
-              <Textarea
-                id="job-work"
-                rows={2}
-                value={form.work_details}
-                maxLength={500}
-                onChange={(e) => set("work_details", e.target.value)}
-                placeholder="e.g. Flex fixing and glow sign installation at 3 stores"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label>Area</Label>
-              <AreaPicker
-                areas={areas}
-                value={form.area_id}
-                onChange={(id) => set("area_id", id)}
-              />
-              {area?.needs_confirmation && (
-                <p className="text-xs text-amber-600">
-                  Local / non-local for this area is not confirmed yet.
-                </p>
-              )}
-            </div>
-            <div className="grid gap-2">
-              <Label>CSM code</Label>
-              <CodeSelect
-                codes={codes}
-                value={form.csm_code_id}
-                onChange={(v) => set("csm_code_id", v)}
-                placeholder="Order creator's code"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label>
-                Vehicle <span className="font-normal text-muted-foreground">(optional)</span>
-              </Label>
-              <Select
-                value={form.vehicle_id ? String(form.vehicle_id) : NONE}
-                onValueChange={(v) => set("vehicle_id", v === NONE ? null : Number(v))}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={NONE}>No vehicle</SelectItem>
-                  {vehicles.map((v) => (
-                    <SelectItem key={v.id} value={String(v.id)}>
-                      {v.reg_no} · {v.type}
-                      {v.usualDriver ? ` · ${v.usualDriver.name}` : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
           </section>
 
-          {/* Team: one role at a time */}
-          <section className="grid gap-2">
-            <Label>Team</Label>
-            <TeamStepper
-              key={opened}
+          {/* Team */}
+          <section className="grid gap-3">
+            <TeamPicker
               staff={staff}
               selected={form.member_ids}
-              needed={form.needed}
+              helpersRequired={helpersRequired}
               busy={busy}
               onLeave={onLeave}
-              onToggle={toggleMember}
-              onNeededChange={changeNeeded}
+              onChange={setTeam}
+              onHelpersRequired={setHelpersRequired}
             />
             {chosenOnLeave.length > 0 && (
               <p className="flex items-start gap-1.5 text-xs text-destructive">
@@ -563,14 +481,72 @@ export function JobDialog({
                 {chosenOnLeave.length === 1 ? "is" : "are"} on leave over these dates.
               </p>
             )}
-            {clashing.length > 0 && !form.allow_double_booking && (
+            {clashing.length > 0 && (
               <p className="flex items-start gap-1.5 text-xs text-amber-600">
                 <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 {clashing.map((s) => s.name).join(", ")} already{" "}
-                {clashing.length === 1 ? "has" : "have"} work on these dates. Pick someone else or
-                turn on "Allow 2nd job" under More options.
+                {clashing.length === 1 ? "has" : "have"} work on these dates. Saving books both
+                jobs.
               </p>
             )}
+          </section>
+
+          {/* Where */}
+          <section className="grid gap-3">
+            <div className="grid gap-2">
+              <Label>
+                Location <span className="font-normal text-muted-foreground">(optional)</span>
+              </Label>
+              <div
+                role="radiogroup"
+                aria-label="Location"
+                className="inline-flex justify-self-start rounded-xl border bg-muted/40 p-1 text-sm"
+              >
+                {(["LOCAL", "NON_LOCAL"] as const).map((l) => (
+                  <button
+                    key={l}
+                    type="button"
+                    role="radio"
+                    aria-checked={form.locality === l}
+                    onClick={() => pickLocality(l)}
+                    className={cn(
+                      "min-h-8 rounded-lg px-3 font-medium transition-colors",
+                      form.locality === l
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    {PLACE_LABELS[l]}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {form.locality && (
+              <div className="grid gap-2 sm:max-w-sm">
+                <Label>
+                  Area name <span className="font-normal text-muted-foreground">(optional)</span>
+                </Label>
+                <AreaNamePicker
+                  names={areas.map((a) => a.name)}
+                  value={form.area_name}
+                  onChange={(name) => set("area_name", name)}
+                />
+              </div>
+            )}
+          </section>
+
+          <section className="grid gap-2">
+            <Label htmlFor="job-work">
+              Work details <span className="font-normal text-muted-foreground">(optional)</span>
+            </Label>
+            <Textarea
+              id="job-work"
+              rows={2}
+              value={form.work_details}
+              maxLength={500}
+              onChange={(e) => set("work_details", e.target.value)}
+              placeholder="The CSM can add these later"
+            />
           </section>
 
           <section className="grid gap-3">
@@ -584,7 +560,7 @@ export function JobDialog({
                 className={cn("h-4 w-4 transition-transform", showMore && "rotate-180")}
               />
               More options
-              <span className="font-normal">(route, 2nd CSM, grid tag, instructions, 2nd job)</span>
+              <span className="font-normal">(route, 2nd CSM, grid tag, instructions)</span>
             </button>
             {showMore && (
               <div className="grid gap-3">
@@ -606,7 +582,7 @@ export function JobDialog({
                       <span className="font-normal text-muted-foreground">(optional)</span>
                     </Label>
                     <CodeSelect
-                      codes={codes.filter((c) => c.id !== form.csm_code_id)}
+                      codes={codes.filter((c) => c.user?.id !== form.csm_user_id)}
                       value={form.csm2_code_id}
                       onChange={(v) => set("csm2_code_id", v)}
                       placeholder="None"
@@ -638,20 +614,6 @@ export function JobDialog({
                     onChange={(e) => set("instructions", e.target.value)}
                   />
                 </div>
-                <div className="flex items-center justify-between gap-4 rounded-xl border p-3">
-                  <div>
-                    <div className="text-sm font-medium">Allow 2nd job</div>
-                    <div className="text-xs text-muted-foreground">
-                      Lets this team be on another job over the same dates. Use only for short or
-                      same-route work.
-                    </div>
-                  </div>
-                  <Switch
-                    checked={form.allow_double_booking}
-                    onCheckedChange={(v) => set("allow_double_booking", v)}
-                    aria-label="Allow 2nd job"
-                  />
-                </div>
               </div>
             )}
           </section>
@@ -681,8 +643,10 @@ export function JobDialog({
               <ul className="mb-3 grid gap-1">
                 {conflicts.map((c) => (
                   <li key={`${c.user_id}-${c.job_id}`}>
-                    <span className="font-medium">{c.name}</span> is on {c.order_no} (
-                    {formatJobDates(c.start_date, c.end_date)}) — {c.work_details}
+                    <span className="font-medium">{c.name}</span> is on{" "}
+                    {c.order_no ?? "a job with no order"} (
+                    {formatJobDates(c.start_date, c.end_date)})
+                    {c.work_details ? ` — ${c.work_details}` : ""}
                   </li>
                 ))}
               </ul>
@@ -690,10 +654,7 @@ export function JobDialog({
                 size="sm"
                 variant="outline"
                 disabled={save.isPending}
-                onClick={() => {
-                  set("allow_double_booking", true);
-                  save.mutate(true);
-                }}
+                onClick={() => save.mutate(true)}
               >
                 Book anyway as a 2nd job
               </Button>
@@ -702,7 +663,7 @@ export function JobDialog({
         </div>
 
         <DialogFooter className="items-center gap-2 sm:gap-2">
-          {!canSave && missing && (
+          {!canSave && (
             <p className="mr-auto text-xs text-muted-foreground" aria-live="polite">
               {missing}
             </p>
@@ -727,11 +688,9 @@ export function JobDialog({
 function OrderPicker({
   value,
   onChange,
-  disabled,
 }: {
   value: Form["order"];
-  onChange: (o: OrderOption) => void;
-  disabled?: boolean;
+  onChange: (o: OrderOption | null) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
@@ -747,128 +706,170 @@ function OrderPicker({
   });
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          role="combobox"
-          disabled={disabled}
-          className="h-auto min-h-10 w-full justify-between rounded-xl py-2 text-left font-normal"
-        >
-          {value ? (
-            <span className="min-w-0 truncate">
-              <span className="font-mono font-semibold">{value.order_no}</span> ·{" "}
-              {value.client_name}
-            </span>
-          ) : (
-            <span className="text-muted-foreground">Search by order no, client or store</span>
-          )}
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-        <Command shouldFilter={false}>
-          <CommandInput value={q} onValueChange={setQ} placeholder="ORD26…, client or store" />
-          <CommandList>
-            {isFetching && !data ? (
-              <div className="p-4 text-center text-sm text-muted-foreground">Searching…</div>
+    <div className="flex items-start gap-1">
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            role="combobox"
+            className="h-auto min-h-10 min-w-0 flex-1 justify-between rounded-xl py-2 text-left font-normal"
+          >
+            {value ? (
+              <span className="min-w-0 truncate">
+                <span className="font-mono font-semibold">{value.order_no}</span> ·{" "}
+                {value.client_name}
+              </span>
             ) : (
-              <CommandEmpty>No orders found.</CommandEmpty>
+              <span className="truncate text-muted-foreground">
+                Search by order no, client or store
+              </span>
             )}
-            <CommandGroup>
-              {(data?.orders ?? []).map((o) => (
-                <CommandItem
-                  key={o.id}
-                  value={String(o.id)}
-                  onSelect={() => {
-                    onChange(o);
-                    setOpen(false);
-                  }}
-                >
-                  <Check
-                    className={cn("mr-2 h-4 w-4", value?.id === o.id ? "opacity-100" : "opacity-0")}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate">
-                      <span className="font-mono font-semibold">{o.order_no}</span> ·{" "}
-                      {o.client_name}
+            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent
+          className="w-[var(--radix-popover-trigger-width)] min-w-72 p-0"
+          align="start"
+        >
+          <Command shouldFilter={false}>
+            <CommandInput value={q} onValueChange={setQ} placeholder="ORD26…, client or store" />
+            <CommandList>
+              {isFetching && !data ? (
+                <div className="p-4 text-center text-sm text-muted-foreground">Searching…</div>
+              ) : (
+                <CommandEmpty>No orders found.</CommandEmpty>
+              )}
+              <CommandGroup>
+                {(data?.orders ?? []).map((o) => (
+                  <CommandItem
+                    key={o.id}
+                    value={String(o.id)}
+                    onSelect={() => {
+                      onChange(o);
+                      setOpen(false);
+                    }}
+                  >
+                    <Check
+                      className={cn(
+                        "mr-2 h-4 w-4",
+                        value?.id === o.id ? "opacity-100" : "opacity-0",
+                      )}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate">
+                        <span className="font-mono font-semibold">{o.order_no}</span> ·{" "}
+                        {o.client_name}
+                      </div>
+                      <div className="truncate text-xs text-muted-foreground">
+                        {o.stores.length} store{o.stores.length === 1 ? "" : "s"} · {o.status}
+                        {o.creator_name ? ` · ${o.creator_name}` : ""}
+                      </div>
                     </div>
-                    <div className="truncate text-xs text-muted-foreground">
-                      {o.stores.length} store{o.stores.length === 1 ? "" : "s"} · {o.status}
-                      {o.creator_name ? ` · ${o.creator_name}` : ""}
-                    </div>
-                  </div>
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+      {value && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-10 w-10 shrink-0"
+          aria-label="Remove the order"
+          onClick={() => onChange(null)}
+        >
+          <X className="h-4 w-4" />
+        </Button>
+      )}
+    </div>
   );
 }
 
-function AreaPicker({
-  areas,
+/** Pick an area from the list, or type a new name; the API adds new names to the list. */
+function AreaNamePicker({
+  names,
   value,
   onChange,
 }: {
-  areas: { id: number; name: string; locality: "LOCAL" | "NON_LOCAL"; district: string | null }[];
-  value: number | null;
-  onChange: (id: number) => void;
+  names: string[];
+  value: string;
+  onChange: (name: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const current = areas.find((a) => a.id === value);
+  const [q, setQ] = useState("");
+  const typed = q.trim();
+  const known = names.some((n) => n.toLowerCase() === typed.toLowerCase());
+  const pick = (name: string) => {
+    onChange(name);
+    setQ("");
+    setOpen(false);
+  };
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          role="combobox"
-          className="w-full justify-between rounded-xl font-normal"
+    <div className="flex items-start gap-1">
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            role="combobox"
+            className="min-w-0 flex-1 justify-between rounded-xl font-normal"
+          >
+            {value ? (
+              <span className="truncate">{value}</span>
+            ) : (
+              <span className="text-muted-foreground">Pick or type an area</span>
+            )}
+            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent
+          className="w-[var(--radix-popover-trigger-width)] min-w-64 p-0"
+          align="start"
         >
-          {current ? (
-            <span className="flex min-w-0 items-center gap-2 truncate">
-              {current.name} <LocalityTag locality={current.locality} />
-            </span>
-          ) : (
-            <span className="text-muted-foreground">Pick an area</span>
-          )}
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          <Command>
+            <CommandInput
+              value={q}
+              onValueChange={setQ}
+              maxLength={100}
+              placeholder="Search or type a new area"
+            />
+            <CommandList>
+              {!typed && <CommandEmpty>No areas yet. Type a name to add one.</CommandEmpty>}
+              <CommandGroup>
+                {typed && !known && (
+                  // Matches the search whatever is typed, so it always stays in the list.
+                  <CommandItem value={typed} onSelect={() => pick(typed)}>
+                    <Plus className="mr-2 h-4 w-4" /> Add “{typed}”
+                  </CommandItem>
+                )}
+                {names.map((n) => (
+                  <CommandItem key={n} value={n} onSelect={() => pick(n)}>
+                    <Check
+                      className={cn("mr-2 h-4 w-4", value === n ? "opacity-100" : "opacity-0")}
+                    />
+                    {n}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+      {value && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-10 w-10 shrink-0"
+          aria-label="Clear the area name"
+          onClick={() => onChange("")}
+        >
+          <X className="h-4 w-4" />
         </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-        <Command>
-          <CommandInput placeholder="Search areas" />
-          <CommandList>
-            <CommandEmpty>No area by that name. Add it under Allocation Masters.</CommandEmpty>
-            <CommandGroup>
-              {areas.map((a) => (
-                <CommandItem
-                  key={a.id}
-                  value={`${a.name} ${a.district ?? ""}`}
-                  onSelect={() => {
-                    onChange(a.id);
-                    setOpen(false);
-                  }}
-                >
-                  <Check
-                    className={cn("mr-2 h-4 w-4", value === a.id ? "opacity-100" : "opacity-0")}
-                  />
-                  <span className="flex-1">
-                    {a.name}
-                    {a.district ? (
-                      <span className="text-xs text-muted-foreground"> · {a.district}</span>
-                    ) : null}
-                  </span>
-                  <LocalityTag locality={a.locality} />
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
+      )}
+    </div>
   );
 }
 

@@ -42,6 +42,9 @@ export const Route = createFileRoute("/_portal/admin/masters")({
 
 const NONE = "__none__";
 
+/** Jobs no longer record a vehicle. The list is kept, hidden, in case that comes back. */
+const SHOW_VEHICLES = false;
+
 function MastersPage() {
   return (
     <>
@@ -54,11 +57,11 @@ function MastersPage() {
         <TabsList className="mb-4">
           <TabsTrigger value="csm-codes">CSM codes</TabsTrigger>
           <TabsTrigger value="areas">Areas</TabsTrigger>
-          <TabsTrigger value="vehicles">Vehicles</TabsTrigger>
+          {SHOW_VEHICLES && <TabsTrigger value="vehicles">Vehicles</TabsTrigger>}
         </TabsList>
         <TabsContent value="csm-codes"><CsmCodesTab /></TabsContent>
         <TabsContent value="areas"><AreasTab /></TabsContent>
-        <TabsContent value="vehicles"><VehiclesTab /></TabsContent>
+        {SHOW_VEHICLES && <TabsContent value="vehicles"><VehiclesTab /></TabsContent>}
       </Tabs>
     </>
   );

@@ -1,8 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Fragment, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, ChevronLeft, ChevronRight, Loader2, Pencil, Plus } from "lucide-react";
-import { toast } from "sonner";
+import { AlertTriangle, ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { ErrorState, LoadingState } from "@/components/layout/PageStates";
@@ -16,21 +15,22 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { JobDialog } from "@/components/allocation/JobDialog";
+import { JobDetailDialog } from "@/components/allocation/JobDetailDialog";
 import { JobStatusMenu, LocalityTag, cellStyles } from "@/components/allocation/JobBits";
 import {
   FIELD_ROLE_LABELS,
-  JOB_EDITABLE,
   JOB_STATUS_LABELS,
   addDays,
-  apiErrorMessage,
   fetchWeeklyGrid,
-  fetchWorkJob,
   fetchWorkJobs,
   formatJobDates,
+  jobPlace,
   todayIST,
   type FieldRole,
+  type GridJob,
   type WeeklyGrid,
   type WorkJob,
+  type WorkJobStatus,
 } from "@/api/allocation";
 
 export const Route = createFileRoute("/_portal/admin/grid")({
@@ -41,6 +41,13 @@ export const Route = createFileRoute("/_portal/admin/grid")({
 const ROLES: FieldRole[] = ["PASTER", "HELPER", "DRIVER"];
 const LIVE = "ASSIGNED,STARTED,HOLD,COMPLETED";
 type View = "dates" | "people";
+type RoleFilter = FieldRole | "ALL";
+const ROLE_FILTERS: [RoleFilter, string][] = [
+  ["ALL", "All"],
+  ["PASTER", "Pasters"],
+  ["HELPER", "Helpers"],
+  ["DRIVER", "Drivers"],
+];
 type DialogState = { job: WorkJob | null; date?: string; members?: number[] } | null;
 
 /** The Monday on or before a YYYY-MM-DD date, so the grid always shows whole weeks. */
@@ -63,8 +70,9 @@ function WeeklyGridPage() {
   const [days, setDays] = useState(7);
   const [selected, setSelected] = useState(today);
   const [view, setView] = useState<View>("dates");
+  const [role, setRole] = useState<RoleFilter>("ALL");
   const [dialog, setDialog] = useState<DialogState>(null);
-  const [opening, setOpening] = useState<number | null>(null);
+  const [detail, setDetail] = useState<number | null>(null);
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["work-jobs", "grid", from, days],
     queryFn: () => fetchWeeklyGrid(from, days),
@@ -78,25 +86,8 @@ function WeeklyGridPage() {
     setSelected((s) => pick ?? (s >= start && s <= end ? s : start));
   };
 
-  const openJob = async (id: number) => {
-    setOpening(id);
-    try {
-      const job = await fetchWorkJob(id);
-      if (!JOB_EDITABLE.includes(job.status)) {
-        toast.info(
-          `The job on ${job.order.order_no} is ${JOB_STATUS_LABELS[job.status].toLowerCase()}. Reopen it from Field Jobs to change it.`,
-        );
-        return;
-      }
-      setDialog({ job });
-    } catch (err) {
-      toast.error(apiErrorMessage(err, "Could not open the job"));
-    } finally {
-      setOpening(null);
-    }
-  };
-
   const selIndex = data?.dates.indexOf(selected) ?? -1;
+  const onRole = (r: { role: FieldRole }) => role === "ALL" || r.role === role;
 
   return (
     <>
@@ -140,6 +131,29 @@ function WeeklyGridPage() {
           {fmt(to, { day: "numeric", month: "short", year: "numeric" })}
         </span>
         <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto">
+          <div
+            role="radiogroup"
+            aria-label="Who to show"
+            className="inline-flex rounded-xl border bg-muted/40 p-1 text-sm"
+          >
+            {ROLE_FILTERS.map(([r, label]) => (
+              <button
+                key={r}
+                type="button"
+                role="radio"
+                aria-checked={role === r}
+                onClick={() => setRole(r)}
+                className={cn(
+                  "min-h-8 rounded-lg px-2.5 font-medium transition-colors",
+                  role === r
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           <div
             role="radiogroup"
             aria-label="View"
@@ -194,25 +208,42 @@ function WeeklyGridPage() {
         <ErrorState title="Couldn't load the grid" error={error} onRetry={() => refetch()} />
       ) : view === "dates" ? (
         <>
-          <DateCalendar data={data} today={today} selected={selected} onSelect={setSelected} />
+          <DateCalendar
+            data={data}
+            rows={data.rows.filter(onRole)}
+            today={today}
+            selected={selected}
+            onSelect={setSelected}
+          />
           <DayPanel
             date={selected}
+            role={role}
             free={selIndex >= 0 ? data.free[selIndex] : undefined}
-            onLeave={selIndex >= 0 ? data.rows.filter((r) => r.leave[selIndex]).length : 0}
+            onLeave={
+              selIndex >= 0 ? data.rows.filter((r) => onRole(r) && r.leave[selIndex]).length : 0
+            }
             onAssign={() => setDialog({ job: null, date: selected })}
-            onEdit={(job) => setDialog({ job })}
+            onOpenJob={setDetail}
           />
         </>
       ) : (
         <PeopleGrid
           data={data}
+          role={role}
           today={today}
-          opening={opening}
-          onOpenJob={openJob}
+          onOpenJob={setDetail}
           onNewJob={(date, member) => setDialog({ job: null, date, members: [member] })}
         />
       )}
 
+      <JobDetailDialog
+        jobId={detail}
+        onClose={() => setDetail(null)}
+        onEdit={(job) => {
+          setDetail(null);
+          setDialog({ job });
+        }}
+      />
       <JobDialog
         open={!!dialog}
         job={dialog?.job}
@@ -229,12 +260,12 @@ function WeeklyGridPage() {
 // ---------------------------------------------------------------------------
 
 /** Per day: how many jobs run, how many people are booked, and whether anyone clashes. */
-function daySummaries(data: WeeklyGrid) {
+function daySummaries(data: WeeklyGrid, rows: WeeklyGrid["rows"]) {
   return data.dates.map((_, i) => {
     const jobs = new Set<number>();
     let booked = 0;
     let clashes = 0;
-    for (const r of data.rows) {
+    for (const r of rows) {
       const cell = r.days[i];
       for (const c of cell) jobs.add(c.job_id);
       if (cell.length) booked++;
@@ -247,16 +278,19 @@ function daySummaries(data: WeeklyGrid) {
 /** Whole weeks of day tiles. A tile shows counts only, never names. */
 function DateCalendar({
   data,
+  rows,
   today,
   selected,
   onSelect,
 }: {
   data: WeeklyGrid;
+  /** The people counted: all of them, or one role. */
+  rows: WeeklyGrid["rows"];
   today: string;
   selected: string;
   onSelect: (d: string) => void;
 }) {
-  const sums = daySummaries(data);
+  const sums = daySummaries(data, rows);
   return (
     <div className="surface-panel mb-4 p-2 sm:p-3">
       <div className="mb-1 grid grid-cols-7 gap-1 sm:gap-2" aria-hidden>
@@ -358,22 +392,27 @@ function teamByRole(members: WorkJob["members"]) {
 /** One day's work: its jobs with their teams, and who is still free. */
 function DayPanel({
   date,
+  role,
   free,
   onLeave,
   onAssign,
-  onEdit,
+  onOpenJob,
 }: {
   date: string;
+  role: RoleFilter;
   free: Record<FieldRole, number> | undefined;
   onLeave: number;
   onAssign: () => void;
-  onEdit: (job: WorkJob) => void;
+  onOpenJob: (id: number) => void;
 }) {
   const { data, isLoading } = useQuery({
     queryKey: ["work-jobs", "list", { from: date, to: date, status: LIVE }],
     queryFn: () => fetchWorkJobs({ from: date, to: date, status: LIVE }),
   });
-  const jobs = data?.jobs ?? [];
+  const jobs = (data?.jobs ?? []).filter(
+    (j) => role === "ALL" || j.members.some((m) => m.slot_role === role),
+  );
+  const freeRoles = role === "ALL" ? ROLES : [role];
 
   return (
     <section className="surface-panel p-4 sm:p-5" aria-labelledby="day-title">
@@ -385,7 +424,7 @@ function DayPanel({
           {free && (
             <p className="mt-0.5 text-sm text-muted-foreground">
               Free:{" "}
-              {ROLES.map((r, i) => (
+              {freeRoles.map((r, i) => (
                 <Fragment key={r}>
                   {i > 0 && " · "}
                   <span className={cn(free[r] === 0 && "font-medium text-destructive")}>
@@ -407,41 +446,51 @@ function DayPanel({
         <LoadingState bare className="p-4" />
       ) : jobs.length === 0 ? (
         <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
-          Nothing is booked on this date. Use “Assign workers” to book a team for an order.
+          Nothing is booked on this date. Use “Assign workers” to book a team.
         </div>
       ) : (
         <ul className="grid gap-3 md:grid-cols-2">
           {jobs.map((j) => {
-            const editable = JOB_EDITABLE.includes(j.status);
             const dayNo =
               Math.round((Date.parse(date) - Date.parse(j.start_date)) / 86_400_000) + 1;
             return (
               <li key={j.id} className="grid min-w-0 content-start gap-2 rounded-xl border p-3">
                 <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="font-mono font-semibold">{j.order.order_no}</div>
-                    <div
-                      className="truncate text-xs text-muted-foreground"
-                      title={j.order.client_name}
-                    >
-                      {j.order.client_name}
+                  <button
+                    type="button"
+                    className="min-w-0 text-left hover:underline"
+                    onClick={() => onOpenJob(j.id)}
+                  >
+                    <div className="font-mono font-semibold">
+                      {j.order?.order_no ?? "No order"}
                     </div>
-                  </div>
+                    {j.order && (
+                      <div
+                        className="truncate text-xs text-muted-foreground"
+                        title={j.order.client_name}
+                      >
+                        {j.order.client_name}
+                      </div>
+                    )}
+                  </button>
                   <JobStatusMenu job={j} />
                 </div>
-                <p className="break-words text-sm">{j.work_details}</p>
+                {j.work_details && <p className="break-words text-sm">{j.work_details}</p>}
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
                   <span className="flex items-center gap-1">
-                    {j.area.name} <LocalityTag locality={j.locality} />
+                    {jobPlace(j) ?? "Location not set"} <LocalityTag locality={j.locality} />
                   </span>
                   {j.days > 1 && (
                     <span>
                       · Day {dayNo} of {j.days} ({formatJobDates(j.start_date, j.end_date)})
                     </span>
                   )}
-                  {j.vehicle && <span>· {j.vehicle.reg_no}</span>}
                 </div>
                 <dl className="grid gap-1 rounded-lg bg-muted/30 p-2 text-sm">
+                  <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-2">
+                    <dt className="text-xs leading-5 text-muted-foreground">CSM</dt>
+                    <dd className="break-words">{j.csm?.name ?? "Not set"}</dd>
+                  </div>
                   {teamByRole(j.members).map((t) => (
                     <div key={t.role} className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-2">
                       <dt className="text-xs leading-5 text-muted-foreground">{t.label}</dt>
@@ -450,14 +499,8 @@ function DayPanel({
                   ))}
                 </dl>
                 <div>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    disabled={!editable}
-                    onClick={() => onEdit(j)}
-                    title={editable ? undefined : "Completed jobs cannot be changed"}
-                  >
-                    <Pencil className="mr-1.5 h-3.5 w-3.5" /> Edit team
+                  <Button size="sm" variant="ghost" onClick={() => onOpenJob(j.id)}>
+                    Open details
                   </Button>
                 </div>
               </li>
@@ -473,25 +516,61 @@ function DayPanel({
 // By person (the old WAS sheet)
 // ---------------------------------------------------------------------------
 
+/** A job in a grid cell: its order, CSM, Pasters and Driver, always. A click opens the details. */
+function JobBox({
+  job,
+  status,
+  onClick,
+}: {
+  job: GridJob | undefined;
+  status: WorkJobStatus;
+  onClick: () => void;
+}) {
+  const orderNo = job?.order_no ?? "No order";
+  const line = (label: string, value: string) => (
+    <span className="block truncate" title={`${label}: ${value}`}>
+      <span className="opacity-70">{label}:</span> {value}
+    </span>
+  );
+  return (
+    <button
+      type="button"
+      aria-label={`${orderNo}, ${JOB_STATUS_LABELS[status]}. Open details.`}
+      className={cn(
+        "block w-full min-w-0 rounded-md border px-1.5 py-1 text-left text-[11px] leading-4",
+        cellStyles[status],
+      )}
+      onClick={onClick}
+    >
+      <span className="block truncate font-mono font-semibold" title={orderNo}>
+        {orderNo}
+      </span>
+      {line("CSM", job?.csm ?? "—")}
+      {line("Paster", job?.pasters.join(", ") || "—")}
+      {line("Driver", job?.drivers.join(", ") || "—")}
+    </button>
+  );
+}
+
 /**
- * One row per person, one column per day, each cell showing the job label (order/CSM code,
- * -N_ for non-local, then the tag). Click a job to edit it, or an empty cell to start a
- * job for that person on that day.
+ * One row per person, one column per day, each cell boxing the person's jobs. Click a box to
+ * open the job's details, or an empty cell to start a job for that person on that day.
  */
 function PeopleGrid({
   data,
+  role,
   today,
-  opening,
   onOpenJob,
   onNewJob,
 }: {
   data: WeeklyGrid;
+  role: RoleFilter;
   today: string;
-  opening: number | null;
   onOpenJob: (id: number) => void;
   onNewJob: (date: string, member: number) => void;
 }) {
   const dates = data.dates;
+  const roles = role === "ALL" ? ROLES : [role];
   const head = (d: string) => ({
     day: fmt(d, { weekday: "short" }),
     date: fmt(d, { day: "numeric", month: "short" }),
@@ -513,7 +592,7 @@ function PeopleGrid({
                   <th
                     key={d}
                     className={cn(
-                      "min-w-[7.5rem] border-b border-l px-2 py-2 text-center text-xs font-medium",
+                      "min-w-[10rem] border-b border-l px-2 py-2 text-center text-xs font-medium",
                       d === today
                         ? "bg-primary/10 text-primary"
                         : h.sunday
@@ -529,17 +608,17 @@ function PeopleGrid({
             </tr>
           </thead>
           <tbody>
-            {ROLES.map((role) => {
-              const rows = data.rows.filter((r) => r.role === role);
+            {roles.map((rowRole) => {
+              const rows = data.rows.filter((r) => r.role === rowRole);
               if (rows.length === 0) return null;
               return (
-                <Fragment key={role}>
+                <Fragment key={rowRole}>
                   <tr>
                     <td
                       colSpan={dates.length + 1}
                       className="sticky left-0 border-b bg-background px-3 pb-1 pt-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
                     >
-                      {FIELD_ROLE_LABELS[role]}s
+                      {FIELD_ROLE_LABELS[rowRole]}s
                     </td>
                   </tr>
                   {rows.map((r) => (
@@ -583,21 +662,12 @@ function PeopleGrid({
                                 </div>
                               )}
                               {cell.map((c) => (
-                                <button
+                                <JobBox
                                   key={c.job_id}
-                                  type="button"
-                                  title={`${c.order_no} · ${JOB_STATUS_LABELS[c.status]}`}
-                                  className={cn(
-                                    "flex items-center justify-center gap-1 truncate rounded-md border px-1.5 py-1 font-mono text-[11px] font-semibold",
-                                    cellStyles[c.status],
-                                  )}
+                                  job={data.jobs[c.job_id]}
+                                  status={c.status}
                                   onClick={() => onOpenJob(c.job_id)}
-                                >
-                                  {opening === c.job_id && (
-                                    <Loader2 className="h-3 w-3 animate-spin" />
-                                  )}
-                                  {c.label}
-                                </button>
+                                />
                               ))}
                             </div>
                           )}
@@ -617,20 +687,20 @@ function PeopleGrid({
             )}
           </tbody>
           <tfoot>
-            {ROLES.map((role) => (
-              <tr key={role} className="bg-muted/30 text-xs">
+            {roles.map((footRole) => (
+              <tr key={footRole} className="bg-muted/30 text-xs">
                 <td className="sticky left-0 z-10 border-t bg-muted px-3 py-1.5 font-medium text-muted-foreground">
-                  Free {FIELD_ROLE_LABELS[role].toLowerCase()}s
+                  Free {FIELD_ROLE_LABELS[footRole].toLowerCase()}s
                 </td>
                 {data.free.map((f, i) => (
                   <td
                     key={dates[i]}
                     className={cn(
                       "border-l border-t px-2 py-1.5 text-center font-semibold tabular-nums",
-                      f[role] === 0 ? "text-destructive" : "text-success",
+                      f[footRole] === 0 ? "text-destructive" : "text-success",
                     )}
                   >
-                    {f[role]}
+                    {f[footRole]}
                   </td>
                 ))}
               </tr>

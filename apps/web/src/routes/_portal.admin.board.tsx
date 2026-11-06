@@ -27,6 +27,7 @@ import {
   addDays,
   fetchDailyBoard,
   formatJobDates,
+  jobPlace,
   todayIST,
   type FieldRole,
   type WorkJob,
@@ -184,23 +185,24 @@ function DailyBoardPage() {
                       onClick={() => setDialog({ job: j })}
                     >
                       <div className="font-mono text-sm font-semibold enabled:hover:underline">
-                        {j.order.order_no} · {j.label}
+                        {j.order?.order_no ?? "No order"} · {j.label}
                       </div>
-                      <div className="truncate text-xs text-muted-foreground">
-                        {j.order.order_no} · {j.order.client_name}
-                      </div>
+                      {j.order && (
+                        <div className="truncate text-xs text-muted-foreground">
+                          {j.order.order_no} · {j.order.client_name}
+                        </div>
+                      )}
                     </button>
                     <JobStatusMenu job={j} />
                   </div>
                   <p className="line-clamp-2 text-sm">{j.work_details}</p>
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                     <span className="flex items-center gap-1">
-                      {j.area.name} <LocalityTag locality={j.locality} />
+                      {jobPlace(j) ?? "Location not set"} <LocalityTag locality={j.locality} />
                     </span>
                     <span>
                       {formatJobDates(j.start_date, j.end_date)} ({j.days}d)
                     </span>
-                    {j.vehicle && <span>{j.vehicle.reg_no}</span>}
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {j.members.map((m) => (
