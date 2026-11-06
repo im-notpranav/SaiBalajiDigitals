@@ -514,24 +514,24 @@ export const getAccountantDashboard = async (req: Request, res: Response) => {
       // Orders ready to be billed (Installed status)
       prisma.order.findMany({
         where: { ...baseWhere, status: "Installed" },
-        include: { items: true, stores: { select: { store_name: true, installed_at: true, installed_by: true } , orderBy: { s_no: "asc" as const } }, invoices: true },
+        include: { items: { select: { amount: true } }, stores: { select: { store_name: true, installed_at: true, installed_by: true } , orderBy: { s_no: "asc" as const } }, invoices: true },
       }),
       // Orders billed, awaiting payment (BillingCompleted or Pending)
       prisma.order.findMany({
         where: { ...baseWhere, status: { in: ["BillingCompleted", "Pending"] } },
-        include: { items: true, stores: { select: { store_name: true, installed_at: true, installed_by: true } , orderBy: { s_no: "asc" as const } }, invoices: true },
+        include: { items: { select: { amount: true } }, stores: { select: { store_name: true, installed_at: true, installed_by: true } , orderBy: { s_no: "asc" as const } }, invoices: true },
       }),
       // Recently completed (paid)
       prisma.order.findMany({
         where: { ...baseWhere, status: { in: CLOSED_STATUSES } },
-        include: { items: true, stores: { select: { store_name: true, installed_at: true, installed_by: true } , orderBy: { s_no: "asc" as const } }, invoices: true },
+        include: { items: { select: { amount: true } }, stores: { select: { store_name: true, installed_at: true, installed_by: true } , orderBy: { s_no: "asc" as const } }, invoices: true },
       }),
     ]);
 
     // Also get Active orders that have no production assignments (billable without production)
     const activeNoProd = await prisma.order.findMany({
       where: { ...baseWhere, status: "Active" },
-      include: { items: { include: { assignments: true } }, stores: { select: { store_name: true, installed_at: true, installed_by: true }, orderBy: { s_no: "asc" as const } }, invoices: true },
+      include: { items: { select: { amount: true, assignments: { select: { id: true } } } }, stores: { select: { store_name: true, installed_at: true, installed_by: true }, orderBy: { s_no: "asc" as const } }, invoices: true },
     });
     const activeReady = activeNoProd.filter(
       (o) => !(o.items ?? []).some((i: any) => (i.assignments?.length ?? 0) > 0)

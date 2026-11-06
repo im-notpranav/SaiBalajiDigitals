@@ -242,6 +242,9 @@ function summarize(samples: Sample[], seconds: number, stats: { cpu: number; mem
     p95_ms: Math.round(pct(all, 0.95)),
     p99_ms: Math.round(pct(all, 0.99)),
     failed: samples.filter((s) => s.status >= 400 || s.status === 0).length,
+    failed_by_status: samples
+      .filter((s) => s.status >= 400 || s.status === 0)
+      .reduce<Record<number, number>>((tally, s) => ({ ...tally, [s.status]: (tally[s.status] ?? 0) + 1 }), {}),
     cpu_core_share: Math.round((stats.cpu / seconds) * 1000) / 1000,
     cpu_ms_per_request: Math.round((stats.cpu * 1000 / samples.length) * 10) / 10,
     memory_peak_mb: Math.round(stats.memPeak / 1048576),

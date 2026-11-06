@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import { prisma } from "../utils/prisma";
-import { JWT_SECRET } from "../utils/config";
+import { JWT_SECRET, NODE_ENV } from "../utils/config";
 
 export interface AuthUser {
   id: number;
@@ -19,6 +19,17 @@ declare global {
   }
 }
 
+/**
+ * Every request re-reads its user, and that one query is a real share of the small CPU allowance
+ * with 150 staff. So a user is remembered briefly: a deactivation or role change takes effect
+ * within this time rather than instantly. Tests expect it at once.
+ */
+const USER_CACHE_MS = NODE_ENV === "test" ? 0 : 15_000;
+const recentUsers = new Map<number, {
+  user: { id: number; username: string; name: string; role: string; is_active: boolean; is_super_admin: boolean };
+  until: number;
+}>();
+
 export async function authenticate(req: Request, res: Response, next: NextFunction) {
   const token = req.cookies?.token;
   if (!token) {
@@ -29,10 +40,15 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
     const payload = jwt.verify(token, JWT_SECRET) as AuthUser;
 
     // Re-validate against the database: ensure user is still active and role hasn't changed
-    const dbUser = await prisma.user.findUnique({
-      where: { id: payload.id },
-      select: { id: true, username: true, name: true, role: true, is_active: true, is_super_admin: true },
-    });
+    const recent = recentUsers.get(payload.id);
+    let dbUser = recent && recent.until > Date.now() ? recent.user : null;
+    if (!dbUser) {
+      dbUser = await prisma.user.findUnique({
+        where: { id: payload.id },
+        select: { id: true, username: true, name: true, role: true, is_active: true, is_super_admin: true },
+      });
+      if (dbUser && USER_CACHE_MS > 0) recentUsers.set(payload.id, { user: dbUser, until: Date.now() + USER_CACHE_MS });
+    }
 
     if (!dbUser || !dbUser.is_active) {
       res.clearCookie("token");
