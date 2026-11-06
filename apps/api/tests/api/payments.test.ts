@@ -94,13 +94,24 @@ describe("resubmitting a returned request (GAP-D02)", () => {
 });
 
 describe("once approved for payment (GAP-C07, GAP-D04)", () => {
-  it("only Cost Control cancels, with a reason", async () => {
+  it("only Cost Control rejects, with a reason, and nobody cancels", async () => {
     const r = await pendingPayment();
-    expect((await as(admin).post(`/api/payment-requests/${r.id}/cancel`).send({ note: "Duplicate" })).status).toBe(403);
-    expect((await as(csm).post(`/api/payment-requests/${r.id}/cancel`).send({})).status).toBe(403);
-    expect((await as(ccm).post(`/api/payment-requests/${r.id}/cancel`).send({})).status).toBe(400);
-    expect((await as(ccm).post(`/api/payment-requests/${r.id}/cancel`).send({ note: "Duplicate" })).status).toBe(200);
-    expect(await statusOf(r.id)).toBe("CANCELLED");
+    expect((await as(ccm).post(`/api/payment-requests/${r.id}/cancel`).send({ note: "Duplicate" })).status).toBe(409);
+    expect((await as(admin).post(`/api/payment-requests/${r.id}/reject`).send({ note: "Duplicate" })).status).toBe(403);
+    expect((await as(csm).post(`/api/payment-requests/${r.id}/reject`).send({ note: "Duplicate" })).status).toBe(403);
+    expect((await as(ccm).post(`/api/payment-requests/${r.id}/reject`).send({})).status).toBe(400);
+    expect((await as(ccm).post(`/api/payment-requests/${r.id}/reject`).send({ note: "Duplicate" })).status).toBe(200);
+    expect(await statusOf(r.id)).toBe("REJECTED");
+  });
+
+  it("marks paid without a UTR, and cannot be rejected after that", async () => {
+    const r = await pendingPayment();
+    expect((await as(ccm).post(`/api/payment-requests/${r.id}/mark-paid`).send({ payment_reference: "12" })).status).toBe(400);
+    expect((await as(ccm).post(`/api/payment-requests/${r.id}/mark-paid`).send({ payment_reference: " " })).status).toBe(200);
+    const row = await prisma.paymentRequest.findUniqueOrThrow({ where: { id: r.id } });
+    expect(row.status).toBe("PAID");
+    expect(row.payment_reference).toBeNull();
+    expect((await as(ccm).post(`/api/payment-requests/${r.id}/reject`).send({ note: "Too late" })).status).toBe(409);
   });
 
   it("paying less than asked needs a note", async () => {

@@ -6,11 +6,12 @@
  * money the company pays out to the requester by UPI; it never touches order status or
  * order revenue.
  *
- * Routes (decided 2026-10-20), fixed at submission by "Bill details required?":
- *   No bill  (ADMIN_THEN_CCM): ADMIN_REVIEW → CCM_REVIEW → PAYMENT_PENDING → PAID → CLOSED
- *   Bill     (CCM_ONLY):       CCM_REVIEW → PAYMENT_PENDING → PAID → CLOSED
+ * Routes (decided 2026-10-20), fixed at submission by the requester's choice:
+ *   No need to submit details (ADMIN_THEN_CCM): ADMIN_REVIEW → CCM_REVIEW → PAYMENT_PENDING → PAID → CLOSED
+ *   Need to submit details    (CCM_ONLY):       CCM_REVIEW → PAYMENT_PENDING → PAID → CLOSED
  * Either review stage can reject (→ REJECTED) or return for information (→ INFO_REQUESTED,
- * and back to the same stage when the requester resubmits).
+ * and back to the same stage when the requester resubmits). Cost Control can still reject
+ * after approving, until the request is marked paid.
  *
  * Gap-review decisions (2026-10-22): a bill request needs its bill before Cost Control
  * approves it; any request above the Admin threshold starts with the Admin; a resubmission
@@ -193,12 +194,14 @@ export const PAYMENT_RULES: Record<Exclude<PaymentAction, "SUBMIT" | "ATTACH" | 
     // (GAP-D01): the bill is what lets it skip the Admin.
     blockedBy: (r, ctx) =>
       r.status === "CCM_REVIEW" && r.bill_details_required && !ctx.billCount
-        ? "Attach the bill before approving: this request was raised with bill details."
+        ? "Attach the bill before approving: this request needs details submitted."
         : null,
   },
   REJECT: {
-    from: ["ADMIN_REVIEW", "CCM_REVIEW"],
-    allowed: isStageReviewer,
+    // Once approved for payment, Cost Control can still reject until it is marked paid.
+    // After that the money has gone, and payout errors are handled outside the app (D-09).
+    from: ["ADMIN_REVIEW", "CCM_REVIEW", "PAYMENT_PENDING"],
+    allowed: (r, a, ctx) => (r.status === "PAYMENT_PENDING" ? actsForCcm(a, ctx) : isStageReviewer(r, a, ctx)),
     to: () => "REJECTED",
     noteRequired: () => true,
     who: "the reviewer for this stage",
@@ -221,16 +224,13 @@ export const PAYMENT_RULES: Record<Exclude<PaymentAction, "SUBMIT" | "ATTACH" | 
   },
   CANCEL: {
     // The requester may withdraw before anyone has approved it. The Admin may cancel while
-    // it is under review, with a reason. Once approved for payment, only Cost Control may
-    // cancel, because Cost Control may already be sending the money (GAP-C07).
-    from: ["ADMIN_REVIEW", "CCM_REVIEW", "INFO_REQUESTED", "PAYMENT_PENDING"],
-    allowed: (r, a, ctx) =>
-      r.status === "PAYMENT_PENDING"
-        ? actsForCcm(a, ctx)
-        : a.role === "ADMIN" || (isRequester(r, a) && !approvedYet(r, ctx)),
+    // it is under review, with a reason. Once approved for payment nobody cancels: Cost
+    // Control, who may already be sending the money, rejects it instead (GAP-C07).
+    from: ["ADMIN_REVIEW", "CCM_REVIEW", "INFO_REQUESTED"],
+    allowed: (r, a, ctx) => a.role === "ADMIN" || (isRequester(r, a) && !approvedYet(r, ctx)),
     to: () => "CANCELLED",
     noteRequired: (r, a) => !isRequester(r, a),
-    who: "the requester before approval, the Admin during review, or Cost Control once approved",
+    who: "the requester before approval, or the Admin during review",
   },
   MARK_PAID: {
     from: ["PAYMENT_PENDING"],
@@ -246,7 +246,7 @@ export const PAYMENT_RULES: Record<Exclude<PaymentAction, "SUBMIT" | "ATTACH" | 
     // A request raised with bill details cannot close until a bill is attached.
     blockedBy: (r, ctx) =>
       r.bill_details_required && !ctx.billCount
-        ? "Attach the bill before closing: this request was raised with bill details."
+        ? "Attach the bill before closing: this request needs details submitted."
         : null,
   },
 };

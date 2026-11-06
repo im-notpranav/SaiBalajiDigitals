@@ -641,7 +641,7 @@ model PaymentRequest {
   status_changed_at     DateTime              @default(now())
   paid_amount           Decimal?              @db.Decimal(10, 2)
   paid_at               DateTime?
-  /// UTR or other bank reference, required to mark a request paid.
+  /// UTR or other bank reference, optional when marking a request paid.
   payment_reference     String?
   paid_by               Int?
   payer                 User?                 @relation("PaymentPayer", fields: [paid_by], references: [id], onDelete: SetNull)

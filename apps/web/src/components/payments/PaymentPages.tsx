@@ -486,7 +486,7 @@ export function PaymentReviewQueue({
                     )}
                   </TableCell>
                   <TableCell className="text-sm">
-                    <div>{r.bill_details_required ? "Yes" : "No"}</div>
+                    <div>{r.bill_details_required ? "Need to submit" : "No need"}</div>
                     {r.bill_missing ? (
                       <BillMissing timer={billTimer(r)} />
                     ) : (

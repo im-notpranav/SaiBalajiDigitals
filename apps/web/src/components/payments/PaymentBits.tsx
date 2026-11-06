@@ -376,7 +376,7 @@ export function NewPaymentRequestDialog({
     if (!order.eligibility.eligible) return setError(order.eligibility.reason);
     const read = readDraft(draft);
     if ("error" in read) return setError(read.error);
-    if (bill === null) return setError("Answer “Bill details required?”.");
+    if (bill === null) return setError("Choose whether you need to submit details.");
     save.mutate({
       ...read.input,
       order_id: order.id,
@@ -436,17 +436,17 @@ export function NewPaymentRequestDialog({
           <RequestFields draft={draft} onChange={setDraft} />
 
           <div className="grid gap-1.5">
-            <Label>Bill details required?</Label>
+            <Label>Bill details</Label>
             <div className="grid grid-cols-2 gap-2">
               {[
                 {
                   v: true,
-                  label: "Yes, I have a bill",
-                  hint: "Goes straight to Cost Control. Bill must be attached before it closes.",
+                  label: "Need to submit details",
+                  hint: "Goes to Cost Control. The bill must be attached before it is approved. Large amounts go to the Admin first.",
                 },
                 {
                   v: false,
-                  label: "No bill",
+                  label: "No need to submit details",
                   hint: "The Admin approves first, then Cost Control.",
                 },
               ].map((o) => (

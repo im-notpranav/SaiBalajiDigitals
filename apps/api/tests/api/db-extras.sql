@@ -66,7 +66,7 @@ ALTER TABLE "OvertimeEntry" ADD CONSTRAINT "OvertimeEntry_no_overlap"
     EXCLUDE USING gist ("user_id" WITH =, int4range("start_minute", "start_minute" + "minutes") WITH &&)
     WHERE ("status" <> 'REJECTED');
 
--- 20261024000000_add_payment_requests
+-- 20261024000000_add_payment_requests, 20261106000000_payment_reference_optional
 ALTER TABLE "PaymentRequest" ADD CONSTRAINT "PaymentRequest_amount_check" CHECK ("amount" > 0);
 ALTER TABLE "PaymentRequest" ADD CONSTRAINT "PaymentRequest_paid_amount_check"
     CHECK ("paid_amount" IS NULL OR ("paid_amount" > 0 AND "paid_amount" <= "amount"));
@@ -76,7 +76,7 @@ ALTER TABLE "PaymentRequest" ADD CONSTRAINT "PaymentRequest_returned_check"
     CHECK ("status" <> 'INFO_REQUESTED' OR "returned_from" IN ('ADMIN_REVIEW', 'CCM_REVIEW'));
 ALTER TABLE "PaymentRequest" ADD CONSTRAINT "PaymentRequest_paid_check"
     CHECK ("status" NOT IN ('PAID', 'CLOSED')
-           OR ("paid_at" IS NOT NULL AND "paid_amount" IS NOT NULL AND "payment_reference" IS NOT NULL));
+           OR ("paid_at" IS NOT NULL AND "paid_amount" IS NOT NULL));
 CREATE OR REPLACE FUNCTION fn_payment_event_immutable() RETURNS trigger AS $$
 BEGIN
     RAISE EXCEPTION 'PaymentRequestEvent rows cannot be changed';

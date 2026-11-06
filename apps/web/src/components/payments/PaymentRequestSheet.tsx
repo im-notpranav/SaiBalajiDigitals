@@ -189,15 +189,20 @@ export function PaymentRequestSheet({
                 </Row>
                 <Row label="Bill details">
                   {r.bill_details_required
-                    ? "Yes: approved for payment only once the bill is attached"
-                    : "No: Admin, then Cost Control"}
+                    ? "Need to submit: approved for payment only once the bill is attached"
+                    : "No need to submit: Admin, then Cost Control"}
                 </Row>
                 {r.remarks && <Row label="Remarks">{r.remarks}</Row>}
                 <Row label="Raised">{formatWhen(r.created_at)}</Row>
                 {r.paid_at && (
                   <Row label="Paid">
-                    {formatRupees(r.paid_amount)} · ref{" "}
-                    <span className="font-mono">{r.payment_reference}</span>
+                    {formatRupees(r.paid_amount)}
+                    {r.payment_reference && (
+                      <>
+                        {" "}
+                        · ref <span className="font-mono">{r.payment_reference}</span>
+                      </>
+                    )}
                     <span className="text-muted-foreground">
                       {" "}
                       · {r.payer?.name} · {formatWhen(r.paid_at)}
@@ -382,12 +387,13 @@ function ActionDialog({
       if (!Number.isFinite(paid) || paid <= 0) return setError("Enter the amount paid.");
       if (paid > request.amount)
         return setError(`Cannot pay more than the ${formatRupees(request.amount)} asked for.`);
-      if (reference.trim().length < 4) return setError("Enter the UTR or bank reference.");
+      if (reference.trim() && reference.trim().length < 4)
+        return setError("Enter the full UTR or bank reference, or leave it blank.");
       if (paysShort && !note.trim())
         return setError(`Say why ${formatRupees(request.amount - paid)} less than asked is being paid.`);
       return run.mutate({
         paid_amount: paid,
-        payment_reference: reference.trim(),
+        payment_reference: reference.trim() || null,
         note: note.trim() || null,
       });
     }
@@ -400,15 +406,14 @@ function ActionDialog({
       request.status === "ADMIN_REVIEW"
         ? "It moves on to Cost Control for their approval."
         : "It moves to payment pending. Pay it, then mark it paid here.",
-    REJECT: "The requester is told why. A rejected request cannot be reopened.",
+    REJECT:
+      request.status === "PAYMENT_PENDING"
+        ? "Reject this approved request. Only do this if the money has not been sent. The requester is told why, and it cannot be reopened."
+        : "The requester is told why. A rejected request cannot be reopened.",
     RETURN: "It goes back to the requester to correct and resubmit. Say what is missing.",
     RESUBMIT:
       "Correct the details and send it back to the same reviewer. Asking for more, or changing where it is paid, starts review again from the beginning.",
-    CANCEL: request.is_mine
-      ? "Withdraw this request."
-      : request.status === "PAYMENT_PENDING"
-        ? "Cancel this approved request. Only do this if the money has not been sent. The requester is told why."
-        : "Cancel this request. The requester is told why.",
+    CANCEL: request.is_mine ? "Withdraw this request." : "Cancel this request. The requester is told why.",
     MARK_PAID: `Record the payment to ${payeeText(request)}.`,
     CLOSE: "Close the request once the payment and paperwork are settled.",
   };
@@ -444,7 +449,9 @@ function ActionDialog({
                 />
               </div>
               <div className="grid gap-1.5">
-                <Label htmlFor="pr-ref">UTR / reference</Label>
+                <Label htmlFor="pr-ref">
+                  UTR / reference <span className="font-normal text-muted-foreground">(optional)</span>
+                </Label>
                 <Input
                   id="pr-ref"
                   value={reference}

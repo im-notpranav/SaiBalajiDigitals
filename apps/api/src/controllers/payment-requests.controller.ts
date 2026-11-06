@@ -261,7 +261,7 @@ async function notifyAfter(
   to: PaymentRequestStatus,
   actor: Actor,
   note: string | null,
-  paid?: { amount: number; reference: string; shortBy: number },
+  paid?: { amount: number; reference: string | null; shortBy: number },
 ) {
   // A request goes by its order's number; the amount tells two on one order apart.
   const no = r.order.order_no;
@@ -328,9 +328,10 @@ async function notifyAfter(
     case "MARK_PAID":
       await toRequester(
         "Payment sent",
-        `${no}: ${formatRupees(paid!.amount)} paid to ${payTo}. Reference ${paid!.reference}.` +
+        `${no}: ${formatRupees(paid!.amount)} paid to ${payTo}.` +
+          (paid!.reference ? ` Reference ${paid!.reference}.` : "") +
           (paid!.shortBy ? ` ${formatRupees(paid!.shortBy)} less than asked: ${note}` : ""),
-        ["PAYMENT_PAID", [formatRupees(paid!.amount), payTo, no, paid!.reference]],
+        ["PAYMENT_PAID", [formatRupees(paid!.amount), payTo, no, paid!.reference ?? "not recorded"]],
       );
       break;
     case "CLOSE":
@@ -448,7 +449,7 @@ export const createRequest = async (req: Request, res: Response) => {
               actor_id: actor.id,
               actor_role: actor.role as Role,
               note: [
-                body.bill_details_required ? "Bill details given" : "No bill details",
+                body.bill_details_required ? "Need to submit details" : "No need to submit details",
                 overLimit ? `Over the ${formatRupees(adminThreshold)} Admin review limit` : null,
               ]
                 .filter(Boolean)
@@ -476,8 +477,8 @@ export const createRequest = async (req: Request, res: Response) => {
           overLimit
             ? "New request over the Admin review limit"
             : body.bill_details_required
-              ? "New request with bill details"
-              : "New request without bill details",
+              ? "New request, details to be submitted"
+              : "New request, no details to submit",
         ],
         { type: "payment_request", id: row.id },
         actor.id,
@@ -674,7 +675,7 @@ export const transition = (action: WorkflowAction) => async (req: Request, res: 
       const now = new Date();
       const data: Prisma.PaymentRequestUncheckedUpdateManyInput = { status: check.to, status_changed_at: now };
       const changes: string[] = [];
-      let paid: { amount: number; reference: string; shortBy: number } | undefined;
+      let paid: { amount: number; reference: string | null; shortBy: number } | undefined;
 
       if (action === "RETURN") data.returned_from = r.status;
       if (action === "RESUBMIT" && resubmit) {
@@ -707,11 +708,12 @@ export const transition = (action: WorkflowAction) => async (req: Request, res: 
         if (shortBy > 0.005 && !note?.trim()) {
           throw new HttpError(400, `Say why ${formatRupees(shortBy)} less than asked is being paid.`);
         }
-        paid = { amount, reference: paidBody.payment_reference, shortBy: shortBy > 0.005 ? shortBy : 0 };
+        const reference = paidBody.payment_reference ?? null;
+        paid = { amount, reference, shortBy: shortBy > 0.005 ? shortBy : 0 };
         Object.assign(data, {
           paid_amount: amount,
           paid_at: now,
-          payment_reference: paidBody.payment_reference,
+          payment_reference: reference,
           paid_by: actor.id,
         });
       }
@@ -721,7 +723,7 @@ export const transition = (action: WorkflowAction) => async (req: Request, res: 
       if (count === 0) throw new HttpError(409, "Someone else changed this request just now. Reload and try again.");
 
       const eventNote = [
-        paid ? `Paid ${formatRupees(paid.amount)}, reference ${paid.reference}` : null,
+        paid ? `Paid ${formatRupees(paid.amount)}${paid.reference ? `, reference ${paid.reference}` : ""}` : null,
         paid?.shortBy ? `${formatRupees(paid.shortBy)} less than asked` : null,
         changes.length ? `Changed ${changes.join(", ")}` : null,
         ctx.materialChange ? "Sent back to the start of review because the amount went up or the payee changed" : null,

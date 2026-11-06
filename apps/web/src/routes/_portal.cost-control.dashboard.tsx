@@ -11,7 +11,7 @@ function CostControlDashboard() {
   return (
     <PaymentReviewQueue
       title="Cost Control"
-      description="Requests with bill details come straight to you; requests without bills arrive after the Admin approves them. Approve, pay to the UPI ID or UPI mobile number given, then close."
+      description="Requests that need details submitted come straight to you; the rest, and anything above the Admin limit, arrive after the Admin approves them. Approve, pay to the UPI ID or UPI mobile number given, then close."
       crumbs={[{ label: "Cost Control" }]}
     />
   );

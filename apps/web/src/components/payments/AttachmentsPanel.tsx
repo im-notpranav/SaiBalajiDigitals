@@ -114,8 +114,8 @@ export function AttachmentsPanel({
       {request.bill_missing && (
         <div className="flex items-start gap-1.5 rounded-xl border border-warning/40 bg-warning/10 px-3 py-2 text-xs">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          This request was raised with bill details. Attach the bill before it can be approved
-          for payment or closed.
+          This request needs details submitted. Attach the bill before it can be approved for
+          payment or closed.
         </div>
       )}
 

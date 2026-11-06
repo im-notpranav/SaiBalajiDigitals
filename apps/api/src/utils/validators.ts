@@ -494,6 +494,10 @@ export const paymentResubmitSchema = z.object({
 export const paymentMarkPaidSchema = z.object({
   /** Defaults to the amount asked for. */
   paid_amount: rupees.optional().nullable(),
-  payment_reference: z.string().trim().min(4, "Enter the UTR or bank reference").max(64),
+  /** Optional; blank means none was given. */
+  payment_reference: z.preprocess(
+    (v) => (typeof v === "string" && !v.trim() ? null : v),
+    z.string().trim().min(4, "Enter the full UTR or bank reference, or leave it blank").max(64).optional().nullable(),
+  ),
   note: z.string().trim().max(500).optional().nullable(),
 });

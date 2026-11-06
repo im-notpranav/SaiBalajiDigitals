@@ -241,9 +241,8 @@ function PaymentThresholdCard() {
     <div className="surface-panel p-6">
       <h3 className="mb-1 text-sm font-semibold">Admin review limit for payment requests</h3>
       <p className="mb-4 text-xs text-muted-foreground">
-        A request raised with bill details normally goes straight to Cost Control. Above this amount
-        it starts with the Admin instead, like a request without a bill. Requests already raised keep
-        their route.
+        A request that needs details submitted normally goes straight to Cost Control. Above this
+        amount it starts with the Admin instead. Requests already raised keep their route.
       </p>
       <form
         className="flex flex-wrap items-end gap-3"

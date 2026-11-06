@@ -24,7 +24,7 @@ function AdminPayments() {
   return (
     <PaymentReviewQueue
       title="Payment Requests"
-      description="Requests without bill details wait here for your approval before Cost Control pays them."
+      description="Requests with no details to submit, and anything above your limit, wait here for your approval before Cost Control pays them."
       crumbs={[{ label: "Payment Request" }, { label: "Requests" }]}
     />
   );

@@ -9,7 +9,7 @@ export const SETTINGS = {
   payment_overdue_days: { default: 10, valid: (v: unknown) => Number.isInteger(v) && (v as number) >= 1 && (v as number) <= 90 },
   /** Payment requests above this many rupees always go to the Admin first (decision D-07). */
   payment_admin_threshold: {
-    default: 10_000,
+    default: 5_000,
     valid: (v: unknown) => typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= 99_999_999,
   },
 } as const;

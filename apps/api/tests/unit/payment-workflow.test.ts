@@ -31,13 +31,13 @@ describe("routes and entry stage", () => {
   });
 
   it("starts at the route's first stage at or below the threshold", () => {
-    expect(entryStage("CCM_ONLY", 10_000, 10_000)).toBe("CCM_REVIEW");
-    expect(entryStage("ADMIN_THEN_CCM", 500, 10_000)).toBe("ADMIN_REVIEW");
+    expect(entryStage("CCM_ONLY", 5_000, 5_000)).toBe("CCM_REVIEW");
+    expect(entryStage("ADMIN_THEN_CCM", 500, 5_000)).toBe("ADMIN_REVIEW");
   });
 
   it("sends anything above the threshold to the Admin first, bill or not (D-07)", () => {
-    expect(entryStage("CCM_ONLY", 10_000.01, 10_000)).toBe("ADMIN_REVIEW");
-    expect(entryStage("CCM_ONLY", 50_000, 10_000)).toBe("ADMIN_REVIEW");
+    expect(entryStage("CCM_ONLY", 5_000.01, 5_000)).toBe("ADMIN_REVIEW");
+    expect(entryStage("CCM_ONLY", 50_000, 5_000)).toBe("ADMIN_REVIEW");
   });
 });
 
@@ -64,7 +64,7 @@ describe("approve", () => {
     expect(checkTransition(r, "APPROVE", ADMIN, null, { noActiveCcm: true })).toEqual({ ok: true, to: "PAYMENT_PENDING" });
     expect(checkTransition(r, "APPROVE", ADMIN, null, { noActiveCcm: false })).toMatchObject({ ok: false, status: 403 });
     const pending = req({ status: "PAYMENT_PENDING" });
-    expect(availableActions(pending, ADMIN, { noActiveCcm: true })).toEqual(expect.arrayContaining(["MARK_PAID", "CANCEL"]));
+    expect(availableActions(pending, ADMIN, { noActiveCcm: true })).toEqual(expect.arrayContaining(["MARK_PAID", "REJECT"]));
     expect(availableActions(pending, ADMIN)).toEqual([]);
   });
 });
@@ -78,6 +78,15 @@ describe("reject and return", () => {
 
   it("refuses from a closed status with 409", () => {
     expect(checkTransition(req({ status: "PAID" }), "REJECT", ADMIN, "no")).toMatchObject({ ok: false, status: 409 });
+  });
+
+  it("lets Cost Control reject after approving, until it is marked paid", () => {
+    const pending = req({ status: "PAYMENT_PENDING" });
+    expect(checkTransition(pending, "REJECT", CCM)).toMatchObject({ ok: false, status: 400 });
+    expect(checkTransition(pending, "REJECT", CCM, "Duplicate")).toEqual({ ok: true, to: "REJECTED" });
+    expect(checkTransition(pending, "REJECT", ADMIN, "Duplicate")).toMatchObject({ ok: false, status: 403 });
+    expect(checkTransition(pending, "REJECT", REQUESTER, "Duplicate")).toMatchObject({ ok: false, status: 403 });
+    expect(checkTransition(req({ status: "PAID" }), "REJECT", CCM, "Too late")).toMatchObject({ ok: false, status: 409 });
   });
 });
 
@@ -130,12 +139,11 @@ describe("cancel", () => {
     expect(checkTransition(req(), "CANCEL", ADMIN, "Duplicate")).toEqual({ ok: true, to: "CANCELLED" });
   });
 
-  it("leaves a payment-pending request to Cost Control only (GAP-C07)", () => {
+  it("is not open to anyone once approved for payment (GAP-C07)", () => {
     const pending = req({ status: "PAYMENT_PENDING" });
-    expect(checkTransition(pending, "CANCEL", ADMIN, "Duplicate")).toMatchObject({ ok: false, status: 403 });
-    expect(checkTransition(pending, "CANCEL", REQUESTER)).toMatchObject({ ok: false, status: 403 });
-    expect(checkTransition(pending, "CANCEL", CCM, "Duplicate")).toEqual({ ok: true, to: "CANCELLED" });
-    expect(checkTransition(pending, "CANCEL", CCM)).toMatchObject({ ok: false, status: 400 });
+    expect(checkTransition(pending, "CANCEL", CCM, "Duplicate")).toMatchObject({ ok: false, status: 409 });
+    expect(checkTransition(pending, "CANCEL", ADMIN, "Duplicate")).toMatchObject({ ok: false, status: 409 });
+    expect(checkTransition(pending, "CANCEL", REQUESTER)).toMatchObject({ ok: false, status: 409 });
   });
 });
 
