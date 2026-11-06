@@ -2,11 +2,12 @@
 import { CLIENT_URL, NODE_ENV } from "./utils/config";
 
 import express from "express";
+import compression from "compression";
 import cors from "cors";
 import helmet from "helmet";
 import cookieParser from "cookie-parser";
 import rateLimit from "express-rate-limit";
-import { clientIpKey } from "./utils/rate-limit";
+import { userOrIpKey } from "./utils/rate-limit";
 
 /**
  * The Express app, without listening or background workers, so tests can drive it
@@ -18,6 +19,9 @@ const app = express();
 app.set("trust proxy", 1);
 
 app.use(helmet());
+// Long lists shrink a great deal for a phone on mobile data. The low level costs little of the
+// small CPU share the free hosting gives; small replies are left as they are.
+app.use(compression({ level: 4, threshold: 2048 }));
 
 // Health checks sit ahead of CORS and the rate limiter so uptime monitors
 // (which send no Origin and ping on a schedule) are never blocked or throttled.
@@ -42,15 +46,16 @@ app.use(cookieParser());
 import whatsappRoutes, { webhookRouter } from "./routes/whatsapp.routes";
 app.use("/api/webhooks", webhookRouter);
 
-// Global rate limit: 200 requests per minute per IP (generous for 50-60 employees).
+// Global rate limit: 300 requests per minute per signed-in person, and per address for everyone
+// signed out, which covers the login page of a full office at nine.
 // The API test suite sends far more than that from one address, so it is off under test.
 app.use(
   rateLimit({
     windowMs: 60 * 1000,
-    max: 200,
+    max: 300,
     standardHeaders: true,
     legacyHeaders: false,
-    keyGenerator: clientIpKey,
+    keyGenerator: userOrIpKey,
     skip: () => NODE_ENV === "test",
     message: { message: "Too many requests. Please slow down." },
   })

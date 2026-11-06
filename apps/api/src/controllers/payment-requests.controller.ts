@@ -813,8 +813,8 @@ export const uploadAttachment = async (req: Request, res: Response) => {
     if (!mime) throw new HttpError(415, "Only photos (JPG, PNG, WEBP, HEIC) and PDF files can be attached.");
     const sha256 = createHash("sha256").update(data).digest("hex");
 
-    const created = await withAudit(actor.id, async (tx) => {
-      const r = await tx.paymentRequest.findUnique({
+    const checkAllowed = async (db: Pick<Prisma.TransactionClient, "paymentRequest" | "paymentAttachment">) => {
+      const r = await db.paymentRequest.findUnique({
         where: { id },
         select: { id: true, order_id: true, status: true, requested_by: true },
       });
@@ -828,7 +828,7 @@ export const uploadAttachment = async (req: Request, res: Response) => {
         throw new HttpError(403, `You cannot add a ${ATTACHMENT_KIND_LABELS[kind].toLowerCase()} to this request.`);
       }
 
-      const live = await tx.paymentAttachment.findMany({
+      const live = await db.paymentAttachment.findMany({
         where: { request_id: id, deleted_at: null },
         select: { sha256: true },
       });
@@ -836,39 +836,54 @@ export const uploadAttachment = async (req: Request, res: Response) => {
       if (live.length >= MAX_FILES_PER_REQUEST) {
         throw new HttpError(409, `A request can hold up to ${MAX_FILES_PER_REQUEST} files. Remove one first.`);
       }
+      return r;
+    };
 
-      const store = currentStore();
-      const row = await tx.paymentAttachment.create({
-        data: {
-          request_id: id,
-          order_id: r.order_id,
-          kind,
-          original_name: name,
-          mime,
-          size_bytes: data.length,
-          sha256,
-          storage: store.name,
-          uploaded_by: actor.id,
-        },
-      });
-      const key = await store.put(tx, row.id, data);
-      if (key) await tx.paymentAttachment.update({ where: { id: row.id }, data: { storage_key: key } });
+    // Checked before the upload, so nobody can fill the bucket with files they may not add, and
+    // again inside the transaction, which is the check that counts.
+    await checkAllowed(prisma);
+    const store = currentStore();
+    const storageKey = await store.prepare(id, data, mime);
 
-      await tx.paymentRequestEvent.create({
-        data: {
-          request_id: id,
-          action: "ATTACH",
-          from_status: r.status,
-          to_status: r.status,
-          actor_id: actor.id,
-          actor_role: actor.role as Role,
-          note: `${ATTACHMENT_KIND_LABELS[kind]}: ${name}`,
-        },
+    let created;
+    try {
+      created = await withAudit(actor.id, async (tx) => {
+        const r = await checkAllowed(tx);
+        const row = await tx.paymentAttachment.create({
+          data: {
+            request_id: id,
+            order_id: r.order_id,
+            kind,
+            original_name: name,
+            mime,
+            size_bytes: data.length,
+            sha256,
+            storage: store.name,
+            storage_key: storageKey,
+            uploaded_by: actor.id,
+          },
+        });
+        await store.put(tx, row.id, data);
+
+        await tx.paymentRequestEvent.create({
+          data: {
+            request_id: id,
+            action: "ATTACH",
+            from_status: r.status,
+            to_status: r.status,
+            actor_id: actor.id,
+            actor_role: actor.role as Role,
+            note: `${ATTACHMENT_KIND_LABELS[kind]}: ${name}`,
+          },
+        });
+        const file = await tx.paymentAttachment.findUniqueOrThrow({ where: { id: row.id }, include: fileInclude });
+        const approvedOnce = (await tx.paymentRequestEvent.count({ where: { request_id: id, action: "APPROVE" } })) > 0;
+        return { file, r, approvedOnce };
       });
-      const file = await tx.paymentAttachment.findUniqueOrThrow({ where: { id: row.id }, include: fileInclude });
-      const approvedOnce = (await tx.paymentRequestEvent.count({ where: { request_id: id, action: "APPROVE" } })) > 0;
-      return { file, r, approvedOnce };
-    });
+    } catch (err) {
+      if (storageKey) await store.discard(storageKey).catch(() => {});
+      throw err;
+    }
 
     return res.status(201).json({ attachment: serializeFile(created.file, created.r, actor, created.approvedOnce) });
   } catch (err) {
@@ -904,7 +919,7 @@ export const downloadAttachment = async (req: Request, res: Response) => {
 };
 
 /**
- * DELETE /:id/attachments/:fileId — a soft delete; the file stays in the database and the
+ * DELETE /:id/attachments/:fileId — a soft delete; the file stays in storage and the
  * history. Removing a file someone else added needs a `note` in the body.
  */
 export const removeAttachment = async (req: Request, res: Response) => {

@@ -28,6 +28,7 @@
     "@types/nodemailer": "^6.4.24",
     "aws4fetch": "^1.0.20",
     "bcryptjs": "^2.4.3",
+    "compression": "^1.8.2",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "dotenv": "^16.6.1",
@@ -47,6 +48,7 @@
     "seed": "tsx prisma/seed.ts"
   },
   "devDependencies": {
+    "@types/compression": "^1.8.1",
     "@types/supertest": "^6.0.3",
     "nodemon": "^3.1.14",
     "supertest": "^7.1.4",

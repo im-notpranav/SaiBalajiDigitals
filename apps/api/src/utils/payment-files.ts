@@ -3,12 +3,15 @@
  * the bytes are kept.
  *
  * Storage: the API runs on Render, whose disk is wiped on every restart, so files cannot
- * live on disk. They go in Postgres (PaymentAttachmentBlob) for now. Cloudflare R2 can
- * replace that behind FileStore once a bucket and keys exist; `PaymentAttachment.storage`
- * records which store holds each file, so both can be read side by side.
+ * live on disk. They go to Cloudflare R2 when it is set up, which keeps the small free
+ * database free of file bytes, and to Postgres (PaymentAttachmentBlob) when it is not.
+ * `PaymentAttachment.storage` records which store holds each file, so both can be read side
+ * by side.
  */
 
+import { randomUUID } from "node:crypto";
 import type { PaymentAttachmentKind, PaymentRequestStatus, Prisma } from "@prisma/client";
+import { objectStore } from "./object-store";
 import { prisma } from "./prisma";
 import { isReviewerRole, type Actor } from "./payment-workflow";
 
@@ -87,27 +90,53 @@ export function canRemoveFile(
 
 export interface FileStore {
   name: "db" | "r2";
-  /** Save the bytes for an attachment row; returns the storage key, if the store uses one. */
-  put(tx: Prisma.TransactionClient, attachmentId: number, data: Buffer): Promise<string | null>;
+  /**
+   * Runs before the database transaction, so a slow upload holds no connection. Returns the
+   * storage key, if the store uses one.
+   */
+  prepare(requestId: number, data: Buffer, mime: string): Promise<string | null>;
+  /** Save the bytes for an attachment row, inside the transaction, if `prepare` did not. */
+  put(tx: Prisma.TransactionClient, attachmentId: number, data: Buffer): Promise<void>;
   get(file: { id: number; storage_key: string | null }): Promise<Buffer | null>;
+  /** Undo `prepare` when the transaction fails. */
+  discard(key: string): Promise<void>;
 }
 
 const dbStore: FileStore = {
   name: "db",
+  async prepare() {
+    return null;
+  },
   async put(tx, attachmentId, data) {
     await tx.paymentAttachmentBlob.create({ data: { attachment_id: attachmentId, data } });
-    return null;
   },
   async get(file) {
     const blob = await prisma.paymentAttachmentBlob.findUnique({ where: { attachment_id: file.id } });
     return blob ? Buffer.from(blob.data) : null;
   },
+  async discard() {},
 };
 
-const STORES: Record<string, FileStore> = { db: dbStore };
+const r2Store: FileStore = {
+  name: "r2",
+  async prepare(requestId, data, mime) {
+    const key = `payments/${requestId}/${randomUUID()}`;
+    await objectStore!.put(key, data, mime);
+    return key;
+  },
+  async put() {},
+  async get(file) {
+    return file.storage_key ? objectStore!.get(file.storage_key) : null;
+  },
+  async discard(key) {
+    await objectStore!.remove(key);
+  },
+};
+
+const STORES: Record<string, FileStore> = objectStore ? { db: dbStore, r2: r2Store } : { db: dbStore };
 
 /** The store new files go to. */
-export const currentStore = (): FileStore => dbStore;
+export const currentStore = (): FileStore => (objectStore ? r2Store : dbStore);
 
 /** The store holding an existing file. */
 export function storeFor(name: string): FileStore {

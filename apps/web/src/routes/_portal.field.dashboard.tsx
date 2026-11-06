@@ -57,7 +57,7 @@ function FieldDashboard() {
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["my", "work-jobs"],
     queryFn: fetchMyJobs,
-    refetchInterval: 60_000,
+    refetchInterval: 120_000,
   });
 
   const today = data?.today ?? "";

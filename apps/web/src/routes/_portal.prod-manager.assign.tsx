@@ -24,7 +24,7 @@ function ProdManagerAssignPage() {
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["orders", "prod-manager"],
-    queryFn: () => fetchOrders({ limit: 100 }),
+    queryFn: () => fetchOrders({ limit: 100, items: "full" }),
   });
 
   const { data: staffData } = useQuery({

@@ -26,6 +26,8 @@ import {
 import { sanitizeZodErrors } from "../utils/sanitize-errors";
 
 
+const MAX_ORDERS_PER_PAGE = 200;
+
 export const getOrders = async (req: Request, res: Response) => {
   try {
     const { section, order_no, client, store, status, q, page = "1", limit = "50" } = req.query;
@@ -48,7 +50,6 @@ export const getOrders = async (req: Request, res: Response) => {
     // A store match may sit on any of the order's stores. Collected under AND so that a
     // store filter and a free-text search can both apply instead of overwriting each other.
     const storeMatch = (term: string) => [
-      { store_name: { contains: term, mode: "insensitive" } },
       { stores: { some: { store_name: { contains: term, mode: "insensitive" } } } },
     ];
     const andClauses: any[] = [];
@@ -76,8 +77,12 @@ export const getOrders = async (req: Request, res: Response) => {
       where.items = { some: {} };
     }
 
-    const skip = (Number(page) - 1) * Number(limit);
-    const take = Number(limit);
+    const take = Math.min(Math.max(1, Number(limit) || 50), MAX_ORDERS_PER_PAGE);
+    const skip = (Math.max(1, Number(page) || 1) - 1) * take;
+
+    // Order tables show only an item count and a total. Whole item rows go to production, and
+    // to the Assign Work page, which asks for them.
+    const fullItems = user.role === "PRODUCTION" || user.role === "PRODUCTION_MANAGER" || req.query.items === "full";
 
     const [orders, total] = await Promise.all([
       prisma.order.findMany({
@@ -86,7 +91,9 @@ export const getOrders = async (req: Request, res: Response) => {
         take,
         orderBy: { created_at: "desc" },
         include: {
-          items: { include: { assignments: { include: { user: { select: { id: true, name: true } } } } } },
+          items: fullItems
+            ? { include: { assignments: { include: { user: { select: { id: true, name: true } } } } } }
+            : { select: { id: true, amount: true, remarks: true, remarks_confirmed: true, assignments: { select: { id: true } } } },
           stores: { select: { id: true, s_no: true, store_name: true, location: true, installed_at: true, invoice_id: true }, orderBy: { s_no: "asc" } },
           _count: { select: { stores: true } },
         },
@@ -132,8 +139,14 @@ export const getOrders = async (req: Request, res: Response) => {
     
     const ordersWithTotal = orders.map((o: any) => {
       const { total_amount, loss_amount } = computeTotals(o.items);
-      const { _count, ...rest } = o;
-      return { ...rest, store_count: _count.stores, total_amount, loss_amount };
+      const { _count, items, ...rest } = o;
+      return {
+        ...rest,
+        items: fullItems ? items : items.map((i: any) => ({ id: i.id, assignments: i.assignments })),
+        store_count: _count.stores,
+        total_amount,
+        loss_amount,
+      };
     });
     return res.status(200).json(serializeDecimals({ data: ordersWithTotal, total, page: Number(page) }));
   } catch (err) {
@@ -1464,7 +1477,6 @@ export const exportOrders = async (req: Request, res: Response) => {
       where.OR = [
         { order_no: { contains: String(q), mode: "insensitive" } },
         { client_name: { contains: String(q), mode: "insensitive" } },
-        { store_name: { contains: String(q), mode: "insensitive" } },
         { stores: { some: { store_name: { contains: String(q), mode: "insensitive" } } } },
       ];
     }
@@ -2086,7 +2098,6 @@ export const emailExport = async (req: Request, res: Response) => {
       where.OR = [
         { order_no: { contains: String(q), mode: "insensitive" } },
         { client_name: { contains: String(q), mode: "insensitive" } },
-        { store_name: { contains: String(q), mode: "insensitive" } },
         { stores: { some: { store_name: { contains: String(q), mode: "insensitive" } } } },
       ];
     }

@@ -1,7 +1,6 @@
 import { useMemo, useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { Trash2, Plus, Save, Send, CheckCircle2, Upload, FileSpreadsheet } from "lucide-react";
-import * as xlsx from "xlsx";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -259,8 +258,10 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
     e.target.value = "";
 
     const reader = new FileReader();
-    reader.onload = (ev) => {
+    reader.onload = async (ev) => {
       try {
+        // Loaded here, not with the page: this library is a large download few visits need.
+        const xlsx = await import("xlsx");
         const data = new Uint8Array(ev.target?.result as ArrayBuffer);
         const wb = xlsx.read(data, { type: "array" });
         // Look the sheet up by name: older files also carry an example and a guide sheet, and

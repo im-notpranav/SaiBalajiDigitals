@@ -168,6 +168,7 @@ model Order {
   @@index([client_name])
   @@index([status])
   @@index([created_by])
+  @@index([created_at])
 }
 
 model OrderItem {
@@ -208,6 +209,7 @@ model OrderItem {
   production_completed    Boolean   @default(false)
   production_completed_at DateTime?
 
+  @@index([order_id])
   @@index([order_store_id])
 }
 
@@ -320,7 +322,7 @@ model Notification {
   order      Order?   @relation("OrderNotifications", fields: [order_id], references: [id], onDelete: SetNull)
   created_at DateTime @default(now())
 
-  @@index([user_id])
+  @@index([user_id, created_at])
 }
 
 model PaymentFollowUp {

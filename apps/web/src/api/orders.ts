@@ -68,6 +68,8 @@ export interface OrdersQuery {
   q?: string;
   page?: number;
   limit?: number;
+  /** Whole item rows. Lists otherwise carry only what the order tables show. */
+  items?: "full";
 }
 
 export async function fetchOrders(params: OrdersQuery = {}) {
