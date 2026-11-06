@@ -109,6 +109,7 @@ const NAV: Record<UserRole, NavItem[]> = {
   CSM: [
     { to: "/employee/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { to: "/employee/new-order", label: "New Order", icon: PlusCircle },
+    { to: "/employee/upload-orders", label: "Upload Orders", icon: Upload },
     { to: "/employee/orders", label: "My Orders", icon: ClipboardList },
     { to: "/employee/jobs", label: "Field Jobs", icon: CalendarRange },
     { to: "/employee/payments", label: "Payment Requests", icon: Wallet },

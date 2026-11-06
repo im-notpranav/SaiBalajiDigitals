@@ -1,4 +1,4 @@
-import { Router, raw } from "express";
+import { Router, raw, type RequestHandler } from "express";
 import rateLimit from "express-rate-limit";
 import { clientIpKey } from "../utils/rate-limit";
 import {
@@ -28,9 +28,8 @@ import {
   createFollowUp,
   emailExport,
   getRecentRecipients,
-  lineItemTemplate,
 } from "../controllers/orders.controller";
-import { importTemplate, bulkImportOrders } from "../controllers/import.controller";
+import { orderTemplate, previewBulkOrders, createBulkOrders } from "../controllers/import.controller";
 import { authenticate, authorize, requireSuperAdmin , denyReadOnlyMutations } from "../middlewares/auth.middleware";
 import { OMS_ROLES } from "../utils/roles";
 
@@ -55,10 +54,13 @@ router.use(denyReadOnlyMutations);
 
 router.get("/export", authorize("CSM", "ADMIN", "OPERATION_MANAGER", "ACCOUNTS"), exportOrders);
 router.get("/export/recipients", authorize("CSM", "ADMIN", "OPERATION_MANAGER", "ACCOUNTS"), getRecentRecipients);
-router.get("/line-item-template", authorize("CSM", "ADMIN"), lineItemTemplate);
-// Bulk import (super-admin only). `raw` accepts the uploaded .xlsx as the request body.
-router.get("/import/template", authorize("ADMIN"), requireSuperAdmin, importTemplate);
-router.post("/import", authorize("ADMIN"), requireSuperAdmin, raw({ type: () => true, limit: "10mb" }), bulkImportOrders);
+router.get("/template", authorize("CSM", "ADMIN"), orderTemplate);
+// Bulk upload: any CSM for their own orders; among admins, the super admin. `raw` accepts the
+// uploaded .xlsx as the request body.
+const bulkUploader: RequestHandler = (req, res, next) =>
+  req.user!.role === "ADMIN" ? requireSuperAdmin(req, res, next) : next();
+router.post("/bulk/preview", authorize("CSM", "ADMIN"), bulkUploader, raw({ type: () => true, limit: "10mb" }), previewBulkOrders);
+router.post("/bulk", authorize("CSM", "ADMIN"), bulkUploader, createBulkOrders);
 router.get("/", getOrders);
 router.get("/:id", getOrder);
 router.post("/", authorize("CSM", "ADMIN"), createOrder);

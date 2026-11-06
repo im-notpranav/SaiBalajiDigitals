@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { downloadLineItemTemplate } from "@/api/orders";
+import { downloadOrderTemplate } from "@/api/orders";
 import { inr } from "@/lib/format";
 import { LOSS_REMARK_TYPES } from "@/lib/constants";
 import type { CreateOrderInput, CreateOrderItemInput, Order, UserRole } from "@sb-oms/shared-types";
@@ -245,7 +245,7 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
    */
   const handleTemplateDownload = async () => {
     try {
-      await downloadLineItemTemplate();
+      await downloadOrderTemplate();
     } catch (err: any) {
       toast.error("Could not download template", { description: err?.message });
     }
@@ -263,17 +263,24 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
       try {
         const data = new Uint8Array(ev.target?.result as ArrayBuffer);
         const wb = xlsx.read(data, { type: "array" });
-        // Look the sheet up by name: the template also ships an example and a guide sheet,
-        // and neither of those is data.
+        // Look the sheet up by name: older files also carry an example and a guide sheet, and
+        // neither of those is data. The current template has its rows on the first sheet.
         const sheetName = wb.SheetNames.find((n) => n.trim().toLowerCase() === "line items") ?? wb.SheetNames[0];
         const rows: any[] = xlsx.utils.sheet_to_json(wb.Sheets[sheetName], { defval: "" });
 
         if (rows.length === 0) {
-          alert("The 'Line Items' sheet is empty. Enter the rows there — the 'Example' sheet is never read.");
+          alert("The sheet is empty. Enter the rows on the first sheet.");
           return;
         }
 
         const result = parseOrderSheet(rows);
+
+        // This form is one order, and the template makes one order per client.
+        if (result.clients.length > 1) {
+          alert(`This file has ${result.clients.length} clients, which makes ${result.clients.length} orders. Use Upload Orders for it.`);
+          return;
+        }
+        if (result.clients.length === 1 && !clientName.trim()) setClientName(result.clients[0]!);
 
         // Errors first, so the user decides with the problems already in front of them.
         if (result.errors.length > 0) {

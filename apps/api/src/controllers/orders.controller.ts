@@ -1,10 +1,10 @@
 import { serializeDecimals } from "../utils/serialize";
 import { computeTotals } from "../utils/order-totals";
-import { isClosed, isCsmEditable, isHeaderEditable, isBillingStarted, OPEN_STATUSES, CLOSED_STATUSES } from "../utils/order-status";
-import { currentStage, lastProducedAt, businessDaysBetween } from "../utils/order-stage";
+import { isCsmEditable, isHeaderEditable, isBillingStarted, OPEN_STATUSES, CLOSED_STATUSES } from "../utils/order-status";
 import { Request, Response } from "express";
 import { prisma } from "../utils/prisma";
 import { generateOrderId } from "../utils/order-sequence";
+import { buildOrdersExport } from "../utils/order-template";
 import { recomputeOrderStatus, rollupOrder, storeLabelOf, storeLocationOf } from "../utils/order-derive";
 
 import { notifyRole, notifyUser } from "../services/notifications.service";
@@ -23,7 +23,6 @@ import {
   type OrderItemSummary,
   type FieldChange,
 } from "../services/email.service";
-import * as xlsx from "xlsx";
 import { sanitizeZodErrors } from "../utils/sanitize-errors";
 
 
@@ -1470,87 +1469,7 @@ export const exportOrders = async (req: Request, res: Response) => {
       ];
     }
 
-    const orders = await prisma.order.findMany({
-      where,
-      include: {
-        // Each row names the store its own line item belongs to, so a multi-store order
-        // exports one block per store rather than repeating the first store's name.
-        items: {
-          include: { assignments: true, orderStore: true },
-          orderBy: [{ orderStore: { s_no: "asc" } }, { s_no: "asc" }],
-        },
-        stores: { orderBy: { s_no: "asc" } },
-        invoices: { orderBy: { id: "asc" } },
-        creator: true,
-      },
-      orderBy: { order_no: "asc" },
-      take: 10000, // Cap to prevent memory exhaustion on large exports
-    });
-
-    const d = (x: Date | null | undefined) => (x ? x.toLocaleDateString("en-IN") : "");
-    const dayspan = (a: Date | null | undefined, b: Date | null | undefined) =>
-      a && b ? businessDaysBetween(a, b) : "";
-
-    const rows: any[] = [];
-    for (const order of orders) {
-      // Billable total excludes confirmed losses; used for the Pending Amount column.
-      const total = computeTotals(order.items).total_amount;
-      const producedAt = lastProducedAt(order);
-      const roll = rollupOrder(order);
-      const stage = currentStage(order);
-      for (const item of order.items) {
-        const lossStatus = item.remarks == null ? "" : (item.remarks_confirmed ? "Loss (confirmed)" : "Loss (proposed)");
-        const row: any = {
-          "S.No": item.s_no,
-          "Date": order.date.toLocaleDateString("en-IN"),
-          "Client Name": order.client_name,
-          "Store Name": item.orderStore?.store_name ?? "",
-          "Location": item.orderStore?.location ?? "",
-          "Order No": order.order_no,
-          "Media": item.media,
-          "Size (W) in": Number(item.width_inches),
-          "Size (H) in": Number(item.height_inches),
-          "Qty": Number(item.qty),
-          "Total SFT": Number(item.total_sft),
-          "Rate": Number(item.rate),
-          "Amount": Number(item.amount),
-          "PO Number": order.po_number || "",
-          "Remarks": item.remarks === "Other" ? (item.remarks_other_text || "") : (item.remarks || ""),
-          "Loss": lossStatus,
-          "Closure Remarks": order.remarks === "Other" ? (order.remarks_other_text || "") : (order.remarks || ""),
-          "Status": order.status,
-        };
-        if (user.role === "ADMIN" || user.role === "ACCOUNTS") {
-          row["Invoice No"] = roll.invoice_no || "";
-          row["Bill Amount"] = roll.bill_amount !== null ? roll.bill_amount : "";
-          row["Amount Received"] = roll.amount_received !== null ? roll.amount_received : "";
-          // Outstanding = billable total less whatever has actually been received.
-          row["Pending Amount"] = isClosed(order.status) ? "" : total - Number(roll.amount_received ?? 0);
-          row["Billing Date"] = d(roll.billing_date);
-          row["Billing Completed On"] = d(roll.billing_completed_at);
-          row["Payment Received On"] = d(roll.payment_received_at);
-        }
-        if (user.role === "ADMIN") {
-          row["Created By"] = order.creator_name;
-          // TAT (Phase 6): milestone dates + stage-to-stage durations, in days.
-          row["Produced On"] = d(producedAt);
-          row["Installed On"] = d(roll.installed_at);
-          row["Days: Create→Produce"] = dayspan(order.created_at, producedAt);
-          row["Days: Produce→Install"] = dayspan(producedAt, roll.installed_at);
-          row["Days: Install→Bill"] = dayspan(roll.installed_at, roll.billing_completed_at);
-          row["Days: Bill→Pay"] = dayspan(roll.billing_completed_at, roll.payment_received_at);
-          row["Total TAT (days)"] = dayspan(order.created_at, roll.payment_received_at);
-          row["Current Stage"] = stage ? stage.stage : "Closed";
-          row["Days in Stage"] = stage ? stage.days_in_stage : "";
-        }
-        rows.push(row);
-      }
-    }
-
-    const ws = xlsx.utils.json_to_sheet(rows);
-    const wb = xlsx.utils.book_new();
-    xlsx.utils.book_append_sheet(wb, ws, "Orders");
-    const buffer = xlsx.write(wb, { type: "buffer", bookType: "xlsx" });
+    const { buffer } = await buildOrdersExport(where);
 
     res.setHeader("Content-Disposition", `attachment; filename=orders_${new Date().toISOString().split("T")[0]}.xlsx`);
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
@@ -2172,77 +2091,11 @@ export const emailExport = async (req: Request, res: Response) => {
       ];
     }
 
-    const orders = await prisma.order.findMany({
-      where,
-      include: {
-        items: {
-          include: { assignments: true, orderStore: true },
-          orderBy: [{ orderStore: { s_no: "asc" } }, { s_no: "asc" }],
-        },
-        stores: { orderBy: { s_no: "asc" } },
-        invoices: { orderBy: { id: "asc" } },
-        creator: true,
-      },
-      orderBy: { order_no: "asc" },
-      take: 10000, // Cap to prevent memory exhaustion on large exports
-    });
-
-    const d = (x: Date | null | undefined) => (x ? x.toLocaleDateString("en-IN") : "");
-    const dayspan = (a: Date | null | undefined, b: Date | null | undefined) =>
-      a && b ? businessDaysBetween(a, b) : "";
-
-    const rows: any[] = [];
-    for (const order of orders) {
-      const total = computeTotals(order.items).total_amount;
-      const producedAt = lastProducedAt(order);
-      const roll = rollupOrder(order);
-      const stage = currentStage(order);
-      for (const item of order.items) {
-        const lossStatus = item.remarks == null ? "" : (item.remarks_confirmed ? "Loss (confirmed)" : "Loss (proposed)");
-        const row: any = {
-          "S.No": item.s_no,
-          "Date": order.date.toLocaleDateString("en-IN"),
-          "Client Name": order.client_name,
-          "Store Name": item.orderStore?.store_name ?? "",
-          "Location": item.orderStore?.location ?? "",
-          "Order No": order.order_no,
-          "Media": item.media,
-          "Size (W) in": Number(item.width_inches),
-          "Size (H) in": Number(item.height_inches),
-          "Qty": Number(item.qty),
-          "Total SFT": Number(item.total_sft),
-          "Rate": Number(item.rate),
-          "Amount": Number(item.amount),
-          "PO Number": order.po_number || "",
-          "Remarks": item.remarks === "Other" ? (item.remarks_other_text || "") : (item.remarks || ""),
-          "Loss": lossStatus,
-          "Closure Remarks": order.remarks === "Other" ? (order.remarks_other_text || "") : (order.remarks || ""),
-          "Status": order.status,
-        };
-        if (user.role === "ADMIN" || user.role === "ACCOUNTS") {
-          row["Invoice No"] = roll.invoice_no || "";
-          row["Bill Amount"] = roll.bill_amount !== null ? roll.bill_amount : "";
-          row["Amount Received"] = roll.amount_received !== null ? roll.amount_received : "";
-          row["Pending Amount"] = isClosed(order.status) ? "" : total - Number(roll.amount_received ?? 0);
-          row["Billing Date"] = d(roll.billing_date);
-        }
-        if (user.role === "ADMIN") {
-          row["Created By"] = order.creator_name;
-          row["Current Stage"] = stage ? stage.stage : "Closed";
-          row["Days in Stage"] = stage ? stage.days_in_stage : "";
-        }
-        rows.push(row);
-      }
-    }
-
-    const ws = xlsx.utils.json_to_sheet(rows);
-    const wb = xlsx.utils.book_new();
-    xlsx.utils.book_append_sheet(wb, ws, "Orders");
-    const buffer = xlsx.write(wb, { type: "buffer", bookType: "xlsx" });
+    const { buffer, orderCount, itemCount } = await buildOrdersExport(where);
 
     const filename = `orders_${new Date().toISOString().split("T")[0]}.xlsx`;
     const emailSubject = subject || `Orders Export — ${new Date().toLocaleDateString("en-IN")}`;
-    const emailMessage = message || `Please find the attached orders export with ${orders.length} order(s) and ${rows.length} line item(s).`;
+    const emailMessage = message || `Please find the attached orders export with ${orderCount} order(s) and ${itemCount} line item(s).`;
 
     await sendExcelEmail(to, emailSubject, emailMessage, buffer, filename, user.name);
 
@@ -2255,8 +2108,8 @@ export const emailExport = async (req: Request, res: Response) => {
 
     return res.status(200).json({
       message: `Export emailed to ${to} successfully.`,
-      orders_count: orders.length,
-      items_count: rows.length,
+      orders_count: orderCount,
+      items_count: itemCount,
     });
   } catch (err) {
     console.error("Email export error:", err);
@@ -2279,85 +2132,6 @@ export const getRecentRecipients = async (req: Request, res: Response) => {
     });
     return res.status(200).json(recipients.map((r) => r.email));
   } catch (err) {
-    return res.status(500).json({ message: "Internal server error" });
-  }
-};
-
-/**
- * Downloadable .xlsx for the New Order form.
- *
- * Three sheets, in the order an employee meets them: "Line Items" is the one that opens,
- * and it holds nothing but the column headings, so the job is to type — not to read an
- * instruction page and then clear out sample rows. The worked example and the field
- * reference sit behind it for whoever wants them.
- */
-const LINE_ITEM_TEMPLATE_HEADER = [
-  "Store Name", "Location", "Store PO Number",
-  "Media", "Size (W) in", "Size (H) in", "Qty", "Rate",
-];
-
-/** One row per column, so the guide reads as a lookup table rather than prose. */
-const LINE_ITEM_COLUMN_GUIDE: string[][] = [
-  ["Column", "Required", "What to enter", "Example"],
-  ["Store Name", "Yes", "The store this line item belongs to. Repeat it on every row of that store.", "MG Road"],
-  ["Location", "Yes", "Where that store is. Needed on the store's first row; blank on later rows means the same place.", "Bengaluru"],
-  ["Store PO Number", "No", "PO covering this store only. Leave blank if it has not arrived — it can be added in the app later.", "PO-11"],
-  ["Media", "Yes", "Material for this line item.", "Vinyl"],
-  ["Size (W) in", "Yes", "Width in inches. Up to two decimals.", "48"],
-  ["Size (H) in", "Yes", "Height in inches. Up to two decimals.", "36"],
-  ["Qty", "Yes", "Whole number — no fractions.", "2"],
-  ["Rate", "Yes", "Rate per square foot.", "40"],
-  [],
-  ["Rules"],
-  ["One row is one line item. Rows that share a Store Name AND a Location become one store."],
-  ["The same name in two places is two stores: MG Road, Bengaluru and MG Road, Pune are separate."],
-  ["Never leave Store Name blank. It is read as a mistake, not as \"same as the row above\"."],
-  ["A blank Location repeats the last one used for that store name, so fill it in when the place changes."],
-  ["One store cannot have two different Store PO Numbers."],
-  ["Client Name and Job PO Number are not in this sheet. Enter them on the form — they cover the whole order."],
-  ["Limits: 500 rows per file, 50 stores per order."],
-  [],
-  ["Type into the \"Line Items\" sheet. This sheet and \"Example\" are reference only and are never read."],
-];
-
-export const lineItemTemplate = async (_req: Request, res: Response) => {
-  try {
-    const wb = xlsx.utils.book_new();
-    const widths = LINE_ITEM_TEMPLATE_HEADER.map((h) => ({ wch: Math.max(14, h.length + 4) }));
-
-    // 1. The fill-in sheet, first so it is what opens: headings and nothing else.
-    const sheet = xlsx.utils.aoa_to_sheet([LINE_ITEM_TEMPLATE_HEADER]);
-    sheet["!cols"] = widths;
-    xlsx.utils.book_append_sheet(wb, sheet, "Line Items");
-
-    // 2. A worked example, kept off the fill-in sheet so nothing has to be deleted.
-    //    Each store's second row leaves Location and PO blank, which is what that rule
-    //    looks like in practice.
-    const row = (store: string, location: string, po: string, media: string, w: number, h: number, q: number, r: number) => ({
-      "Store Name": store, "Location": location, "Store PO Number": po,
-      "Media": media, "Size (W) in": w, "Size (H) in": h, "Qty": q, "Rate": r,
-    });
-    const example = [
-      row("MG Road", "Bengaluru", "PO-11", "Vinyl", 48, 36, 2, 40),
-      row("MG Road", "", "", "Flex", 96, 48, 1, 25),
-      row("Indiranagar", "Bengaluru", "PO-12", "Vinyl", 36, 24, 3, 40),
-      row("Indiranagar", "", "", "Flex", 72, 48, 1, 25),
-    ];
-    const ex = xlsx.utils.json_to_sheet(example, { header: LINE_ITEM_TEMPLATE_HEADER });
-    ex["!cols"] = widths;
-    xlsx.utils.book_append_sheet(wb, ex, "Example (do not fill)");
-
-    // 3. The field reference last — there when wanted, out of the way when not.
-    const guide = xlsx.utils.aoa_to_sheet(LINE_ITEM_COLUMN_GUIDE);
-    guide["!cols"] = [{ wch: 18 }, { wch: 10 }, { wch: 95 }, { wch: 12 }];
-    xlsx.utils.book_append_sheet(wb, guide, "Column Guide");
-
-    const buffer = xlsx.write(wb, { type: "buffer", bookType: "xlsx" });
-    res.setHeader("Content-Disposition", "attachment; filename=line_item_template.xlsx");
-    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    return res.send(buffer);
-  } catch (err) {
-    console.error(err);
     return res.status(500).json({ message: "Internal server error" });
   }
 };

@@ -47,6 +47,7 @@ import { Route as PortalEmployeeNewOrderRouteImport } from './routes/_portal.emp
 import { Route as PortalEmployeeNotificationsRouteImport } from './routes/_portal.employee.notifications'
 import { Route as PortalEmployeeOrdersRouteImport } from './routes/_portal.employee.orders'
 import { Route as PortalEmployeePaymentsRouteImport } from './routes/_portal.employee.payments'
+import { Route as PortalEmployeeUploadOrdersRouteImport } from './routes/_portal.employee.upload-orders'
 import { Route as PortalFieldDashboardRouteImport } from './routes/_portal.field.dashboard'
 import { Route as PortalFieldLeaveRouteImport } from './routes/_portal.field.leave'
 import { Route as PortalFieldNotificationsRouteImport } from './routes/_portal.field.notifications'
@@ -260,6 +261,12 @@ const PortalEmployeePaymentsRoute = PortalEmployeePaymentsRouteImport.update({
   path: '/employee/payments',
   getParentRoute: () => PortalRoute,
 } as any)
+const PortalEmployeeUploadOrdersRoute =
+  PortalEmployeeUploadOrdersRouteImport.update({
+    id: '/employee/upload-orders',
+    path: '/employee/upload-orders',
+    getParentRoute: () => PortalRoute,
+  } as any)
 const PortalFieldDashboardRoute = PortalFieldDashboardRouteImport.update({
   id: '/field/dashboard',
   path: '/field/dashboard',
@@ -387,6 +394,7 @@ export interface FileRoutesByFullPath {
   '/employee/notifications': typeof PortalEmployeeNotificationsRoute
   '/employee/orders': typeof PortalEmployeeOrdersRoute
   '/employee/payments': typeof PortalEmployeePaymentsRoute
+  '/employee/upload-orders': typeof PortalEmployeeUploadOrdersRoute
   '/field/dashboard': typeof PortalFieldDashboardRoute
   '/field/leave': typeof PortalFieldLeaveRoute
   '/field/notifications': typeof PortalFieldNotificationsRoute
@@ -442,6 +450,7 @@ export interface FileRoutesByTo {
   '/employee/notifications': typeof PortalEmployeeNotificationsRoute
   '/employee/orders': typeof PortalEmployeeOrdersRoute
   '/employee/payments': typeof PortalEmployeePaymentsRoute
+  '/employee/upload-orders': typeof PortalEmployeeUploadOrdersRoute
   '/field/dashboard': typeof PortalFieldDashboardRoute
   '/field/leave': typeof PortalFieldLeaveRoute
   '/field/notifications': typeof PortalFieldNotificationsRoute
@@ -499,6 +508,7 @@ export interface FileRoutesById {
   '/_portal/employee/notifications': typeof PortalEmployeeNotificationsRoute
   '/_portal/employee/orders': typeof PortalEmployeeOrdersRoute
   '/_portal/employee/payments': typeof PortalEmployeePaymentsRoute
+  '/_portal/employee/upload-orders': typeof PortalEmployeeUploadOrdersRoute
   '/_portal/field/dashboard': typeof PortalFieldDashboardRoute
   '/_portal/field/leave': typeof PortalFieldLeaveRoute
   '/_portal/field/notifications': typeof PortalFieldNotificationsRoute
@@ -556,6 +566,7 @@ export interface FileRouteTypes {
     | '/employee/notifications'
     | '/employee/orders'
     | '/employee/payments'
+    | '/employee/upload-orders'
     | '/field/dashboard'
     | '/field/leave'
     | '/field/notifications'
@@ -611,6 +622,7 @@ export interface FileRouteTypes {
     | '/employee/notifications'
     | '/employee/orders'
     | '/employee/payments'
+    | '/employee/upload-orders'
     | '/field/dashboard'
     | '/field/leave'
     | '/field/notifications'
@@ -667,6 +679,7 @@ export interface FileRouteTypes {
     | '/_portal/employee/notifications'
     | '/_portal/employee/orders'
     | '/_portal/employee/payments'
+    | '/_portal/employee/upload-orders'
     | '/_portal/field/dashboard'
     | '/_portal/field/leave'
     | '/_portal/field/notifications'
@@ -960,6 +973,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PortalEmployeePaymentsRouteImport
       parentRoute: typeof PortalRoute
     }
+    '/_portal/employee/upload-orders': {
+      id: '/_portal/employee/upload-orders'
+      path: '/employee/upload-orders'
+      fullPath: '/employee/upload-orders'
+      preLoaderRoute: typeof PortalEmployeeUploadOrdersRouteImport
+      parentRoute: typeof PortalRoute
+    }
     '/_portal/field/dashboard': {
       id: '/_portal/field/dashboard'
       path: '/field/dashboard'
@@ -1110,6 +1130,7 @@ interface PortalRouteChildren {
   PortalEmployeeNotificationsRoute: typeof PortalEmployeeNotificationsRoute
   PortalEmployeeOrdersRoute: typeof PortalEmployeeOrdersRoute
   PortalEmployeePaymentsRoute: typeof PortalEmployeePaymentsRoute
+  PortalEmployeeUploadOrdersRoute: typeof PortalEmployeeUploadOrdersRoute
   PortalFieldDashboardRoute: typeof PortalFieldDashboardRoute
   PortalFieldLeaveRoute: typeof PortalFieldLeaveRoute
   PortalFieldNotificationsRoute: typeof PortalFieldNotificationsRoute
@@ -1163,6 +1184,7 @@ const PortalRouteChildren: PortalRouteChildren = {
   PortalEmployeeNotificationsRoute: PortalEmployeeNotificationsRoute,
   PortalEmployeeOrdersRoute: PortalEmployeeOrdersRoute,
   PortalEmployeePaymentsRoute: PortalEmployeePaymentsRoute,
+  PortalEmployeeUploadOrdersRoute: PortalEmployeeUploadOrdersRoute,
   PortalFieldDashboardRoute: PortalFieldDashboardRoute,
   PortalFieldLeaveRoute: PortalFieldLeaveRoute,
   PortalFieldNotificationsRoute: PortalFieldNotificationsRoute,

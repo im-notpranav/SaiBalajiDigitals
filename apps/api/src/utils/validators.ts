@@ -359,6 +359,42 @@ export const workJobSchema = z
   .refine((j) => !j.area_name || !!j.locality, { message: "Choose Hyderabad or Non-local for this area", path: ["locality"] })
   .refine((j) => new Set(j.member_ids).size === j.member_ids.length, { message: "The same person is listed twice", path: ["member_ids"] });
 
+/** The orders on the upload review screen, one per client. An admin names the CSM for each. */
+export const bulkOrdersSchema = z.object({
+  orders: z
+    .array(
+      z
+        .object({
+          client_name: z.string().trim().min(1).max(100),
+          date: dayString,
+          csm_user_id: z.number().int().positive().optional(),
+          stores: z
+            .array(
+              z.object({
+                store_name: z.string().trim().min(1).max(100),
+                location: z.string().trim().min(1).max(100),
+                items: z
+                  .array(
+                    z.object({
+                      media: z.string().trim().min(1).max(100),
+                      width_inches: z.number().positive(),
+                      height_inches: z.number().positive(),
+                      qty: z.number().int().positive(),
+                      rate: z.number().positive(),
+                    }),
+                  )
+                  .min(1),
+              }),
+            )
+            .min(1)
+            .max(50),
+        })
+        .refine(uniqueStores, uniqueStoresConfig),
+    )
+    .min(1)
+    .max(200),
+});
+
 /** What a CSM may change on a job they own: its work details, and which of their orders it is on. */
 export const csmJobSchema = z.object({
   work_details: z.string().trim().max(500).optional().nullable(),

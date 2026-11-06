@@ -1,6 +1,8 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
+import { Upload } from "lucide-react";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { createOrder } from "@/api/orders";
 import { OrderForm } from "@/components/orders/OrderForm";
@@ -39,6 +41,13 @@ function NewOrder() {
         title="Create New Order"
         description="Line items compute totals live. The order number is assigned by the server on submit."
         crumbs={[{ label: "Employee" }, { label: "New Order" }]}
+        actions={
+          <Button asChild variant="outline">
+            <Link to="/employee/upload-orders">
+              <Upload className="mr-2 h-4 w-4" /> Upload Orders
+            </Link>
+          </Button>
+        }
       />
 
       <OrderForm onSubmit={submit} isSubmitting={saving} />

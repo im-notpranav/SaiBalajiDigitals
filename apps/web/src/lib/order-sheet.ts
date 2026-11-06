@@ -30,6 +30,8 @@ export interface SheetParseResult {
   errors: string[];
   /** False when the sheet has no Store Name column — an old five-column file. */
   hadStoreColumn: boolean;
+  /** Each different Client Name on the sheet, in the first spelling seen. */
+  clients: string[];
 }
 
 const MAX_ROWS = 500;
@@ -37,12 +39,13 @@ const MAX_STORES = 50;
 
 /** Tolerant column headers. Kept in step with import.controller.ts where they overlap. */
 const H: Record<string, string[]> = {
+  client: ["Client Name", "Client"],
   store: ["Store Name", "Store"],
   location: ["Location"],
   storePo: ["Store PO Number", "Store PO"],
   media: ["Media", "media", "MEDIA"],
-  width: ["Size (W) in", "Width", "Width (in)", "W", "width_inches", "width"],
-  height: ["Size (H) in", "Height", "Height (in)", "H", "height_inches", "height"],
+  width: ["Size (W) Inches", "Size (W) in", "Width", "Width (in)", "W", "width_inches", "width"],
+  height: ["Size (H) Inches", "Size (H) in", "Height", "Height (in)", "H", "height_inches", "height"],
   qty: ["Qty", "Quantity", "qty", "QTY"],
   rate: ["Rate", "Rate (per Sq.Ft.)", "rate", "RATE"],
 };
@@ -64,10 +67,21 @@ interface StoreDraft {
   firstRow: number;
 }
 
-export function parseOrderSheet(rows: any[]): SheetParseResult {
+export function parseOrderSheet(input: any[]): SheetParseResult {
   const errors: string[] = [];
 
+  // The company's sheet pads some headings with spaces, and keeps formulas on its unused rows.
+  const rows = input
+    .map((r) => Object.fromEntries(Object.entries(r).map(([k, v]) => [k.trim(), v])))
+    .filter((r) => [H.store, H.location, H.media].some((keys) => String(cell(r, keys)).trim() !== ""));
+
   const hadStoreColumn = rows.some((r) => String(cell(r, H.store)).trim() !== "");
+
+  const clients = new Map<string, string>();
+  for (const r of rows) {
+    const client = String(cell(r, H.client)).trim();
+    if (client && !clients.has(client.toLowerCase())) clients.set(client.toLowerCase(), client);
+  }
 
   let data = rows;
   if (rows.length > MAX_ROWS) {
@@ -171,5 +185,6 @@ export function parseOrderSheet(rows: any[]): SheetParseResult {
     })),
     errors,
     hadStoreColumn,
+    clients: [...clients.values()],
   };
 }

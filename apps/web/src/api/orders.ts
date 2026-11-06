@@ -1,23 +1,62 @@
 import { apiFetch, apiDownload, apiClient } from "./client";
 import type { CreateOrderInput, Invoice, Order, OrderStore, ProductionOrder } from "@sb-oms/shared-types";
 
-export interface ImportResult {
-  message: string;
-  orders_imported?: number;
-  line_items_imported?: number;
-  errors?: { row: number; message: string }[];
-  orders_in_file?: number;
+export interface BulkItem {
+  media: string;
+  width_inches: number;
+  height_inches: number;
+  qty: number;
+  rate: number;
+  total_sft: number;
+  amount: number;
+}
+export interface BulkStore {
+  store_name: string;
+  location: string;
+  items: BulkItem[];
+}
+/** One client's rows of an uploaded sheet, not saved yet. */
+export interface BulkOrder {
+  client_name: string;
+  date: string;
+  has_other_dates: boolean;
+  first_row: number;
+  expected_order_no: string | null;
+  stores: BulkStore[];
+}
+export interface BulkPreview {
+  orders: BulkOrder[];
+  errors: { row: number; message: string }[];
+  error_count: number;
 }
 
-export async function downloadImportTemplate() {
-  return apiDownload("/orders/import/template");
+export async function downloadOrderTemplate() {
+  return apiDownload("/orders/template");
 }
 
-export async function bulkImportOrders(file: File): Promise<ImportResult> {
-  const res = await apiClient.post<ImportResult>("/orders/import", file, {
+export async function previewBulkOrders(file: File): Promise<BulkPreview> {
+  const res = await apiClient.post<BulkPreview>("/orders/bulk/preview", file, {
     headers: { "Content-Type": "application/octet-stream" },
   });
   return res.data;
+}
+
+export async function createBulkOrders(orders: (BulkOrder & { csm_user_id?: number })[]) {
+  return apiFetch<{ orders: { id: number; order_no: string; client_name: string }[] }>("/orders/bulk", {
+    method: "POST",
+    data: {
+      orders: orders.map((o) => ({
+        client_name: o.client_name,
+        date: o.date,
+        csm_user_id: o.csm_user_id,
+        stores: o.stores.map((s) => ({
+          store_name: s.store_name,
+          location: s.location,
+          items: s.items.map(({ media, width_inches, height_inches, qty, rate }) => ({ media, width_inches, height_inches, qty, rate })),
+        })),
+      })),
+    },
+  });
 }
 
 export interface OrdersQuery {
@@ -284,8 +323,4 @@ export async function emailExport(payload: EmailExportPayload) {
 export async function getRecentRecipients(q?: string) {
   const qs = q ? `?q=${encodeURIComponent(q)}` : "";
   return apiFetch<string[]>(`/orders/export/recipients${qs}`);
-}
-
-export async function downloadLineItemTemplate() {
-  return apiDownload("/orders/line-item-template");
 }

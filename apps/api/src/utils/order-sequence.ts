@@ -43,6 +43,21 @@ export async function firstFreeNumber(db: { order: { findUnique: (args: any) => 
   return { number: n, order_no: formatOrderNo(yearCode, n) };
 }
 
+/** The next `count` numbers the sequence would give right now, without taking them. */
+export async function previewOrderNumbers(count: number): Promise<string[]> {
+  const seq = await prisma.orderSequence.findUnique({ where: { id: 1 } });
+  if (!seq) return [];
+  const currentYY = deriveYY();
+  let last = seq.year_code === currentYY ? seq.last_number : RESERVED_NUMBERS;
+  const numbers: string[] = [];
+  for (let i = 0; i < count; i++) {
+    const next = await firstFreeNumber(prisma, currentYY, last);
+    numbers.push(next.order_no);
+    last = next.number;
+  }
+  return numbers;
+}
+
 /**
  * Atomic, row-locked transaction to generate ORD{YY}{NNNN}
  */
