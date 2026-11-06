@@ -100,6 +100,9 @@ export function PaymentRequestSheet({
   const r = data?.request;
   const returned = [...(data?.events ?? [])].reverse().find((e) => e.action === "RETURN");
   const actions = ACTION_ORDER.filter((a) => r?.actions.includes(a));
+  // Held-up actions show disabled with the reason beside them; the API refuses them too.
+  const blocked = r?.blocked_actions ?? {};
+  const blockedReasons = [...new Set(actions.map((a) => blocked[a]).filter(Boolean))] as string[];
 
   return (
     <Sheet open={requestId != null} onOpenChange={(o) => !o && onClose()}>
@@ -186,7 +189,7 @@ export function PaymentRequestSheet({
                 </Row>
                 <Row label="Bill details">
                   {r.bill_details_required
-                    ? "Yes: straight to Cost Control"
+                    ? "Yes: approved for payment only once the bill is attached"
                     : "No: Admin, then Cost Control"}
                 </Row>
                 {r.remarks && <Row label="Remarks">{r.remarks}</Row>}
@@ -223,13 +226,17 @@ export function PaymentRequestSheet({
                             : "secondary"
                       }
                       className={cn(a === "REJECT" && "text-destructive")}
-                      // The API refuses this too; disabling it saves a pointless round trip.
-                      disabled={a === "CLOSE" && r.bill_missing}
-                      title={a === "CLOSE" && r.bill_missing ? "Attach the bill first" : undefined}
+                      disabled={!!blocked[a]}
+                      title={blocked[a]}
                       onClick={() => setAction(a)}
                     >
                       {ACTION_LABELS[a]}
                     </Button>
+                  ))}
+                  {blockedReasons.map((why) => (
+                    <p key={why} className="w-full text-xs text-muted-foreground">
+                      {why}
+                    </p>
                   ))}
                 </div>
               )}
@@ -349,29 +356,42 @@ function ActionDialog({
   });
 
   if (!action) return null;
+  const paid = Number(paidAmount);
+  const paysShort = action === "MARK_PAID" && Number.isFinite(paid) && paid > 0 && paid < request.amount - 0.005;
   const reasonRequired =
-    action === "REJECT" || action === "RETURN" || (action === "CANCEL" && !request.is_mine);
+    action === "REJECT" ||
+    action === "RETURN" ||
+    (action === "CANCEL" && !request.is_mine) ||
+    paysShort;
+  // Asking for more, or a new payee, sends a returned request back to the start (GAP-D02).
+  const read = action === "RESUBMIT" ? readDraft(draft) : null;
+  const restartsReview =
+    !!read &&
+    "input" in read &&
+    (read.input.amount > request.amount + 0.005 ||
+      read.input.upi_method !== request.upi_method ||
+      read.input.upi_id !== request.upi_id);
 
   const submit = () => {
     setError(null);
-    if (reasonRequired && !note.trim()) return setError("Give a reason.");
-    if (action === "RESUBMIT") {
-      const read = readDraft(draft);
+    if (action === "RESUBMIT" && read) {
       if ("error" in read) return setError(read.error);
       return run.mutate({ ...read.input, note: note.trim() || null });
     }
     if (action === "MARK_PAID") {
-      const amount = Number(paidAmount);
-      if (!Number.isFinite(amount) || amount <= 0) return setError("Enter the amount paid.");
-      if (amount > request.amount)
+      if (!Number.isFinite(paid) || paid <= 0) return setError("Enter the amount paid.");
+      if (paid > request.amount)
         return setError(`Cannot pay more than the ${formatRupees(request.amount)} asked for.`);
       if (reference.trim().length < 4) return setError("Enter the UTR or bank reference.");
+      if (paysShort && !note.trim())
+        return setError(`Say why ${formatRupees(request.amount - paid)} less than asked is being paid.`);
       return run.mutate({
-        paid_amount: amount,
+        paid_amount: paid,
         payment_reference: reference.trim(),
         note: note.trim() || null,
       });
     }
+    if (reasonRequired && !note.trim()) return setError("Give a reason.");
     run.mutate({ note: note.trim() || null });
   };
 
@@ -382,10 +402,13 @@ function ActionDialog({
         : "It moves to payment pending. Pay it, then mark it paid here.",
     REJECT: "The requester is told why. A rejected request cannot be reopened.",
     RETURN: "It goes back to the requester to correct and resubmit. Say what is missing.",
-    RESUBMIT: "Correct the details and send it back to the same reviewer.",
+    RESUBMIT:
+      "Correct the details and send it back to the same reviewer. Asking for more, or changing where it is paid, starts review again from the beginning.",
     CANCEL: request.is_mine
       ? "Withdraw this request."
-      : "Cancel this request. The requester is told why.",
+      : request.status === "PAYMENT_PENDING"
+        ? "Cancel this approved request. Only do this if the money has not been sent. The requester is told why."
+        : "Cancel this request. The requester is told why.",
     MARK_PAID: `Record the payment to ${payeeText(request)}.`,
     CLOSE: "Close the request once the payment and paperwork are settled.",
   };
@@ -402,6 +425,13 @@ function ActionDialog({
 
         <div className="grid gap-3">
           {action === "RESUBMIT" && <RequestFields draft={draft} onChange={setDraft} />}
+          {restartsReview && (
+            <div className="flex items-start gap-1.5 rounded-xl border border-warning/40 bg-warning/10 px-3 py-2 text-xs">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              This asks for more or changes where it is paid, so review starts again from the
+              beginning.
+            </div>
+          )}
           {action === "MARK_PAID" && (
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="grid gap-1.5">
@@ -425,7 +455,13 @@ function ActionDialog({
             </div>
           )}
           <div className="grid gap-1.5">
-            <Label htmlFor="pr-note">{reasonRequired ? "Reason" : "Note (optional)"}</Label>
+            <Label htmlFor="pr-note">
+              {paysShort
+                ? `Why ${formatRupees(request.amount - paid)} less is paid`
+                : reasonRequired
+                  ? "Reason"
+                  : "Note (optional)"}
+            </Label>
             <Textarea
               id="pr-note"
               rows={2}

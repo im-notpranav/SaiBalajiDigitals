@@ -10,10 +10,12 @@ import { prisma } from "./prisma";
  * Exported because the admin settings screen must derive the same code the minter does;
  * two copies of this rule previously disagreed with each other during April and May.
  */
-export function deriveYY(): string {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth(); // 0-indexed: 0 = Jan, 3 = Apr
+export function deriveYY(now: Date = new Date()): string {
+  // In India time whatever the server's zone: on a UTC host, 1 April 00:00–05:30 IST would
+  // otherwise still read as March (GAP-D05).
+  const ist = new Date(now.getTime() + 330 * 60_000);
+  const year = ist.getUTCFullYear();
+  const month = ist.getUTCMonth(); // 0-indexed: 0 = Jan, 3 = Apr
 
   // Jan, Feb and Mar still belong to the FY that started the previous April.
   const fyStartYear = month < 3 ? year - 1 : year;

@@ -339,7 +339,8 @@ function UsersPage() {
                         setIsPwDialogOpen(true);
                       }}>Password</Button>
                     )}
-                    {(!u.is_super_admin) && (
+                    {/* Switching accounts off is the super admin's, like creating them (D-01). */}
+                    {currentUser?.is_super_admin && !u.is_super_admin && (
                       <Button
                         variant="ghost"
                         size="sm"

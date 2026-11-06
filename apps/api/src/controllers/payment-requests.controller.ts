@@ -20,12 +20,15 @@ import {
   STAGE_REVIEWER,
   STATUS_LABELS,
   availableActions,
+  blockedActions,
   checkTransition,
-  firstStage,
+  entryStage,
   formatRupees,
+  isMaterialChange,
   isReviewerRole,
   paymentEligibility,
   routeFor,
+  type TransitionContext,
   type WorkflowAction,
 } from "../utils/payment-workflow";
 import {
@@ -98,6 +101,8 @@ const requestInclude = {
   closer: { select: { id: true, name: true } },
   // Only the kinds, for the counts and the "bill missing" flag; never the files themselves.
   attachments: { where: { deleted_at: null }, select: { kind: true } },
+  // Approvals so far: who may still cancel, and whether a requester's files are frozen.
+  events: { where: { action: "APPROVE" }, select: { action: true, from_status: true } },
 } satisfies Prisma.PaymentRequestInclude;
 
 type RequestRow = Prisma.PaymentRequestGetPayload<{ include: typeof requestInclude }>;
@@ -119,10 +124,27 @@ interface OrderMoney {
 /** Working days after which a waiting request turns red (Admin → Settings). */
 const overdueDays = () => getSetting("payment_overdue_days");
 
-function serializeRequest(r: RequestRow, actor: Actor, money: OrderMoney | undefined, threshold: number) {
+/** True while nobody holds the Cost Control role: the Admin then acts for Cost Control (D-05). */
+const noActiveCcm = async (db: Db) =>
+  (await db.user.count({ where: { role: "COST_CONTROL_MANAGER", is_active: true } })) === 0;
+
+/** Who decides at this stage now: Cost Control, or the Admin standing in for it. */
+async function reviewerRoleFor(db: Db, status: PaymentRequestStatus | null | undefined): Promise<Role | undefined> {
+  const role = status ? STAGE_REVIEWER[status] : undefined;
+  if (role === "COST_CONTROL_MANAGER" && (await noActiveCcm(db))) return "ADMIN";
+  return role;
+}
+
+type ApprovalEvent = { action: string; from_status: PaymentRequestStatus | null };
+const adminApprovedIn = (events: ApprovalEvent[]) =>
+  events.some((e) => e.action === "APPROVE" && e.from_status === "ADMIN_REVIEW");
+const approvedOnceIn = (events: ApprovalEvent[]) => events.some((e) => e.action === "APPROVE");
+
+function serializeRequest(r: RequestRow, actor: Actor, money: OrderMoney | undefined, threshold: number, ccmMissing = false) {
   const files: Record<PaymentAttachmentKind, number> = { BILL: 0, PHOTO: 0, RECEIPT: 0 };
   for (const a of r.attachments) files[a.kind]++;
   const timers = paymentTimers(r, files.BILL, threshold);
+  const ctx: TransitionContext = { billCount: files.BILL, adminApproved: adminApprovedIn(r.events), noActiveCcm: ccmMissing };
   return {
     id: r.id,
     order: r.order,
@@ -147,7 +169,9 @@ function serializeRequest(r: RequestRow, actor: Actor, money: OrderMoney | undef
     closer: r.closer,
     created_at: r.created_at,
     is_mine: r.requested_by === actor.id,
-    actions: availableActions(r, actor),
+    actions: availableActions(r, actor, ctx),
+    /** Actions the viewer may take but that wait on something, with the reason. */
+    blocked_actions: blockedActions(r, actor, ctx),
     attachment_counts: files,
     /** Still open, raised with bill details, and no bill attached yet: it cannot close like this. */
     bill_missing: r.bill_details_required && files.BILL === 0 && OPEN_PAYMENT_STATUSES.includes(r.status),
@@ -237,7 +261,7 @@ async function notifyAfter(
   to: PaymentRequestStatus,
   actor: Actor,
   note: string | null,
-  paid?: { amount: number; reference: string },
+  paid?: { amount: number; reference: string; shortBy: number },
 ) {
   // A request goes by its order's number; the amount tells two on one order apart.
   const no = r.order.order_no;
@@ -252,7 +276,9 @@ async function notifyAfter(
     await tx.notification.create({ data: { user_id: r.requested_by, title, body, kind } });
     await queueWhatsApp(tx, wa[0], [r.requested_by], wa[1], ref);
   };
-  const toReviewers = async (role: Role | undefined, title: string, body: string, wa: [WaEvent, unknown[]], k = "info") => {
+  // Reviewers are named by stage; Cost Control's stage goes to the Admin while none is active.
+  const toReviewers = async (stage: PaymentRequestStatus | null | undefined, title: string, body: string, wa: [WaEvent, unknown[]], k = "info") => {
+    const role = await reviewerRoleFor(tx, stage);
     await notifyRole(tx, role, title, body, k);
     await queueWhatsAppRole(tx, wa[0], role, wa[1], ref, actor.id);
   };
@@ -261,7 +287,7 @@ async function notifyAfter(
   switch (action) {
     case "APPROVE":
       if (to === "CCM_REVIEW") {
-        await toReviewers("COST_CONTROL_MANAGER", "Payment request to review", `${about} Approved by the Admin.`, [
+        await toReviewers("CCM_REVIEW", "Payment request to review", `${about} Approved by the Admin.`, [
           "PAYMENT_TO_REVIEW",
           [...who, "Approved by the Admin"],
         ]);
@@ -286,7 +312,7 @@ async function notifyAfter(
       ]);
       break;
     case "RESUBMIT":
-      await toReviewers(STAGE_REVIEWER[to], "Payment request resubmitted", about, [
+      await toReviewers(to, "Payment request resubmitted", about, [
         "PAYMENT_TO_REVIEW",
         [...who, "Resubmitted with the information asked for"],
       ]);
@@ -294,7 +320,7 @@ async function notifyAfter(
     case "CANCEL":
       if (r.requested_by === actor.id) {
         const stage = r.status === "INFO_REQUESTED" ? r.returned_from : r.status;
-        await toReviewers(stage ? STAGE_REVIEWER[stage] : undefined, "Payment request withdrawn", about, ["PAYMENT_WITHDRAWN", who]);
+        await toReviewers(stage, "Payment request withdrawn", about, ["PAYMENT_WITHDRAWN", who]);
       } else {
         await toRequester("Payment request cancelled", `${no}: ${note}`, ["PAYMENT_UPDATE", [no, amount, "cancelled", note]]);
       }
@@ -302,7 +328,8 @@ async function notifyAfter(
     case "MARK_PAID":
       await toRequester(
         "Payment sent",
-        `${no}: ${formatRupees(paid!.amount)} paid to ${payTo}. Reference ${paid!.reference}.`,
+        `${no}: ${formatRupees(paid!.amount)} paid to ${payTo}. Reference ${paid!.reference}.` +
+          (paid!.shortBy ? ` ${formatRupees(paid!.shortBy)} less than asked: ${note}` : ""),
         ["PAYMENT_PAID", [formatRupees(paid!.amount), payTo, no, paid!.reference]],
       );
       break;
@@ -393,7 +420,10 @@ export const createRequest = async (req: Request, res: Response) => {
       }
 
       const route = routeFor(body.bill_details_required);
-      const status = firstStage(route);
+      const adminThreshold = await getSetting("payment_admin_threshold");
+      const status = entryStage(route, body.amount, adminThreshold);
+      const overLimit = status === "ADMIN_REVIEW" && route === "CCM_ONLY";
+      const reviewerRole = await reviewerRoleFor(tx, status);
 
       const row = await tx.paymentRequest.create({
         data: {
@@ -417,7 +447,12 @@ export const createRequest = async (req: Request, res: Response) => {
               to_status: status,
               actor_id: actor.id,
               actor_role: actor.role as Role,
-              note: body.bill_details_required ? "Bill details given" : "No bill details",
+              note: [
+                body.bill_details_required ? "Bill details given" : "No bill details",
+                overLimit ? `Over the ${formatRupees(adminThreshold)} Admin review limit` : null,
+              ]
+                .filter(Boolean)
+                .join(". "),
             },
           },
         },
@@ -426,15 +461,24 @@ export const createRequest = async (req: Request, res: Response) => {
 
       await notifyRole(
         tx,
-        STAGE_REVIEWER[status],
+        reviewerRole,
         "New payment request",
         `${order.order_no}: ${formatRupees(body.amount)} for ${row.requester.name}.`,
       );
       await queueWhatsAppRole(
         tx,
         "PAYMENT_TO_REVIEW",
-        STAGE_REVIEWER[status],
-        [order.order_no, formatRupees(body.amount), row.requester.name, body.bill_details_required ? "New request with bill details" : "New request without bill details"],
+        reviewerRole,
+        [
+          order.order_no,
+          formatRupees(body.amount),
+          row.requester.name,
+          overLimit
+            ? "New request over the Admin review limit"
+            : body.bill_details_required
+              ? "New request with bill details"
+              : "New request without bill details",
+        ],
         { type: "payment_request", id: row.id },
         actor.id,
       );
@@ -470,6 +514,10 @@ const QUEUE: Partial<Record<string, PaymentRequestStatus[]>> = {
   COST_CONTROL_MANAGER: ["CCM_REVIEW", "PAYMENT_PENDING", "PAID"],
 };
 
+/** The Admin's queue takes in Cost Control's while no Cost Control Manager is active. */
+const queueFor = (role: string, ccmMissing: boolean): PaymentRequestStatus[] =>
+  role === "ADMIN" && ccmMissing ? [...QUEUE.ADMIN!, ...QUEUE.COST_CONTROL_MANAGER!] : (QUEUE[role] ?? []);
+
 const ALL_STATUSES = Object.keys(STATUS_LABELS) as PaymentRequestStatus[];
 
 /**
@@ -483,8 +531,9 @@ export const listRequests = async (req: Request, res: Response) => {
     const base: Prisma.PaymentRequestWhereInput = reviewer ? {} : { requested_by: actor.id };
     const and: Prisma.PaymentRequestWhereInput[] = [base];
 
+    const ccmMissing = await noActiveCcm(prisma);
     const queue = reviewer && req.query.scope === "queue";
-    if (queue) and.push({ status: { in: QUEUE[actor.role] ?? [] } });
+    if (queue) and.push({ status: { in: queueFor(actor.role, ccmMissing) } });
 
     const statuses = String(req.query.status ?? "")
       .split(",")
@@ -521,7 +570,7 @@ export const listRequests = async (req: Request, res: Response) => {
 
     const money = reviewer ? await orderMoney(prisma, rows.map((r) => r.order_id)) : null;
     const threshold = await overdueDays();
-    const serialized = rows.map((r) => serializeRequest(r, actor, money?.get(r.order_id), threshold));
+    const serialized = rows.map((r) => serializeRequest(r, actor, money?.get(r.order_id), threshold, ccmMissing));
     const overdueOnly = req.query.overdue === "1";
     const counts = Object.fromEntries(ALL_STATUSES.map((s) => [s, 0])) as Record<PaymentRequestStatus, number>;
     const amounts = { ...counts };
@@ -536,7 +585,9 @@ export const listRequests = async (req: Request, res: Response) => {
       threshold,
       counts,
       amounts,
-      queue_statuses: QUEUE[actor.role] ?? [],
+      queue_statuses: queueFor(actor.role, ccmMissing),
+      /** The Admin is standing in for Cost Control because no Cost Control Manager is active. */
+      acting_for_ccm: actor.role === "ADMIN" && ccmMissing,
     });
   } catch (err) {
     return sendError(res, err);
@@ -563,9 +614,10 @@ export const getRequest = async (req: Request, res: Response) => {
       orderBy: { id: "asc" },
     });
     const money = isReviewerRole(actor.role) ? (await orderMoney(prisma, [r.order_id])).get(r.order_id) : undefined;
+    const approvedOnce = approvedOnceIn(r.events);
     return res.json({
-      request: serializeRequest(r, actor, money, await overdueDays()),
-      attachments: files.map((f) => serializeFile(f, r, actor)),
+      request: serializeRequest(r, actor, money, await overdueDays(), await noActiveCcm(prisma)),
+      attachments: files.map((f) => serializeFile(f, r, actor, approvedOnce)),
       events: r.events.map((e) => ({
         id: e.id,
         action: e.action,
@@ -601,18 +653,28 @@ export const transition = (action: WorkflowAction) => async (req: Request, res: 
       const r = await tx.paymentRequest.findUnique({ where: { id }, include: requestInclude });
       if (!r || !canSee(r, actor)) throw new HttpError(404, "Payment request not found");
 
-      // Closing a bill request needs a bill on file; counted inside the transaction.
-      const billCount =
-        action === "CLOSE"
-          ? await tx.paymentAttachment.count({ where: { request_id: id, kind: "BILL", deleted_at: null } })
-          : 0;
-      const check = checkTransition(r, action, actor, note, { billCount });
+      // Everything the rules need beyond the row, read inside the transaction: bills on file
+      // (approving or closing a bill request needs one), whether the Admin approved it, and
+      // whether the Admin is standing in for an absent Cost Control.
+      const ctx: TransitionContext = {
+        billCount: await tx.paymentAttachment.count({ where: { request_id: id, kind: "BILL", deleted_at: null } }),
+        adminApproved: adminApprovedIn(r.events),
+        noActiveCcm: await noActiveCcm(tx),
+      };
+      if (action === "RESUBMIT" && resubmit) {
+        ctx.materialChange = isMaterialChange(
+          { amount: Number(r.amount), upi_method: r.upi_method, upi_id: r.upi_id },
+          resubmit,
+        );
+        ctx.entryStage = entryStage(r.route, resubmit.amount, await getSetting("payment_admin_threshold"));
+      }
+      const check = checkTransition(r, action, actor, note, ctx);
       if (!check.ok) throw new HttpError(check.status, check.message);
 
       const now = new Date();
       const data: Prisma.PaymentRequestUncheckedUpdateManyInput = { status: check.to, status_changed_at: now };
       const changes: string[] = [];
-      let paid: { amount: number; reference: string } | undefined;
+      let paid: { amount: number; reference: string; shortBy: number } | undefined;
 
       if (action === "RETURN") data.returned_from = r.status;
       if (action === "RESUBMIT" && resubmit) {
@@ -640,7 +702,12 @@ export const transition = (action: WorkflowAction) => async (req: Request, res: 
         if (amount > Number(r.amount) + 0.005) {
           throw new HttpError(409, `The amount paid cannot be more than the ${formatRupees(Number(r.amount))} asked for.`);
         }
-        paid = { amount, reference: paidBody.payment_reference };
+        // Paying less than asked needs a reason, which the requester is told (GAP-B04).
+        const shortBy = Number(r.amount) - amount;
+        if (shortBy > 0.005 && !note?.trim()) {
+          throw new HttpError(400, `Say why ${formatRupees(shortBy)} less than asked is being paid.`);
+        }
+        paid = { amount, reference: paidBody.payment_reference, shortBy: shortBy > 0.005 ? shortBy : 0 };
         Object.assign(data, {
           paid_amount: amount,
           paid_at: now,
@@ -655,7 +722,9 @@ export const transition = (action: WorkflowAction) => async (req: Request, res: 
 
       const eventNote = [
         paid ? `Paid ${formatRupees(paid.amount)}, reference ${paid.reference}` : null,
+        paid?.shortBy ? `${formatRupees(paid.shortBy)} less than asked` : null,
         changes.length ? `Changed ${changes.join(", ")}` : null,
+        ctx.materialChange ? "Sent back to the start of review because the amount went up or the payee changed" : null,
         note,
       ]
         .filter(Boolean)
@@ -679,7 +748,7 @@ export const transition = (action: WorkflowAction) => async (req: Request, res: 
     const money = isReviewerRole(actor.role)
       ? (await orderMoney(prisma, [updated.order_id])).get(updated.order_id)
       : undefined;
-    return res.json({ request: serializeRequest(updated, actor, money, await overdueDays()) });
+    return res.json({ request: serializeRequest(updated, actor, money, await overdueDays(), await noActiveCcm(prisma)) });
   } catch (err) {
     return sendError(res, err);
   }
@@ -696,7 +765,12 @@ const fileInclude = {
 
 type FileRow = Prisma.PaymentAttachmentGetPayload<{ include: typeof fileInclude }>;
 
-function serializeFile(f: FileRow, r: { id: number; status: PaymentRequestStatus; requested_by: number }, actor: Actor) {
+function serializeFile(
+  f: FileRow,
+  r: { id: number; status: PaymentRequestStatus; requested_by: number },
+  actor: Actor,
+  approvedOnce = false,
+) {
   return {
     id: f.id,
     kind: f.kind,
@@ -707,7 +781,9 @@ function serializeFile(f: FileRow, r: { id: number; status: PaymentRequestStatus
     uploaded_at: f.uploaded_at,
     /** Relative to the API base. */
     url: `/payment-requests/${r.id}/attachments/${f.id}`,
-    can_remove: canRemoveFile(r, f, actor),
+    can_remove: canRemoveFile(r, f, actor, { approvedOnce }),
+    /** Removing someone else's file needs a note, kept in the history. */
+    remove_needs_note: f.uploaded_by !== actor.id,
   };
 }
 
@@ -788,10 +864,11 @@ export const uploadAttachment = async (req: Request, res: Response) => {
         },
       });
       const file = await tx.paymentAttachment.findUniqueOrThrow({ where: { id: row.id }, include: fileInclude });
-      return { file, r };
+      const approvedOnce = (await tx.paymentRequestEvent.count({ where: { request_id: id, action: "APPROVE" } })) > 0;
+      return { file, r, approvedOnce };
     });
 
-    return res.status(201).json({ attachment: serializeFile(created.file, created.r, actor) });
+    return res.status(201).json({ attachment: serializeFile(created.file, created.r, actor, created.approvedOnce) });
   } catch (err) {
     if (isDuplicateFile(err)) return res.status(409).json({ message: "That file is already attached." });
     return sendError(res, err);
@@ -824,12 +901,16 @@ export const downloadAttachment = async (req: Request, res: Response) => {
   }
 };
 
-/** DELETE /:id/attachments/:fileId — a soft delete; the file stays in the database and the history. */
+/**
+ * DELETE /:id/attachments/:fileId — a soft delete; the file stays in the database and the
+ * history. Removing a file someone else added needs a `note` in the body.
+ */
 export const removeAttachment = async (req: Request, res: Response) => {
   try {
     const actor = req.user!;
     const id = parseId(req.params.id);
     const fileId = parseId(req.params.fileId);
+    const note = parseBody(paymentNoteSchema, pickNote(req.body)).note?.trim() || null;
 
     await withAudit(actor.id, async (tx) => {
       const file = await tx.paymentAttachment.findFirst({
@@ -837,8 +918,17 @@ export const removeAttachment = async (req: Request, res: Response) => {
         include: { request: { select: { id: true, status: true, requested_by: true } } },
       });
       if (!file || !canSee(file.request, actor)) throw new HttpError(404, "File not found");
-      if (!canRemoveFile(file.request, file, actor)) {
-        throw new HttpError(403, "Only whoever added this file, or a reviewer, can remove it while the request is open.");
+      const approvedOnce = (await tx.paymentRequestEvent.count({ where: { request_id: id, action: "APPROVE" } })) > 0;
+      if (!canRemoveFile(file.request, file, actor, { approvedOnce })) {
+        throw new HttpError(
+          403,
+          approvedOnce && file.uploaded_by === actor.id
+            ? "This request has been approved, so its files stay. You can still add more."
+            : "Only whoever added this file, or a reviewer, can remove it while the request is open.",
+        );
+      }
+      if (file.uploaded_by !== actor.id && !note) {
+        throw new HttpError(400, "Say why you are removing a file someone else added.");
       }
       const { count } = await tx.paymentAttachment.updateMany({
         where: { id: fileId, deleted_at: null },
@@ -853,7 +943,7 @@ export const removeAttachment = async (req: Request, res: Response) => {
           to_status: file.request.status,
           actor_id: actor.id,
           actor_role: actor.role as Role,
-          note: `${ATTACHMENT_KIND_LABELS[file.kind]}: ${file.original_name}`,
+          note: [`${ATTACHMENT_KIND_LABELS[file.kind]}: ${file.original_name}`, note].filter(Boolean).join(". "),
         },
       });
     });

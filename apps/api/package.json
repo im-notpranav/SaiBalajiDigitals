@@ -5,6 +5,10 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run && vitest run -c vitest.api.config.ts",
+    "test:unit": "vitest run",
+    "test:api": "vitest run -c vitest.api.config.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
@@ -14,6 +18,7 @@
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
+    "@sb-oms/shared-types": "*",
     "@types/bcryptjs": "^2.4.6",
     "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.19",
@@ -35,15 +40,17 @@
     "tsx": "^4.19.2",
     "typescript": "^5.9.3",
     "xlsx": "^0.18.5",
-    "zod": "^3.24.1",
-    "@sb-oms/shared-types": "*"
+    "zod": "^3.24.1"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
   },
   "devDependencies": {
+    "@types/supertest": "^6.0.3",
     "nodemon": "^3.1.14",
-    "ts-node": "^10.9.2"
+    "supertest": "^7.1.4",
+    "ts-node": "^10.9.2",
+    "vitest": "^3.2.4"
   },
   "version": "1.0.0",
   "description": "",

@@ -5,7 +5,11 @@ import { leaveSchema, leaveCancelSchema, leaveRequestSchema, leaveDecisionSchema
 import { sanitizeZodErrors } from "../utils/sanitize-errors";
 import { isFieldRole } from "../utils/roles";
 import { notifyRole, notifyUser } from "../services/notifications.service";
-import { addDays, dayKey, daysBetween, findLeaveClashes, isLeaveOverlapViolation, lockPeople, parseDay, todayIST } from "../utils/work-allocation";
+import { addDays, dayKey, daysBetween, findLeaveClashes, isLeaveOverlapViolation, lockPeople, lockRows, parseDay, todayIST } from "../utils/work-allocation";
+
+/** Admin and the Operation Manager both decide leave, so both hear about requests (GAP-A07). */
+const notifyLeaveDeciders = (title: string, body: string) =>
+  Promise.all((["ADMIN", "OPERATION_MANAGER"] as const).map((role) => notifyRole(role, title, body, "info", null).catch(() => {})));
 
 /**
  * Leave register for field staff (the old "Leave Details" sheet). Field staff request their
@@ -226,6 +230,7 @@ export const updateLeave = async (req: Request, res: Response) => {
   try {
     const id = parseId(req.params.id);
     const leave = await withAudit(req.user!.id, async (tx) => {
+      await lockRows(tx, "LeaveRecord", [id]);
       const current = await tx.leaveRecord.findUnique({ where: { id } });
       if (!current) throw new HttpError(404, "Leave record not found");
       if (current.cancelled_at) throw new HttpError(400, "Cancelled leave cannot be edited. Record new leave instead.");
@@ -254,6 +259,7 @@ export const decideLeave = async (req: Request, res: Response) => {
     if (!parsed.success) return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parsed.error) });
     const { status, reason, acknowledge_jobs } = parsed.data;
     const leave = await withAudit(req.user!.id, async (tx) => {
+      await lockRows(tx, "LeaveRecord", [id]);
       const current = await tx.leaveRecord.findUnique({ where: { id }, include: { user: { select: { id: true, name: true } } } });
       if (!current) throw new HttpError(404, "Leave request not found");
       if (current.cancelled_at) throw new HttpError(400, "This request was withdrawn. Reload to see the latest.");
@@ -286,6 +292,7 @@ export const cancelLeave = async (req: Request, res: Response) => {
     const parsed = leaveCancelSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parsed.error) });
     const leave = await withAudit(req.user!.id, async (tx) => {
+      await lockRows(tx, "LeaveRecord", [id]);
       const current = await tx.leaveRecord.findUnique({ where: { id } });
       if (!current) throw new HttpError(404, "Leave record not found");
       if (current.cancelled_at) throw new HttpError(400, "This leave is already cancelled.");
@@ -337,7 +344,7 @@ export const myLeave = async (req: Request, res: Response) => {
   }
 };
 
-/** A field-staff member asks for leave. It waits for the Operation Manager's decision. */
+/** A field-staff member asks for leave. It waits for the Operation Manager's or Admin's decision. */
 export const requestMyLeave = async (req: Request, res: Response) => {
   try {
     const parsed = leaveRequestSchema.safeParse(req.body);
@@ -359,7 +366,7 @@ export const requestMyLeave = async (req: Request, res: Response) => {
       });
     });
     const s = serializeLeave(leave);
-    await notifyRole("OPERATION_MANAGER", "Leave request", `${leave.user.name}: ${fmtRange(s.from_date, s.to_date)} · ${s.reason}`, "info", null).catch(() => {});
+    await notifyLeaveDeciders("Leave request", `${leave.user.name}: ${fmtRange(s.from_date, s.to_date)} · ${s.reason}`);
     return res.status(201).json(s);
   } catch (err) {
     return sendError(res, err);
@@ -372,6 +379,7 @@ export const withdrawMyLeave = async (req: Request, res: Response) => {
     const id = parseId(req.params.id);
     const me = req.user!;
     const leave = await withAudit(me.id, async (tx) => {
+      await lockRows(tx, "LeaveRecord", [id]);
       const current = await tx.leaveRecord.findUnique({ where: { id } });
       if (!current || current.user_id !== me.id) throw new HttpError(404, "Leave request not found");
       if (current.cancelled_at) throw new HttpError(400, "This request is already withdrawn.");
@@ -385,7 +393,7 @@ export const withdrawMyLeave = async (req: Request, res: Response) => {
       });
     });
     const s = serializeLeave(leave);
-    await notifyRole("OPERATION_MANAGER", "Leave request withdrawn", `${leave.user.name}: ${fmtRange(s.from_date, s.to_date)}`, "info", null).catch(() => {});
+    await notifyLeaveDeciders("Leave request withdrawn", `${leave.user.name}: ${fmtRange(s.from_date, s.to_date)}`);
     return res.status(200).json(s);
   } catch (err) {
     return sendError(res, err);

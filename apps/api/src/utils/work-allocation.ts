@@ -185,6 +185,18 @@ export async function lockPeople(tx: any, userIds: number[]): Promise<void> {
   }
 }
 
+/**
+ * Row locks for read-check-write on a job, leave record or overtime entry. Taken before the
+ * row is read, so of two people acting at once the second waits, then reads what the first
+ * saved and gets the "already decided / cannot be moved" answer instead of overwriting it
+ * (GAP-E01). Ids are locked in order so two multi-row callers cannot deadlock.
+ */
+export async function lockRows(tx: any, table: "WorkJob" | "LeaveRecord" | "OvertimeEntry", ids: number[]): Promise<void> {
+  const unique = [...new Set(ids)].sort((a, b) => a - b);
+  if (!unique.length) return;
+  await tx.$queryRawUnsafe(`SELECT id FROM "${table}" WHERE id = ANY($1::int[]) ORDER BY id FOR UPDATE`, unique);
+}
+
 export const isLeaveOverlapViolation = (err: any): boolean =>
   /LeaveRecord_no_overlap/i.test(String(err?.message ?? "") + String(err?.meta?.message ?? ""));
 

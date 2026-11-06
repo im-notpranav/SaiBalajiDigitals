@@ -19,6 +19,7 @@ import {
   gridLabel,
   isOverlapViolation,
   lockPeople,
+  lockRows,
   parseDay,
   teamLimitErrors,
   todayIST,
@@ -355,6 +356,7 @@ export const updateJob = async (req: Request, res: Response) => {
   try {
     const id = parseId(req.params.id);
     const { job, added, removed } = await withAudit(req.user!.id, async (tx) => {
+      await lockRows(tx, "WorkJob", [id]);
       const current = await tx.workJob.findUnique({ where: { id }, include: { members: true } });
       if (!current) throw new HttpError(404, "Job not found");
       if (!EDITABLE_STATUSES.includes(current.status)) {
@@ -416,6 +418,7 @@ export const setJobStatus = async (req: Request, res: Response) => {
     const { status, reason } = parsed.data;
 
     const { job, from } = await withAudit(req.user!.id, async (tx) => {
+      await lockRows(tx, "WorkJob", [id]);
       const current = await tx.workJob.findUnique({ where: { id } });
       if (!current) throw new HttpError(404, "Job not found");
       if (!STATUS_TRANSITIONS[current.status].includes(status)) {
@@ -679,6 +682,7 @@ export const myJobStatus = async (req: Request, res: Response) => {
     const me = req.user!.id;
 
     const job = await withAudit(me, async (tx) => {
+      await lockRows(tx, "WorkJob", [id]);
       const current = await tx.workJob.findFirst({ where: { id, members: { some: { user_id: me } } } });
       if (!current) throw new HttpError(404, "Job not found");
       const now = new Date();

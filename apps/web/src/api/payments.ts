@@ -88,6 +88,8 @@ export interface PaymentRequest {
   created_at: string;
   is_mine: boolean;
   actions: PaymentActionName[];
+  /** Actions you may take but that are held up for now, with the reason (e.g. no bill yet). */
+  blocked_actions?: Partial<Record<PaymentActionName, string>>;
   /** Live files on the request, by kind. */
   attachment_counts: Record<AttachmentKind, number>;
   /** Raised with bill details but no bill attached: it cannot be closed yet. */
@@ -143,6 +145,8 @@ export interface PaymentAttachment {
   /** Relative to the API base; see fileUrl(). */
   url: string;
   can_remove: boolean;
+  /** Removing it means removing someone else's file, which needs a reason. */
+  remove_needs_note?: boolean;
 }
 
 export interface PaymentEvent {
@@ -174,6 +178,8 @@ export interface PaymentList {
   overdue_count: number;
   /** Working days after which a timer turns red. */
   threshold: number;
+  /** The Admin is standing in for Cost Control, as none is active. */
+  acting_for_ccm?: boolean;
 }
 
 export const fetchPaymentRequests = (
@@ -222,13 +228,18 @@ export interface PaymentDashboardData {
 export const fetchPaymentDashboard = () =>
   apiFetch<PaymentDashboardData>("/payment-requests/dashboard");
 
-export const fetchPaymentSettings = () =>
-  apiFetch<{ payment_overdue_days: number }>("/admin/payment-settings");
+export interface PaymentSettings {
+  payment_overdue_days: number;
+  /** Requests above this go to the Admin first, bill or not. */
+  payment_admin_threshold: number;
+}
 
-export const updatePaymentSettings = (payment_overdue_days: number) =>
-  apiFetch<{ payment_overdue_days: number }>("/admin/payment-settings", {
+export const fetchPaymentSettings = () => apiFetch<PaymentSettings>("/admin/payment-settings");
+
+export const updatePaymentSettings = (data: Partial<PaymentSettings>) =>
+  apiFetch<PaymentSettings>("/admin/payment-settings", {
     method: "PUT",
-    data: { payment_overdue_days },
+    data,
   });
 
 export const fetchPaymentRequest = (id: number) =>
@@ -384,9 +395,10 @@ export async function uploadPaymentFile(requestId: number, kind: AttachmentKind,
   });
 }
 
-export const removePaymentFile = (requestId: number, fileId: number) =>
+export const removePaymentFile = (requestId: number, fileId: number, note?: string) =>
   apiFetch<{ ok: true }>(`/payment-requests/${requestId}/attachments/${fileId}`, {
     method: "DELETE",
+    data: note ? { note } : undefined,
   });
 
 export const formatBytes = (n: number) =>

@@ -67,10 +67,20 @@ export function attachKindsFor(r: FileRequest, a: Actor): PaymentAttachmentKind[
   return [];
 }
 
-/** Whoever added a file, or a reviewer, may remove it while the request is still open. */
-export function canRemoveFile(r: FileRequest, file: { uploaded_by: number | null }, a: Actor): boolean {
+/**
+ * A reviewer may remove a file while the request is open. Whoever added a file may remove
+ * it too, but a requester only until the request is first approved: the approval rested on
+ * those files (GAP-F04). They can still add more.
+ */
+export function canRemoveFile(
+  r: FileRequest,
+  file: { uploaded_by: number | null },
+  a: Actor,
+  opts: { approvedOnce?: boolean } = {},
+): boolean {
   if (FROZEN.includes(r.status)) return false;
-  return file.uploaded_by === a.id || isReviewerRole(String(a.role));
+  if (isReviewerRole(String(a.role))) return true;
+  return file.uploaded_by === a.id && !opts.approvedOnce;
 }
 
 /* ------------------------------------------------------------------ storage */

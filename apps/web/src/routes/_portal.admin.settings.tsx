@@ -138,6 +138,7 @@ function SettingsPage() {
         </div>
 
         <PaymentOverdueCard />
+        <PaymentThresholdCard />
       </div>
     </>
   );
@@ -160,7 +161,7 @@ function PaymentOverdueCard() {
   const valid = /^\d+$/.test(days) && value >= 1 && value <= 90;
 
   const save = useMutation({
-    mutationFn: () => updatePaymentSettings(value),
+    mutationFn: () => updatePaymentSettings({ payment_overdue_days: value }),
     onSuccess: () => {
       toast.success(`Payment requests now turn red after ${value} working days`);
       queryClient.invalidateQueries({ queryKey: ["payment-settings"] });
@@ -204,6 +205,73 @@ function PaymentOverdueCard() {
       </form>
       {days !== "" && !valid && (
         <div className="mt-2 text-xs text-destructive">Enter a whole number from 1 to 90.</div>
+      )}
+      {!canEdit && <div className="mt-2 text-xs text-muted-foreground">Only the Admin can change this.</div>}
+    </div>
+  );
+}
+
+/** Above this amount every payment request starts with the Admin, bill or not (D-07). */
+function PaymentThresholdCard() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const canEdit = user?.role === "ADMIN";
+  const [amount, setAmount] = useState("");
+  const { data } = useQuery({ queryKey: ["payment-settings"], queryFn: fetchPaymentSettings });
+  const saved = data?.payment_admin_threshold;
+
+  useEffect(() => {
+    if (saved != null) setAmount(String(saved));
+  }, [saved]);
+
+  const value = Number(amount);
+  const valid = /^\d+$/.test(amount) && value <= 99_999_999;
+  const rupees = (n: number) => `₹${n.toLocaleString("en-IN")}`;
+
+  const save = useMutation({
+    mutationFn: () => updatePaymentSettings({ payment_admin_threshold: value }),
+    onSuccess: () => {
+      toast.success(`Requests above ${rupees(value)} now go to the Admin first`);
+      queryClient.invalidateQueries({ queryKey: ["payment-settings"] });
+    },
+    onError: (err) => toast.error(apiErrorMessage(err, "Could not save the limit")),
+  });
+
+  return (
+    <div className="surface-panel p-6">
+      <h3 className="mb-1 text-sm font-semibold">Admin review limit for payment requests</h3>
+      <p className="mb-4 text-xs text-muted-foreground">
+        A request raised with bill details normally goes straight to Cost Control. Above this amount
+        it starts with the Admin instead, like a request without a bill. Requests already raised keep
+        their route.
+      </p>
+      <form
+        className="flex flex-wrap items-end gap-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (valid && value !== saved) save.mutate();
+        }}
+      >
+        <div className="grid gap-1.5">
+          <Label htmlFor="admin_threshold">Amount (₹)</Label>
+          <Input
+            id="admin_threshold"
+            inputMode="numeric"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value.replace(/[^\d]/g, ""))}
+            disabled={!canEdit}
+            className="w-36 font-mono"
+            aria-invalid={amount !== "" && !valid}
+          />
+        </div>
+        {canEdit && (
+          <Button type="submit" className="rounded-xl" disabled={!valid || value === saved || save.isPending}>
+            Save
+          </Button>
+        )}
+      </form>
+      {amount !== "" && !valid && (
+        <div className="mt-2 text-xs text-destructive">Enter a whole rupee amount.</div>
       )}
       {!canEdit && <div className="mt-2 text-xs text-muted-foreground">Only the Admin can change this.</div>}
     </div>

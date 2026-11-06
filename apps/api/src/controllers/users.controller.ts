@@ -84,6 +84,25 @@ export const createUser = async (req: Request, res: Response) => {
   }
 };
 
+/**
+ * Roles the business cannot run without: with no active Admin nobody approves, and with no
+ * active Cost Control Manager payouts fall back on the Admin alone. The last active holder
+ * of either cannot be removed, switched off or moved to another role (BR-30).
+ */
+const ESSENTIAL_ROLES: Record<string, string> = {
+  ADMIN: "Admin",
+  COST_CONTROL_MANAGER: "Cost Control Manager",
+};
+
+async function lastHolderBlock(userId: number): Promise<string | null> {
+  const target = await prisma.user.findUnique({ where: { id: userId }, select: { role: true, is_active: true } });
+  if (!target || !target.is_active || !ESSENTIAL_ROLES[target.role]) return null;
+  const others = await prisma.user.count({ where: { role: target.role, is_active: true, id: { not: userId } } });
+  if (others > 0) return null;
+  const label = ESSENTIAL_ROLES[target.role];
+  return `This is the only active ${label}. Add or activate another ${label} first.`;
+}
+
 export const deleteUser = async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id as string, 10);
@@ -95,6 +114,8 @@ export const deleteUser = async (req: Request, res: Response) => {
     if (targetUser?.is_super_admin) {
       return res.status(400).json({ message: "You cannot delete the super administrator." });
     }
+    const lastHolder = await lastHolderBlock(id);
+    if (lastHolder) return res.status(409).json({ message: lastHolder });
 
     await prisma.user.delete({ where: { id } });
     return res.status(200).json({ message: "User deleted" });
@@ -183,6 +204,10 @@ export const toggleUserStatus = async (req: Request, res: Response) => {
     if (targetUser?.is_super_admin && !is_active) {
       return res.status(400).json({ message: "You cannot deactivate the super administrator." });
     }
+    if (!is_active) {
+      const lastHolder = await lastHolderBlock(id);
+      if (lastHolder) return res.status(409).json({ message: lastHolder });
+    }
 
     const updatedUser = await prisma.user.update({
       where: { id },
@@ -232,9 +257,13 @@ export const updateUser = async (req: Request, res: Response) => {
     const { name, username, role, phone, whatsapp_opt_out } = parsed.data;
 
     // Only super admin can change usernames
-    const targetUser = await prisma.user.findUnique({ where: { id }, select: { username: true } });
+    const targetUser = await prisma.user.findUnique({ where: { id }, select: { username: true, role: true } });
     if (!targetUser) {
       return res.status(404).json({ message: "User not found" });
+    }
+    if (role && role !== targetUser.role) {
+      const lastHolder = await lastHolderBlock(id);
+      if (lastHolder) return res.status(409).json({ message: lastHolder });
     }
     if (username && username !== targetUser.username && !req.user!.is_super_admin) {
       return res.status(403).json({ message: "Only the super administrator can change usernames." });

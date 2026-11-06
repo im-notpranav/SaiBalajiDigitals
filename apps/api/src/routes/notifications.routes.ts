@@ -1,11 +1,12 @@
 import { Router } from "express";
 import { getMyNotifications, markAllAsRead, markOneAsRead } from "../controllers/notifications.controller";
-import { authenticate , denyReadOnlyMutations } from "../middlewares/auth.middleware";
+import { authenticate } from "../middlewares/auth.middleware";
 
 const router = Router();
 
+// Every route here is the user's own inbox, so the Operation Manager's read-only rule
+// (which guards business records) does not apply.
 router.use(authenticate);
-router.use(denyReadOnlyMutations);
 
 router.get("/", getMyNotifications);
 router.put("/read-all", markAllAsRead);

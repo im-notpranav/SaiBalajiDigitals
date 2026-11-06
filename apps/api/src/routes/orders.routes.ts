@@ -47,10 +47,12 @@ router.use(authenticate);
 // Order data (amounts, clients, invoices) is for OMS roles only. Field staff and the Cost
 // Control Manager get the order details they need through their own portals.
 router.use(authorize(...OMS_ROLES));
+// Emailing an export changes no record, so it sits ahead of the read-only rule and the
+// Operation Manager may use it like the download.
+router.post("/export/email", authorize("CSM", "ADMIN", "OPERATION_MANAGER", "ACCOUNTS"), emailExportLimiter, emailExport);
 router.use(denyReadOnlyMutations);
 
 router.get("/export", authorize("CSM", "ADMIN", "OPERATION_MANAGER", "ACCOUNTS"), exportOrders);
-router.post("/export/email", authorize("CSM", "ADMIN", "OPERATION_MANAGER", "ACCOUNTS"), emailExportLimiter, emailExport);
 router.get("/export/recipients", authorize("CSM", "ADMIN", "OPERATION_MANAGER", "ACCOUNTS"), getRecentRecipients);
 router.get("/line-item-template", authorize("CSM", "ADMIN"), lineItemTemplate);
 // Bulk import (super-admin only). `raw` accepts the uploaded .xlsx as the request body.
@@ -66,7 +68,9 @@ router.patch("/:id/details", authorize("CSM", "ADMIN"), updateOrderDetails);
 router.post("/:id/stores", authorize("CSM", "ADMIN"), addStore);
 router.patch("/:orderId/stores/:storeId", authorize("CSM", "ADMIN"), updateStore);
 router.delete("/:orderId/stores/:storeId", authorize("CSM", "ADMIN"), deleteStore);
-router.delete("/:id", authorize("ADMIN"), deleteOrder);
+// Deleting is for untouched orders only (checked in the controller), and only by the super
+// admin; anything else is closed instead (GAP-F01).
+router.delete("/:id", authorize("ADMIN"), requireSuperAdmin, deleteOrder);
 router.put("/:orderId/stores/:storeId/install", authorize("CSM", "ADMIN"), markStoreInstalled);
 // An order can carry several invoices, each covering its own set of stores.
 router.post("/:id/invoices", authorize("ACCOUNTS", "ADMIN"), createInvoice);

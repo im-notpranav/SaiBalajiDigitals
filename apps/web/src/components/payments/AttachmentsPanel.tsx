@@ -4,10 +4,13 @@ import { AlertTriangle, Download, FileText, Loader2, Paperclip, Trash2 } from "l
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -48,6 +51,9 @@ export function AttachmentsPanel({
   const [busy, setBusy] = useState<string | null>(null);
   const [viewing, setViewing] = useState<PaymentAttachment | null>(null);
   const [confirmRemove, setConfirmRemove] = useState<number | null>(null);
+  // Removing someone else's file asks why; the reason goes in the request's history.
+  const [askWhy, setAskWhy] = useState<PaymentAttachment | null>(null);
+  const [why, setWhy] = useState("");
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["payment-requests"] });
 
@@ -79,10 +85,16 @@ export function AttachmentsPanel({
     refresh();
   };
 
-  const remove = async (f: PaymentAttachment) => {
+  const remove = async (f: PaymentAttachment, note?: string) => {
     setConfirmRemove(null);
+    if (f.remove_needs_note && !note) {
+      setWhy("");
+      setAskWhy(f);
+      return;
+    }
+    setAskWhy(null);
     try {
-      await removePaymentFile(request.id, f.id);
+      await removePaymentFile(request.id, f.id, note);
       toast.success(`${f.name} removed`);
       refresh();
     } catch (err) {
@@ -102,7 +114,8 @@ export function AttachmentsPanel({
       {request.bill_missing && (
         <div className="flex items-start gap-1.5 rounded-xl border border-warning/40 bg-warning/10 px-3 py-2 text-xs">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          This request was raised with bill details. Attach the bill before it can be closed.
+          This request was raised with bill details. Attach the bill before it can be approved
+          for payment or closed.
         </div>
       )}
 
@@ -243,6 +256,40 @@ export function AttachmentsPanel({
               className="max-h-[70vh] w-full rounded-lg bg-muted object-contain"
             />
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!askWhy} onOpenChange={(o) => !o && setAskWhy(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="truncate">Remove {askWhy?.name}?</DialogTitle>
+            <DialogDescription>
+              {askWhy?.uploader?.name ?? "Someone else"} added this file. Say why it is being
+              removed; the reason is kept in the request's history.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-1.5">
+            <Label htmlFor="pf-why">Reason</Label>
+            <Textarea
+              id="pf-why"
+              rows={2}
+              maxLength={500}
+              value={why}
+              onChange={(e) => setWhy(e.target.value)}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAskWhy(null)}>
+              Back
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={!why.trim()}
+              onClick={() => askWhy && remove(askWhy, why.trim())}
+            >
+              Remove file
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

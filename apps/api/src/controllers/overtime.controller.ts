@@ -12,6 +12,7 @@ import {
   formatMinutes,
   isOvertimeOverlapViolation,
   lockPeople,
+  lockRows,
   overtimeSpan,
   parseDay,
   todayIST,
@@ -224,6 +225,7 @@ export const updateOvertime = async (req: Request, res: Response) => {
     const parsed = overtimeUpdateSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parsed.error) });
     const entry = await withAudit(req.user!.id, async (tx) => {
+      await lockRows(tx, "OvertimeEntry", [id]);
       const current = await tx.overtimeEntry.findUnique({ where: { id } });
       if (!current) throw new HttpError(404, "Overtime entry not found");
       if (current.status !== "PENDING") throw new HttpError(400, `An ${current.status.toLowerCase()} entry cannot be changed.`);
@@ -240,6 +242,7 @@ export const deleteOvertime = async (req: Request, res: Response) => {
   try {
     const id = parseId(req.params.id);
     await withAudit(req.user!.id, async (tx) => {
+      await lockRows(tx, "OvertimeEntry", [id]);
       const current = await tx.overtimeEntry.findUnique({ where: { id } });
       if (!current) throw new HttpError(404, "Overtime entry not found");
       if (current.status !== "PENDING") throw new HttpError(400, `An ${current.status.toLowerCase()} entry cannot be deleted.`);
@@ -258,6 +261,7 @@ export const decideOvertime = async (req: Request, res: Response) => {
     if (!parsed.success) return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parsed.error) });
     const { ids, status, reason } = parsed.data;
     const entries = await withAudit(req.user!.id, async (tx) => {
+      await lockRows(tx, "OvertimeEntry", ids);
       const rows = await tx.overtimeEntry.findMany({ where: { id: { in: ids } } });
       if (rows.length !== new Set(ids).size) throw new HttpError(404, "Some of these entries no longer exist. Reload and try again.");
       const decided = rows.filter((r) => r.status !== "PENDING");

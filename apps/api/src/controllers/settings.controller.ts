@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { prisma } from "../utils/prisma";
 import { deriveYY, RESERVED_NUMBERS } from "../utils/order-sequence";
-import { getSetting, setSetting } from "../utils/app-settings";
+import { SETTINGS, getSetting, setSetting } from "../utils/app-settings";
 
 // GET /admin/settings/order-sequence
 export const getOrderSequence = async (req: Request, res: Response) => {
@@ -153,7 +153,10 @@ export const updateOrderSequence = async (req: Request, res: Response) => {
 // GET /admin/payment-settings — the overdue threshold for payment requests.
 export const getPaymentSettings = async (_req: Request, res: Response) => {
   try {
-    res.json({ payment_overdue_days: await getSetting("payment_overdue_days") });
+    res.json({
+      payment_overdue_days: await getSetting("payment_overdue_days"),
+      payment_admin_threshold: await getSetting("payment_admin_threshold"),
+    });
   } catch (error) {
     console.error("getPaymentSettings failed:", error);
     res.status(500).json({ message: "Internal server error" });
@@ -163,11 +166,24 @@ export const getPaymentSettings = async (_req: Request, res: Response) => {
 // PUT /admin/payment-settings — Admin only (the Operation Manager is read-only here).
 export const updatePaymentSettings = async (req: Request, res: Response) => {
   try {
+    // Either setting may be sent on its own; each is checked before anything is saved.
     const days = req.body?.payment_overdue_days;
-    if (!(await setSetting("payment_overdue_days", days, req.user!.id))) {
+    const threshold = req.body?.payment_admin_threshold;
+    if (days === undefined && threshold === undefined) {
+      return res.status(400).json({ message: "Nothing to save." });
+    }
+    if (days !== undefined && !SETTINGS.payment_overdue_days.valid(days)) {
       return res.status(400).json({ message: "Enter a whole number of working days from 1 to 90." });
     }
-    res.json({ payment_overdue_days: days });
+    if (threshold !== undefined && !SETTINGS.payment_admin_threshold.valid(threshold)) {
+      return res.status(400).json({ message: "Enter the Admin review limit as a whole number of rupees." });
+    }
+    if (days !== undefined) await setSetting("payment_overdue_days", days, req.user!.id);
+    if (threshold !== undefined) await setSetting("payment_admin_threshold", threshold, req.user!.id);
+    res.json({
+      payment_overdue_days: await getSetting("payment_overdue_days"),
+      payment_admin_threshold: await getSetting("payment_admin_threshold"),
+    });
   } catch (error) {
     console.error("updatePaymentSettings failed:", error);
     res.status(500).json({ message: "Internal server error" });

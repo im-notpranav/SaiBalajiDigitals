@@ -956,25 +956,52 @@ export const deleteStore = async (req: Request, res: Response) => {
   }
 };
 
+/**
+ * Why an order may not be deleted, or null when it is untouched. Only an order nobody has
+ * billed, installed, staffed or claimed money against can go; anything further along is
+ * closed instead, so billed revenue is never erased (GAP-F01). Checked here, inside the
+ * transaction, rather than inferred from foreign-key errors.
+ */
+async function deleteBlocker(tx: any, id: number): Promise<string | null> {
+  const order = await tx.order.findUnique({
+    where: { id },
+    select: {
+      _count: { select: { invoices: true, workJobs: true, paymentRequests: true } },
+      stores: { where: { installed_at: { not: null } }, select: { id: true }, take: 1 },
+    },
+  });
+  if (!order) return "Order not found";
+  if (order._count.invoices) return "This order has invoices. Close it instead of deleting it.";
+  if (order.stores.length) return "This order has installed stores. Close it instead of deleting it.";
+  // Jobs keep their order whatever their status, cancelled ones included.
+  if (order._count.workJobs) return "This order has field jobs, which keep their order even when cancelled. Close it instead.";
+  if (order._count.paymentRequests) return "This order has payment requests. Close it instead of deleting it.";
+  return null;
+}
+
 export const deleteOrder = async (req: Request, res: Response) => {
   try {
     const id = parseInt(req.params.id as string, 10);
-    await prisma.$transaction(async (tx) => {
+    if (!Number.isInteger(id)) return res.status(400).json({ message: "Invalid order id" });
+    const blocked = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT set_config('app.current_user_id', ${req.user!.id.toString()}, true)`;
+      // Lock the row so nothing is billed or staffed between the check and the delete.
+      await tx.$queryRaw`SELECT id FROM "Order" WHERE id = ${id} FOR UPDATE`;
+      const reason = await deleteBlocker(tx, id);
+      if (reason) return reason;
       await tx.order.delete({ where: { id } });
+      return null;
     });
+    if (blocked === "Order not found") return res.status(404).json({ message: blocked });
+    if (blocked) return res.status(409).json({ message: blocked });
     return res.status(200).json(serializeDecimals({ message: "Order deleted" }));
   } catch (err: any) {
-    // Field jobs keep their order (WorkJob.order_id is ON DELETE RESTRICT) so job history
-    // is never silently lost with it.
-    // ON DELETE RESTRICT surfaces as Postgres 23001 (an unknown-request error), not P2003.
-    // Payment requests hold their order the same way: money paid out keeps its order.
-    if (String(err?.message ?? "").includes("PaymentRequest_order_id_fkey")) {
-      return res.status(400).json({ message: "This order has payment requests. It cannot be deleted." });
+    // Corrections to an order are kept in its change log, and that history holds the order
+    // (OrderChangeLog has no cascade).
+    if (String(err?.message ?? "").includes("OrderChangeLog_order_id_fkey")) {
+      return res.status(409).json({ message: "This order has a history of corrections. Close it instead of deleting it." });
     }
-    if (err?.code === "P2003" || String(err?.message ?? "").includes("WorkJob_order_id_fkey")) {
-      return res.status(400).json({ message: "This order has field jobs in the work-allocation portal. Cancel or move those jobs before deleting the order." });
-    }
+    console.error("deleteOrder failed:", err);
     return res.status(500).json({ message: "Internal server error" });
   }
 };
@@ -1108,10 +1135,13 @@ export const createInvoice = async (req: Request, res: Response) => {
           billing_completed_at: isMatch ? new Date() : null,
         },
       });
-      await tx.orderStore.updateMany({
-        where: { id: { in: covered.map((s) => s.id) } },
+      // The stores were checked before the transaction; claim them only if they are still
+      // free, so two invoices raised at once cannot cover the same store (GAP-F02).
+      const { count } = await tx.orderStore.updateMany({
+        where: { id: { in: covered.map((s) => s.id) }, order_id: id, invoice_id: null },
         data: { invoice_id: inv.id },
       });
+      if (count !== covered.length) throw new InvoiceConflict("One of these stores was just put on another invoice. Reload and try again.");
       await recomputeOrderStatus(tx, id);
       return inv;
     });
@@ -1119,11 +1149,16 @@ export const createInvoice = async (req: Request, res: Response) => {
     await invoiceCreatedNotices(order, { invoice_no, bill_amount }, coveredTotal, isMatch, user);
 
     return res.status(201).json(serializeDecimals({ ...invoice, covered_total: coveredTotal }));
-  } catch (err) {
+  } catch (err: any) {
+    if (err instanceof InvoiceConflict) return res.status(409).json({ message: err.message });
+    if (err?.code === "P2002") return res.status(409).json({ message: "That invoice number already exists on this order." });
     console.error(err);
     return res.status(500).json({ message: "Internal server error" });
   }
 };
+
+/** A billing write lost a race with another one; the caller answers 409. */
+class InvoiceConflict extends Error {}
 
 
 /**
@@ -1264,12 +1299,15 @@ export const recordInvoicePayment = async (req: Request, res: Response) => {
 
     const updated = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT set_config('app.current_user_id', ${user.id.toString()}, true)`;
-      const inv = await tx.invoice.update({
-        where: { id: invoiceId },
+      // Recorded only if nobody recorded it since it was read; corrections go through
+      // "edit payment" (GAP-F02).
+      const { count } = await tx.invoice.updateMany({
+        where: { id: invoiceId, amount_received: null },
         data: { amount_received, payment_received_at: payment_date, payment_received_by: user.id },
       });
+      if (count === 0) throw new InvoiceConflict(`Payment was just recorded against invoice ${invoice.invoice_no}. Reload to see it.`);
       await recomputeOrderStatus(tx, orderId);
-      return inv;
+      return tx.invoice.findUniqueOrThrow({ where: { id: invoiceId } });
     });
 
     if (order.created_by) {
@@ -1312,6 +1350,7 @@ export const recordInvoicePayment = async (req: Request, res: Response) => {
 
     return res.status(200).json(serializeDecimals(updated));
   } catch (err) {
+    if (err instanceof InvoiceConflict) return res.status(409).json({ message: err.message });
     console.error(err);
     return res.status(500).json({ message: "Internal server error" });
   }
