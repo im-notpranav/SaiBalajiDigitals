@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { prisma } from "../utils/prisma";
-import { deriveYY, RESERVED_NUMBERS } from "../utils/order-sequence";
+import { deriveYY, firstFreeNumber, RESERVED_NUMBERS } from "../utils/order-sequence";
 import { SETTINGS, getSetting, setSetting } from "../utils/app-settings";
 
 // GET /admin/settings/order-sequence
@@ -28,7 +28,7 @@ export const getOrderSequence = async (req: Request, res: Response) => {
       display_last_number = RESERVED_NUMBERS;
     }
     
-    const next_order_number = `ORD${display_year_code}${String(display_last_number + 1).padStart(4, "0")}`;
+    const { order_no: next_order_number } = await firstFreeNumber(prisma, display_year_code, display_last_number);
 
     res.json({
       seq: {

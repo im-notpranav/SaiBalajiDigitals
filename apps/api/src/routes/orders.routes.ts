@@ -9,6 +9,7 @@ import {
   updateOrderDetails,
   updateStore,
   addStore,
+  startOrder,
   deleteStore,
   deleteOrder,
   createInvoice,
@@ -61,6 +62,7 @@ router.post("/import", authorize("ADMIN"), requireSuperAdmin, raw({ type: () => 
 router.get("/", getOrders);
 router.get("/:id", getOrder);
 router.post("/", authorize("CSM", "ADMIN"), createOrder);
+router.post("/start", authorize("ADMIN"), startOrder);
 router.put("/:id", authorize("CSM", "ADMIN"), updateOrder);
 // Header edits are separate from line items: they stay open later in the pipeline, and
 // they are not restricted to the CSM who raised the order.

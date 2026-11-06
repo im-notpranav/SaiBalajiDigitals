@@ -73,6 +73,8 @@ export const getOrders = async (req: Request, res: Response) => {
 
     if (user.role === "PRODUCTION_MANAGER") {
       where.status = { in: OPEN_STATUSES };
+      // An order an admin has started has nothing to assign until its CSM adds items.
+      where.items = { some: {} };
     }
 
     const skip = (Number(page) - 1) * Number(limit);
@@ -216,7 +218,53 @@ export const getOrder = async (req: Request, res: Response) => {
   }
 };
 
-import { createOrderSchema, updateOrderSchema, updateOrderDetailsSchema, updateStoreSchema, addStoreSchema, invoiceSchema, closeOrderSchema, forceCloseOrderSchema, paymentSchema } from "../utils/validators";
+import { startOrderSchema, createOrderSchema, updateOrderSchema, updateOrderDetailsSchema, updateStoreSchema, addStoreSchema, invoiceSchema, closeOrderSchema, forceCloseOrderSchema, paymentSchema } from "../utils/validators";
+
+/**
+ * POST /api/orders/start — an admin opens an order with its number, client and CSM. It belongs
+ * to the CSM from then on, and has no stores until they add them; the audit log keeps the admin.
+ */
+export const startOrder = async (req: Request, res: Response) => {
+  try {
+    const parseResult = startOrderSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parseResult.error) });
+    }
+    const { client_name, csm_user_id, order_no: typedNo } = parseResult.data;
+    const user = req.user!;
+
+    const csm = await prisma.user.findUnique({ where: { id: csm_user_id }, select: { id: true, name: true, role: true, is_active: true } });
+    if (csm?.role !== "CSM" || !csm.is_active) return res.status(400).json({ message: "Pick an active CSM." });
+
+    const existingClient = await prisma.client.findFirst({ where: { name: { equals: client_name, mode: "insensitive" } } });
+    if (!existingClient) await prisma.client.create({ data: { name: client_name } });
+
+    const order_no = typedNo ?? (await generateOrderId());
+    const order = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.current_user_id', ${user.id.toString()}, true)`;
+      const created = await tx.order.create({ data: { order_no, client_name, created_by: csm.id, creator_name: csm.name, status: "Active" } });
+      // The audit trigger only sees updates and deletes, and created_by names the CSM.
+      await tx.auditLog.create({
+        data: {
+          table_name: "Order",
+          record_id: created.id,
+          action: "INSERT",
+          changed_by: user.id,
+          user_name: user.username,
+          new_data: { order_no, client_name, csm_user_id: csm.id },
+        },
+      });
+      return created;
+    });
+
+    await notifyUser(csm.id, `New order ${order.order_no} for you`, `Client: ${client_name}. Add its stores and items.`, "info", order.id).catch(() => {});
+    return res.status(201).json(serializeDecimals(order));
+  } catch (err: any) {
+    if (err?.code === "P2002") return res.status(409).json({ message: "That order number is already used. Pick another." });
+    console.error(err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
 
 export const createOrder = async (req: Request, res: Response) => {
   try {
@@ -640,6 +688,11 @@ export const updateOrder = async (req: Request, res: Response) => {
 
     if (changes.length > 0 && user.role === "CSM") {
       await sendOrderEditEmail(existingOrder.order_no, user.name, changes);
+    }
+
+    // An order an admin started reaches production only now that it has something to make.
+    if (existingOrder.items.length === 0 && (updatedOrder?.items.length ?? 0) > 0) {
+      await notifyRole("PRODUCTION", `New order ${existingOrder.order_no} created`, `Client: ${existingOrder.client_name}`, "info", id);
     }
 
     if (proposedLossDuringUpdate) {

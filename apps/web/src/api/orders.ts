@@ -102,6 +102,16 @@ export async function updateStore(orderId: number, storeId: number, data: StoreP
   return apiFetch<OrderStore>(`/orders/${orderId}/stores/${storeId}`, { method: "PATCH", data });
 }
 
+/** An admin starts an order for a CSM. Leave the number out to take the next in the series. */
+export async function startOrder(data: { client_name: string; csm_user_id: number; order_no?: string | null }) {
+  return apiFetch<Order>("/orders/start", { method: "POST", data });
+}
+
+export async function fetchNextOrderNumber() {
+  const res = await apiClient.get<{ next_order_number: string }>("/admin/order-sequence");
+  return res.data.next_order_number;
+}
+
 export async function addStore(orderId: number, data: { store_name: string; location: string; po_number?: string | null }) {
   return apiFetch<OrderStore>(`/orders/${orderId}/stores`, { method: "POST", data });
 }

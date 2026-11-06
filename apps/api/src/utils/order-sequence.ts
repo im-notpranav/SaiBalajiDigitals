@@ -31,6 +31,18 @@ export function deriveYY(now: Date = new Date()): string {
  */
 export const RESERVED_NUMBERS = 12;
 
+const formatOrderNo = (yearCode: string, n: number) => `ORD${yearCode}${String(n).padStart(4, "0")}`;
+
+/**
+ * The first number after `last` that no order has. An admin may type a number ahead of the
+ * sequence, so the next one in line can already be taken.
+ */
+export async function firstFreeNumber(db: { order: { findUnique: (args: any) => Promise<unknown> } }, yearCode: string, last: number) {
+  let n = last + 1;
+  while (await db.order.findUnique({ where: { order_no: formatOrderNo(yearCode, n) }, select: { id: true } })) n += 1;
+  return { number: n, order_no: formatOrderNo(yearCode, n) };
+}
+
 /**
  * Atomic, row-locked transaction to generate ORD{YY}{NNNN}
  */
@@ -50,13 +62,13 @@ export const generateOrderId = async (): Promise<string> => {
       last_number = RESERVED_NUMBERS;
     }
 
-    last_number += 1;
-    
+    const next = await firstFreeNumber(tx, year_code, last_number);
+
     await tx.orderSequence.update({
       where: { id: 1 },
-      data: { year_code, last_number },
+      data: { year_code, last_number: next.number },
     });
-    
-    return `ORD${year_code}${String(last_number).padStart(4, "0")}`;
+
+    return next.order_no;
   });
 }

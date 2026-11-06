@@ -116,7 +116,7 @@ function MyOrders() {
                 link follows the header rule, not the line-item one. */}
             {["Active", "Installed", "BillingCompleted", "Pending"].includes(o.status) && (
               <Link to="/employee/edit-order/$id" params={{ id: String(o.id) }} className={buttonVariants({ size: "sm", variant: "outline" })}>
-                <Edit className="mr-1 h-3.5 w-3.5" /> Edit
+                <Edit className="mr-1 h-3.5 w-3.5" /> {o.store_count === 0 ? "Add stores" : "Edit"}
               </Link>
             )}
           </div>

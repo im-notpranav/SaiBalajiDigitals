@@ -77,6 +77,19 @@ export const createOrderSchema = z.object({
   .refine(uniqueStores, uniqueStoresConfig);
 
 /**
+ * An admin starts an order for a CSM, who adds the stores and items. A blank number takes the
+ * next one in the series.
+ */
+export const startOrderSchema = z.object({
+  client_name: z.string().trim().min(1).max(100),
+  csm_user_id: z.number().int().positive(),
+  order_no: z.preprocess(
+    (v) => (typeof v === "string" && !v.trim() ? null : v),
+    z.string().trim().toUpperCase().regex(/^ORD\d{1,16}$/, "An order number is ORD followed by digits, like ORD260123").nullable().optional(),
+  ),
+});
+
+/**
  * Line items only. Header fields (client, store, location, PO) have their own endpoints;
  * they are still parsed here so that sending one can be rejected with a message naming
  * the right endpoint, rather than silently ignored.

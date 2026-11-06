@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { ShieldAlert, Edit, Lock, Download, Search } from "lucide-react";
+import { ShieldAlert, Edit, Lock, Download, Plus, Search } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { OrdersTable } from "@/components/orders/OrdersTable";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -32,6 +32,7 @@ import { toast } from "sonner";
 import type { Order, RemarkType } from "@sb-oms/shared-types";
 import { useAuth, isReadOnlyRole } from "@/lib/auth-store";
 import { EmailExportDialog } from "@/components/orders/EmailExportDialog";
+import { StartOrderDialog } from "@/components/orders/StartOrderDialog";
 
 export const Route = createFileRoute("/_portal/admin/orders")({
   head: () => ({ meta: [{ title: "Order Oversight — SB OMS" }] }),
@@ -51,6 +52,7 @@ function AdminOrders() {
   const [searchField, setSearchField] = useState<"client" | "store" | "order_no">("client");
   const debouncedQ = useDebounce(q, 300);
 
+  const [starting, setStarting] = useState(false);
   const [closingOrder, setClosingOrder] = useState<Order | null>(null);
   const [remark, setRemark] = useState<RemarkType | "Other">(REMARK_TYPES[0]!.value);
   const [custom, setCustom] = useState("");
@@ -93,6 +95,11 @@ function AdminOrders() {
         crumbs={[{ label: "Automated System" }, { label: "Orders" }]}
         actions={
           <div className="flex flex-wrap gap-2">
+            {!readOnly && (
+              <Button className="rounded-xl shadow-soft" onClick={() => setStarting(true)}>
+                <Plus className="mr-2 h-4 w-4" /> New order
+              </Button>
+            )}
             <Button variant="outline" className="rounded-xl shadow-soft" onClick={() => exportOrders({ section })}>
               <Download className="mr-2 h-4 w-4" /> Export {section === "active" ? "Active" : "Completed"}
             </Button>
@@ -171,6 +178,8 @@ function AdminOrders() {
           </div>
         )}
       />
+
+      <StartOrderDialog open={starting} onClose={() => setStarting(false)} />
 
       {/* Admin Force Close Modal */}
       <AlertDialog open={!!closingOrder} onOpenChange={(open) => !open && setClosingOrder(null)}>
