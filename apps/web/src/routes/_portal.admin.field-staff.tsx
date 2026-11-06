@@ -40,7 +40,7 @@ const suggestUsername = (name: string) =>
     .replace(/^_+|_+$/g, "")
     .slice(0, 50);
 
-const emptyForm = { name: "", username: "", password: "", role: "PASTER" as FieldRole, phone: "", emp_code: "" };
+const emptyForm = { name: "", username: "", password: "", role: "PASTER" as FieldRole, phone: "", email: "", emp_code: "" };
 
 function FieldStaffPage() {
   const queryClient = useQueryClient();
@@ -64,7 +64,8 @@ function FieldStaffPage() {
         username: form.username,
         password: form.password,
         role: form.role,
-        phone: form.phone || null,
+        phone: form.phone,
+        email: form.email,
         emp_code: form.emp_code || null,
       }),
     onSuccess: (u) => {
@@ -79,7 +80,7 @@ function FieldStaffPage() {
 
   const updateMutation = useMutation({
     mutationFn: (u: FieldStaff) =>
-      updateFieldStaff(u.id, { name: u.name, role: u.role, phone: u.phone || null, emp_code: u.emp_code || null }),
+      updateFieldStaff(u.id, { name: u.name, role: u.role, phone: u.phone ?? "", email: u.email ?? "", emp_code: u.emp_code || null }),
     onSuccess: () => {
       toast.success("Saved");
       setEditing(null);
@@ -191,7 +192,10 @@ function FieldStaffPage() {
                   </TableCell>
                   <TableCell><Badge variant="outline">{FIELD_ROLE_LABELS[s.role]}</Badge></TableCell>
                   <TableCell className="tabular-nums">{s.emp_code ?? "—"}</TableCell>
-                  <TableCell className="tabular-nums">{s.phone ?? <span className="text-muted-foreground">Missing</span>}</TableCell>
+                  <TableCell className="tabular-nums">
+                    <div>{s.phone ?? <span className="text-muted-foreground">Missing</span>}</div>
+                    <div className="text-xs text-muted-foreground">{s.email ?? "No email"}</div>
+                  </TableCell>
                   <TableCell>
                     {s.is_active ? (
                       <Badge className="bg-success/15 text-success hover:bg-success/20">Active</Badge>
@@ -256,6 +260,10 @@ function FieldStaffPage() {
               <Input id="fs-phone" inputMode="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="98765 43210" />
               <p className="text-xs text-muted-foreground">Used for job and payment notifications on WhatsApp.</p>
             </div>
+            <div className="grid gap-2">
+              <Label htmlFor="fs-email">Email</Label>
+              <Input id="fs-email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-2">
                 <Label htmlFor="fs-user">Username</Label>
@@ -275,7 +283,7 @@ function FieldStaffPage() {
             <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
             <Button
               onClick={() => createMutation.mutate()}
-              disabled={createMutation.isPending || !form.name || form.username.length < 3 || form.password.length < 8}
+              disabled={createMutation.isPending || !form.name || !form.phone.trim() || !form.email.trim() || form.username.length < 3 || form.password.length < 8}
             >
               {createMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Add
@@ -315,11 +323,15 @@ function FieldStaffPage() {
                 <Label htmlFor="fe-phone">WhatsApp number</Label>
                 <Input id="fe-phone" inputMode="tel" value={editing.phone ?? ""} onChange={(e) => setEditing({ ...editing, phone: e.target.value })} />
               </div>
+              <div className="grid gap-2">
+                <Label htmlFor="fe-email">Email</Label>
+                <Input id="fe-email" type="email" value={editing.email ?? ""} onChange={(e) => setEditing({ ...editing, email: e.target.value })} />
+              </div>
             </div>
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditing(null)}>Cancel</Button>
-            <Button onClick={() => editing && updateMutation.mutate(editing)} disabled={updateMutation.isPending || !editing?.name}>
+            <Button onClick={() => editing && updateMutation.mutate(editing)} disabled={updateMutation.isPending || !editing?.name || !editing?.phone?.trim() || !editing?.email?.trim()}>
               {updateMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Save
             </Button>

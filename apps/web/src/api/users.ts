@@ -1,6 +1,10 @@
-import { apiFetch } from "./client";
+import { apiClient, apiFetch } from "./client";
 import type { AppUser, AuthUser } from "@sb-oms/shared-types";
 import type { UserRole } from "@sb-oms/shared-types";
+
+/** Where to load a user's picture from: stored paths are relative to the API. */
+export const photoSrc = (url?: string | null) =>
+  url ? (url.startsWith("/") ? `${apiClient.defaults.baseURL}${url}` : url) : undefined;
 
 export async function fetchUsers() {
   return apiFetch<{ users: AppUser[] }>("/users");
@@ -19,6 +23,8 @@ export async function createUser(data: {
   username: string;
   password: string;
   role: UserRole;
+  phone: string;
+  email: string;
 }) {
   const res = await apiFetch<AuthUser>("/users", {
     method: "POST",
@@ -33,10 +39,7 @@ export async function deleteUser(id: number) {
 
 export async function updateMe(data: {
   name?: string;
-  email?: string | null;
-  phone?: string | null;
   whatsapp_opt_out?: boolean;
-  photo_url?: string | null;
   current_password?: string;
   new_password?: string;
 }) {
@@ -46,6 +49,15 @@ export async function updateMe(data: {
   });
   return { user: res };
 }
+
+export const uploadMyPhoto = (picture: Blob) =>
+  apiFetch<AuthUser>("/users/me/photo", {
+    method: "POST",
+    data: picture,
+    headers: { "Content-Type": "application/octet-stream" },
+  });
+
+export const removeMyPhoto = () => apiFetch<AuthUser>("/users/me/photo", { method: "DELETE" });
 
 export async function toggleUserStatus(id: number, is_active: boolean) {
   const res = await apiFetch<AuthUser>(`/users/${id}/status`, {
@@ -65,7 +77,7 @@ export async function resetUserPassword(id: number, new_password: string) {
 
 export async function updateUser(
   id: number,
-  data: { name: string; username: string; role: string; phone?: string | null; whatsapp_opt_out?: boolean },
+  data: { name: string; username: string; role: string; phone: string; email: string; whatsapp_opt_out?: boolean },
 ) {
   const res = await apiFetch<AuthUser>(`/users/${id}`, {
     method: "PUT",

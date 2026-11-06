@@ -12,6 +12,7 @@ export interface FieldStaff {
   username: string;
   role: FieldRole;
   phone: string | null;
+  email: string | null;
   emp_code: string | null;
   is_active: boolean;
   last_login_at: string | null;
@@ -74,13 +75,14 @@ export const createFieldStaff = (data: {
   username: string;
   password: string;
   role: FieldRole;
-  phone?: string | null;
+  phone: string;
+  email: string;
   emp_code?: string | null;
 }) => apiFetch<FieldStaff>("/field-staff", { method: "POST", data });
 
 export const updateFieldStaff = (
   id: number,
-  data: { name?: string; role?: FieldRole; phone?: string | null; emp_code?: string | null },
+  data: { name?: string; role?: FieldRole; phone: string; email: string; emp_code?: string | null },
 ) => apiFetch<FieldStaff>(`/field-staff/${id}`, { method: "PATCH", data });
 
 export const setFieldStaffStatus = (id: number, is_active: boolean) =>

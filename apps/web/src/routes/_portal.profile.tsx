@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Camera, Loader2 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
@@ -11,7 +11,8 @@ import { Switch } from "@/components/ui/switch";
 import { apiErrorMessage } from "@/api/allocation";
 import { useAuth } from "@/lib/auth-store";
 import { roleLabel } from "@/lib/constants";
-import { updateMe } from "@/api/users";
+import { photoSrc, removeMyPhoto, updateMe, uploadMyPhoto } from "@/api/users";
+import { shrinkImage } from "@/lib/image";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 export const Route = createFileRoute("/_portal/profile")({
@@ -24,12 +25,28 @@ function ProfilePage() {
   const queryClient = useQueryClient();
 
   const [name, setName] = useState(user?.name || "");
-  const [email, setEmail] = useState(user?.email || "");
-  const [phone, setPhone] = useState(user?.phone || "");
   const [whatsapp, setWhatsapp] = useState(!user?.whatsapp_opt_out);
-  const [photoUrl, setPhotoUrl] = useState(user?.photo_url || "");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const photoInput = useRef<HTMLInputElement>(null);
+
+  const photo = useMutation({
+    mutationFn: async (file: File | null) => {
+      if (!file) return removeMyPhoto();
+      const picture = await shrinkImage(file, { maxSide: 256, square: true }).catch(() => {
+        throw new Error("Could not read that picture. Use a JPG or PNG.");
+      });
+      return uploadMyPhoto(picture);
+    },
+    onSuccess: (_saved, file) => {
+      toast.success(file ? "Picture updated" : "Picture removed");
+      queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
+    },
+    onError: (err: any) => toast.error(apiErrorMessage(err, err.message)),
+    onSettled: () => {
+      if (photoInput.current) photoInput.current.value = "";
+    },
+  });
 
   const mutation = useMutation({
     mutationFn: updateMe,
@@ -47,11 +64,7 @@ function ProfilePage() {
   const buildPayload = () => {
     const payload: any = {};
     if (name && name !== user?.name) payload.name = name;
-    // Blank means "no email": sent as null, since the API only accepts a real address.
-    if (email !== (user?.email || "")) payload.email = email.trim() || null;
-    if (phone !== (user?.phone || "")) payload.phone = phone.trim();
     if (whatsapp === !!user?.whatsapp_opt_out) payload.whatsapp_opt_out = !whatsapp;
-    if (photoUrl !== (user?.photo_url || "")) payload.photo_url = photoUrl;
     if (newPassword) {
       payload.current_password = currentPassword;
       payload.new_password = newPassword;
@@ -79,7 +92,7 @@ function ProfilePage() {
         {/* A row on a phone so the form starts on the first screen; a card from `lg` up. */}
         <div className="surface-panel flex items-center gap-4 p-5 lg:flex-col lg:p-8 lg:text-center">
           <Avatar className="h-16 w-16 shrink-0 lg:h-24 lg:w-24">
-            {user?.photo_url && <AvatarImage src={user.photo_url} alt={user.name} className="object-cover" />}
+            {user?.photo_url && <AvatarImage src={photoSrc(user.photo_url)} alt={user.name} className="object-cover" />}
             <AvatarFallback className="bg-gradient-to-br from-primary to-primary-deep text-xl font-bold text-primary-foreground lg:text-2xl">
               {user?.name?.slice(0, 2).toUpperCase()}
             </AvatarFallback>
@@ -95,6 +108,31 @@ function ProfilePage() {
                 <div className="inline-flex rounded-full bg-rose-500/10 px-3 py-1 text-xs font-semibold uppercase text-rose-500">
                   Super Admin
                 </div>
+              )}
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2 lg:justify-center">
+              <input
+                ref={photoInput}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="sr-only"
+                aria-label="Choose a profile picture"
+                onChange={(e) => e.target.files?.[0] && photo.mutate(e.target.files[0])}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={photo.isPending}
+                onClick={() => photoInput.current?.click()}
+              >
+                {photo.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Camera className="mr-2 h-4 w-4" />}
+                {user?.photo_url ? "Change picture" : "Upload picture"}
+              </Button>
+              {user?.photo_url && (
+                <Button type="button" variant="ghost" size="sm" disabled={photo.isPending} onClick={() => photo.mutate(null)}>
+                  Remove
+                </Button>
               )}
             </div>
           </div>
@@ -117,12 +155,15 @@ function ProfilePage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="profile-email">Email</Label>
-              <Input id="profile-email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email address" />
+              <Input id="profile-email" type="email" value={user?.email ?? ""} disabled className="bg-muted" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="profile-phone">Mobile Number</Label>
-              <Input id="profile-phone" type="tel" inputMode="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="10-digit mobile number" />
+              <Input id="profile-phone" type="tel" value={user?.phone ?? ""} disabled className="bg-muted" />
             </div>
+            <p className="sm:col-span-2 text-xs text-muted-foreground">
+              To change your username, email or mobile number, contact the admin.
+            </p>
             <div className="sm:col-span-2 flex items-center justify-between gap-3 rounded-xl border px-3 py-3">
               <div>
                 <Label htmlFor="profile-whatsapp" className="text-sm font-medium">WhatsApp messages</Label>
@@ -138,11 +179,6 @@ function ProfilePage() {
                 aria-describedby="profile-whatsapp-hint"
               />
             </div>
-            <div className="sm:col-span-2 space-y-2">
-              <Label htmlFor="profile-photo">Photo URL</Label>
-              <Input id="profile-photo" type="url" value={photoUrl} onChange={(e) => setPhotoUrl(e.target.value)} placeholder="https://example.com/photo.jpg" />
-            </div>
-
             <div className="sm:col-span-2 mt-2 border-t pt-4">
               <h2 className="text-sm font-semibold">Change Password</h2>
               <p className="mt-1 text-xs text-muted-foreground">Leave these fields blank if you do not wish to change your password. You must provide your current password to set a new one.</p>

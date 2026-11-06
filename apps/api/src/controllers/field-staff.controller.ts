@@ -18,6 +18,7 @@ const staffSelect = {
   username: true,
   role: true,
   phone: true,
+  email: true,
   emp_code: true,
   is_active: true,
   last_login_at: true,
@@ -72,7 +73,7 @@ export const createFieldStaff = async (req: Request, res: Response) => {
     if (!parsed.success) {
       return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parsed.error) });
     }
-    const { name, username, password, role, phone, emp_code } = parsed.data;
+    const { name, username, password, role, phone, email, emp_code } = parsed.data;
 
     const clash = await prisma.user.findFirst({ where: { username: { equals: username, mode: "insensitive" } } });
     if (clash) return res.status(400).json({ message: "Username already exists" });
@@ -83,7 +84,8 @@ export const createFieldStaff = async (req: Request, res: Response) => {
         username,
         password: await bcrypt.hash(password, 12),
         role,
-        phone: phone ?? null,
+        phone,
+        email,
         emp_code: emp_code ?? null,
       },
       select: staffSelect,

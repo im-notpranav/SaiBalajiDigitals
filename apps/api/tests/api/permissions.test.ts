@@ -57,7 +57,7 @@ describe("the last active Cost Control Manager stays (BR-30)", () => {
     expect(off.status).toBe(409);
     expect(off.body.message).toMatch(/only active Cost Control Manager/);
     expect((await as(superAdmin).delete(`/api/users/${ccm.id}`)).status).toBe(409);
-    expect((await as(superAdmin).put(`/api/users/${ccm.id}`).send({ name: ccm.name, username: ccm.username, role: "CSM" })).status).toBe(409);
+    expect((await as(superAdmin).put(`/api/users/${ccm.id}`).send({ name: ccm.name, username: ccm.username, role: "CSM", phone: "9876543210", email: "ccm@example.com" })).status).toBe(409);
 
     // With a second one active, the first can go.
     await makeUser("COST_CONTROL_MANAGER");

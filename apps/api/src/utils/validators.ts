@@ -214,8 +214,8 @@ export const indianMobile = z
   .refine((v) => /^[6-9]\d{9}$/.test(v), "Enter a 10-digit Indian mobile number")
   .transform((v) => `+91${v}`);
 
-/** A mobile number on a user form: blank clears it, anything else must be a valid Indian mobile. */
-const userMobile = z.union([z.literal("").transform(() => null), indianMobile]).optional().nullable();
+/** An email address on a user form, stored lower-case. */
+const userEmail = z.string().trim().toLowerCase().email("Enter a valid email address").max(200);
 
 const empCode = z.string().trim().min(1).max(20);
 const username = z
@@ -229,14 +229,16 @@ export const createFieldStaffSchema = z.object({
   username,
   password: z.string().min(8),
   role: fieldRoleEnum,
-  phone: indianMobile.optional().nullable(),
+  phone: indianMobile,
+  email: userEmail,
   emp_code: empCode.optional().nullable(),
 });
 
 export const updateFieldStaffSchema = z.object({
   name: z.string().trim().min(1).max(100).optional(),
   role: fieldRoleEnum.optional(),
-  phone: indianMobile.optional().nullable(),
+  phone: indianMobile,
+  email: userEmail,
   emp_code: empCode.optional().nullable(),
 });
 
@@ -278,6 +280,8 @@ export const createUserSchema = z.object({
     .regex(/^[a-z0-9_]+$/, "Username must be lowercase letters, numbers, or underscores"),
   password: z.string().min(8),
   role: roleEnum,
+  phone: indianMobile,
+  email: userEmail,
 });
 
 export const updateUserSchema = z.object({
@@ -288,7 +292,8 @@ export const updateUserSchema = z.object({
     .max(50)
     .regex(/^[a-z0-9_]+$/, "Username must be lowercase letters, numbers, or underscores"),
   role: roleEnum,
-  phone: userMobile,
+  phone: indianMobile,
+  email: userEmail,
   whatsapp_opt_out: z.boolean().optional(),
 });
 
@@ -297,15 +302,13 @@ export const resetPasswordSchema = z.object({
   new_password: z.string().min(8),
 });
 
+/** Username, email and mobile are the admin's to change, so sending them here is refused. */
 export const updateMeSchema = z.object({
   name: z.string().min(1).max(100).optional(),
-  email: z.string().email().optional().nullable(),
-  phone: userMobile,
   whatsapp_opt_out: z.boolean().optional(),
-  photo_url: z.string().url().or(z.literal("")).optional().nullable(),
   current_password: z.string().optional(),
   new_password: z.string().min(8).optional(),
-});
+}).strict();
 
 export const loginSchema = z.object({
   username: z.string().min(1),

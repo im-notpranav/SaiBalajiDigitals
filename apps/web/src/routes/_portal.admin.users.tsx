@@ -21,7 +21,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { apiErrorMessage } from "@/api/allocation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { fetchUsers, createUser, toggleUserStatus, updateUser, resetUserPassword } from "@/api/users";
+import { fetchUsers, createUser, toggleUserStatus, updateUser, resetUserPassword, photoSrc } from "@/api/users";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-store";
 import { ROLES, roleLabel } from "@/lib/constants";
@@ -31,11 +31,14 @@ export const Route = createFileRoute("/_portal/admin/users")({
   component: UsersPage,
 });
 
+const blankUser = { name: "", username: "", phone: "", email: "", password: "", role: "CSM" as any };
+
 function UsersPage() {
   const [q, setQ] = useState("");
+  const [onlyMissing, setOnlyMissing] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [newUser, setNewUser] = useState({ name: "", username: "", password: "", role: "CSM" as any });
+  const [newUser, setNewUser] = useState(blankUser);
   const [editUser, setEditUser] = useState<any>(null);
   const [isPwDialogOpen, setIsPwDialogOpen] = useState(false);
   const [pwUser, setPwUser] = useState<any>(null);
@@ -51,7 +54,7 @@ function UsersPage() {
     onSuccess: () => {
       toast.success("User created successfully");
       setIsDialogOpen(false);
-      setNewUser({ name: "", username: "", password: "", role: "CSM" });
+      setNewUser(blankUser);
       queryClient.invalidateQueries({ queryKey: ["users"] });
     },
     onError: (err: any) => {
@@ -71,6 +74,7 @@ function UsersPage() {
         username: data.username,
         role: data.role,
         phone: (data.phone ?? "").trim(),
+        email: (data.email ?? "").trim(),
         whatsapp_opt_out: !!data.whatsapp_opt_out,
       }),
     onSuccess: () => {
@@ -106,9 +110,12 @@ function UsersPage() {
   });
 
   const users = usersData?.users || [];
-  const active = users.filter((u: any) => u.is_active).length;
-  const filtered = users.filter((u: any) =>
-    `${u.name} ${u.username} ${u.role}`.toLowerCase().includes(q.toLowerCase()),
+  const missingDetails = (u: any) => u.is_active && (!u.phone || !u.email);
+  const missingCount = users.filter(missingDetails).length;
+  const filtered = users.filter(
+    (u: any) =>
+      (!onlyMissing || missingDetails(u)) &&
+      `${u.name} ${u.username} ${u.role}`.toLowerCase().includes(q.toLowerCase()),
   );
 
   return (
@@ -139,6 +146,14 @@ function UsersPage() {
                   <Input aria-label="Username" value={newUser.username} onChange={(e) => setNewUser({ ...newUser, username: e.target.value })} />
                 </div>
                 <div className="grid gap-2">
+                  <Label>Mobile number</Label>
+                  <Input aria-label="Mobile number" type="tel" inputMode="tel" value={newUser.phone} onChange={(e) => setNewUser({ ...newUser, phone: e.target.value })} placeholder="10-digit mobile, e.g. 98765 43210" />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Email</Label>
+                  <Input aria-label="Email" type="email" value={newUser.email} onChange={(e) => setNewUser({ ...newUser, email: e.target.value })} />
+                </div>
+                <div className="grid gap-2">
                   <Label>Password</Label>
                   <Input aria-label="Password" type="password" value={newUser.password} onChange={(e) => setNewUser({ ...newUser, password: e.target.value })} />
                 </div>
@@ -156,7 +171,7 @@ function UsersPage() {
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
-                <Button onClick={() => createMutation.mutate()} disabled={createMutation.isPending || !newUser.name || !newUser.username || !newUser.password}>
+                <Button onClick={() => createMutation.mutate()} disabled={createMutation.isPending || !newUser.name || !newUser.username || !newUser.phone.trim() || !newUser.email.trim() || !newUser.password}>
                   {createMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Create
                 </Button>
@@ -202,7 +217,11 @@ function UsersPage() {
                   onChange={(e) => setEditUser({ ...editUser, phone: e.target.value })}
                   placeholder="10-digit mobile, e.g. 98765 43210"
                 />
-                <p className="text-xs text-muted-foreground">Used for WhatsApp notifications. Leave blank if they have none.</p>
+                <p className="text-xs text-muted-foreground">Used for WhatsApp notifications.</p>
+              </div>
+              <div className="grid gap-2">
+                <Label>Email</Label>
+                <Input aria-label="Email" type="email" value={editUser.email ?? ""} onChange={(e) => setEditUser({ ...editUser, email: e.target.value })} />
               </div>
               <div className="flex items-center justify-between gap-3 rounded-xl border px-3 py-2">
                 <div>
@@ -219,7 +238,7 @@ function UsersPage() {
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>Cancel</Button>
-            <Button onClick={() => updateMutation.mutate(editUser)} disabled={updateMutation.isPending || !editUser?.name || !editUser?.username}>
+            <Button onClick={() => updateMutation.mutate(editUser)} disabled={updateMutation.isPending || !editUser?.name || !editUser?.username || !editUser?.phone?.trim() || !editUser?.email?.trim()}>
               {updateMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Save changes
             </Button>
@@ -260,11 +279,16 @@ function UsersPage() {
         </DialogContent>
       </Dialog>
 
-      <div className="surface-panel mb-4 p-3">
-        <div className="relative max-w-sm">
+      <div className="surface-panel mb-4 flex flex-wrap items-center gap-3 p-3">
+        <div className="relative w-full max-w-sm">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search users" placeholder="Search users" className="pl-9" />
         </div>
+        {(missingCount > 0 || onlyMissing) && (
+          <Button variant={onlyMissing ? "secondary" : "outline"} size="sm" onClick={() => setOnlyMissing((v) => !v)}>
+            {missingCount} missing mobile or email
+          </Button>
+        )}
       </div>
 
       <div className="surface-panel overflow-hidden">
@@ -289,7 +313,7 @@ function UsersPage() {
                   <TableCell>
                     <div className="flex items-center gap-3">
                       <Avatar className="h-9 w-9">
-                        {u.photo_url && <AvatarImage src={u.photo_url} alt={u.name} className="object-cover" />}
+                        {u.photo_url && <AvatarImage src={photoSrc(u.photo_url)} alt={u.name} className="object-cover" loading="lazy" />}
                         <AvatarFallback className="bg-gradient-to-br from-primary to-primary-deep text-xs font-bold text-primary-foreground">
                           {u.name.split(" ").map((n: string) => n[0]).join("").slice(0, 2).toUpperCase()}
                         </AvatarFallback>
@@ -300,6 +324,8 @@ function UsersPage() {
                           {u.username}
                           {" · "}
                           {u.phone ? u.phone : <span className="text-warning">no phone</span>}
+                          {" · "}
+                          {u.email ? u.email : <span className="text-warning">no email</span>}
                           {u.whatsapp_opt_out && " · WhatsApp off"}
                         </div>
                       </div>

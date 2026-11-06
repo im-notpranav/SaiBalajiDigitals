@@ -1,8 +1,11 @@
 import { Request, Response } from "express";
+import { createHash } from "node:crypto";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { prisma } from "../utils/prisma";
 import { JWT_SECRET, JWT_EXPIRES_IN } from "../utils/config";
+import { objectStore } from "../utils/object-store";
+import { detectFileType } from "../utils/payment-files";
 
 import { createUserSchema, updateMeSchema, updateUserSchema, resetPasswordSchema } from "../utils/validators";
 import { sanitizeZodErrors } from "../utils/sanitize-errors";
@@ -54,7 +57,7 @@ export const createUser = async (req: Request, res: Response) => {
     if (!parseResult.success) {
       return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parseResult.error) });
     }
-    const { name, username, password, role } = parseResult.data;
+    const { name, username, password, role, phone, email } = parseResult.data;
 
     const clash = await prisma.user.findFirst({
       where: { username: { equals: username, mode: "insensitive" } },
@@ -71,8 +74,10 @@ export const createUser = async (req: Request, res: Response) => {
         username,
         password: hashedPassword,
         role: role as any,
+        phone,
+        email,
       },
-      select: { id: true, name: true, username: true, role: true },
+      select: { id: true, name: true, username: true, role: true, phone: true, email: true },
     });
 
     return res.status(201).json(user);
@@ -134,15 +139,12 @@ export const updateMe = async (req: Request, res: Response) => {
     if (!parseResult.success) {
       return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parseResult.error) });
     }
-    const { name, email, phone, whatsapp_opt_out, photo_url, current_password, new_password } = parseResult.data;
+    const { name, whatsapp_opt_out, current_password, new_password } = parseResult.data;
     const userId = req.user!.id;
 
     const updateData: any = {};
     if (name) updateData.name = name;
-    if (email !== undefined) updateData.email = email;
-    if (phone !== undefined) updateData.phone = phone;
     if (whatsapp_opt_out !== undefined) updateData.whatsapp_opt_out = whatsapp_opt_out;
-    if (photo_url !== undefined) updateData.photo_url = photo_url;
 
     if (new_password) {
       if (!current_password) {
@@ -183,6 +185,77 @@ export const updateMe = async (req: Request, res: Response) => {
 
     return res.status(200).json(updatedUser);
   } catch (err) {
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+const meSelect = { id: true, name: true, username: true, role: true, email: true, phone: true, whatsapp_opt_out: true, photo_url: true, is_super_admin: true } as const;
+
+/**
+ * POST /me/photo: the request body is the picture, already shrunk by the browser. Its type
+ * is read from its bytes. Each upload gets a new key and URL, so browsers can keep a picture
+ * for good and still see a new one straight away.
+ */
+export const uploadMyPhoto = async (req: Request, res: Response) => {
+  try {
+    if (!objectStore) return res.status(503).json({ message: "Photo uploads are not set up yet. Ask the admin." });
+    const data = Buffer.isBuffer(req.body) ? req.body : null;
+    if (!data || data.length === 0) return res.status(400).json({ message: "Choose a picture." });
+    const mime = detectFileType(data);
+    if (mime !== "image/jpeg" && mime !== "image/png" && mime !== "image/webp") {
+      return res.status(415).json({ message: "Use a JPG, PNG or WEBP picture." });
+    }
+
+    const userId = req.user!.id;
+    const version = createHash("sha256").update(data).digest("hex").slice(0, 12);
+    const key = `photos/${userId}-${version}`;
+    await objectStore.put(key, data, mime);
+
+    const before = await prisma.user.findUnique({ where: { id: userId }, select: { photo_key: true } });
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data: { photo_key: key, photo_url: `/users/${userId}/photo?v=${version}` },
+      select: meSelect,
+    });
+    if (before?.photo_key && before.photo_key !== key) {
+      await objectStore.remove(before.photo_key).catch((err) => console.error("Could not remove an old photo", err));
+    }
+    return res.status(200).json(user);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Could not save the picture. Try again." });
+  }
+};
+
+/** DELETE /me/photo: back to initials. */
+export const removeMyPhoto = async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.id;
+    const before = await prisma.user.findUnique({ where: { id: userId }, select: { photo_key: true } });
+    const user = await prisma.user.update({ where: { id: userId }, data: { photo_key: null, photo_url: null }, select: meSelect });
+    if (before?.photo_key) {
+      await objectStore?.remove(before.photo_key).catch((err) => console.error("Could not remove a photo", err));
+    }
+    return res.status(200).json(user);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+/** GET /:id/photo: a picture, to anyone signed in. The URL changes with the picture. */
+export const getUserPhoto = async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id as string, 10);
+    const user = Number.isInteger(id) ? await prisma.user.findUnique({ where: { id }, select: { photo_key: true } }) : null;
+    const data = user?.photo_key && objectStore ? await objectStore.get(user.photo_key) : null;
+    if (!data) return res.status(404).json({ message: "No picture" });
+    res.setHeader("Content-Type", detectFileType(data) ?? "application/octet-stream");
+    res.setHeader("Cache-Control", "private, max-age=31536000, immutable");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    return res.status(200).end(data);
+  } catch (err) {
+    console.error(err);
     return res.status(500).json({ message: "Internal server error" });
   }
 };
@@ -254,7 +327,7 @@ export const updateUser = async (req: Request, res: Response) => {
     if (!parsed.success) {
       return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parsed.error) });
     }
-    const { name, username, role, phone, whatsapp_opt_out } = parsed.data;
+    const { name, username, role, phone, email, whatsapp_opt_out } = parsed.data;
 
     // Only super admin can change usernames
     const targetUser = await prisma.user.findUnique({ where: { id }, select: { username: true, role: true } });
@@ -284,10 +357,11 @@ export const updateUser = async (req: Request, res: Response) => {
         name,
         ...(username ? { username } : {}),
         role: role as any,
-        ...(phone !== undefined ? { phone } : {}),
+        phone,
+        email,
         ...(whatsapp_opt_out !== undefined ? { whatsapp_opt_out } : {}),
       },
-      select: { id: true, name: true, username: true, role: true, is_active: true, phone: true, whatsapp_opt_out: true },
+      select: { id: true, name: true, username: true, role: true, is_active: true, phone: true, email: true, whatsapp_opt_out: true },
     });
 
     return res.status(200).json(updatedUser);

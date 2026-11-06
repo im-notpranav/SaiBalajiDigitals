@@ -64,3 +64,17 @@ export const WHATSAPP_LIVE = WHATSAPP_MODE === "live" && !!ASKEVA_TOKEN;
 if (WHATSAPP_MODE === "live" && !ASKEVA_TOKEN) {
   console.warn("⚠️  WHATSAPP_MODE=live but ASKEVA_TOKEN is not set — WhatsApp messages will only be logged.");
 }
+
+// ─── File storage: Cloudflare R2 (warn, don't crash — uploads are refused) ──
+
+export const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID || "";
+export const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID || "";
+export const R2_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY || "";
+export const R2_BUCKET = process.env.R2_BUCKET || "";
+/** Starts every key, so local files stay apart from production's in a shared bucket. */
+export const R2_PREFIX = optional("R2_PREFIX", NODE_ENV === "production" ? "prod/" : "dev/");
+export const R2_ENABLED = !!(R2_ACCOUNT_ID && R2_ACCESS_KEY_ID && R2_SECRET_ACCESS_KEY && R2_BUCKET);
+
+if (!R2_ENABLED && NODE_ENV !== "test") {
+  console.warn("⚠️  R2 is not fully set — new file uploads will be refused or kept in the database.");
+}

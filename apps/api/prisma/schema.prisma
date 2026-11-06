@@ -82,7 +82,10 @@ model User {
   role          Role
   email         String?
   phone         String?
+  /// Path of the uploaded picture under the API, with a version so browsers can keep it.
   photo_url     String?
+  /// Where the picture lives in object storage.
+  photo_key     String?
   is_super_admin Boolean         @default(false)
   created_at    DateTime         @default(now())
   updated_at    DateTime         @updatedAt
