@@ -49,6 +49,9 @@ newer than what production runs:
 Merge `feat/work-allocation-payments` into `feat/operator-billing-split`, keeping `wrangler.json` and
 `worker/index.js`, which exist only there. Pushing deploys.
 
+After deploying, check that a file under `/assets/` answers with `Cache-Control: public, max-age=31536000, immutable`.
+That comes from `apps/web/public/_headers`, and it has not been tried on Cloudflare yet.
+
 The Render build command should also gain `npx prisma migrate deploy --schema apps/api/prisma/schema.prisma`,
 so this step cannot be forgotten again.
 
