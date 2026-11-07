@@ -176,6 +176,10 @@ export interface DashboardData {
   orders_by_status: Record<OrderStatus, number>;
   employee_leaderboard: Array<{ name: string; completed: number; revenue: number }>;
   avg_turnaround_days: number;
+  /** Whole-number percentage of orders that are closed; null when there are no orders. */
+  closure_rate: number | null;
+  /** Average working days from creation to closure; null when no order has closed. */
+  avg_cycle_days: number | null;
 }
 
 export interface CreateOrderItemInput {

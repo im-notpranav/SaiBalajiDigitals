@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { prisma } from "../utils/prisma";
 import { CLOSED_STATUSES, REVENUE_STATUSES, OPEN_STATUSES } from "../utils/order-status";
-import { businessDaysBetween, lastProducedAt } from "../utils/order-stage";
+import { businessDaysBetween, closureFigures, lastProducedAt } from "../utils/order-stage";
 import { rollupOrder, storeLabelOf } from "../utils/order-derive";
 
 /**
@@ -82,6 +82,16 @@ export const getDashboard = async (req: Request, res: Response) => {
     
     const revenue_trend = Array.from(trendMap.entries()).map(([month, data]) => ({ month, revenue: data.revenue, orders: data.orders }));
 
+    const closedOrders = await prisma.order.findMany({
+      where: { ...baseWhere, status: { in: CLOSED_STATUSES } },
+      select: {
+        status: true,
+        created_at: true,
+        updated_at: true,
+        invoices: { select: { invoice_no: true, bill_amount: true, amount_received: true, payment_received_at: true } },
+      },
+    });
+
     return res.status(200).json({
       total_orders,
       active_orders,
@@ -90,6 +100,7 @@ export const getDashboard = async (req: Request, res: Response) => {
       total_revenue,
       revenue_by_client,
       revenue_trend,
+      ...closureFigures(total_orders, closedOrders),
     });
   } catch (err) {
     return res.status(500).json({ message: "Internal server error" });

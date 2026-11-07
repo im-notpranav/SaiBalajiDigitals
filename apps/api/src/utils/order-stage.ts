@@ -29,6 +29,32 @@ export function businessDaysBetween(from: Date, to: Date): number {
 export const daysSince = (from: Date | string | null | undefined, to: Date = new Date()): number | null =>
   from == null ? null : businessDaysBetween(new Date(from), to);
 
+type ClosedOrder = Parameters<typeof rollupOrder>[0] & { status: string; created_at: Date; updated_at: Date };
+
+/**
+ * When a closed order closed. A fully paid order closes with its last payment. An order an
+ * admin closed by hand has no such moment, since its payments may be older than the closure,
+ * so it uses the last change to the order, which is normally the closure.
+ */
+export function closedAt(order: ClosedOrder): Date {
+  const paidAt = order.status === "PaymentReceived" ? rollupOrder(order).payment_received_at : null;
+  return new Date(paidAt ?? order.updated_at);
+}
+
+/**
+ * The closure figures on Admin Reports. Closure rate is the whole-number percentage of orders
+ * that are closed. Cycle time is the average working days from an order's creation to its
+ * closure, to one decimal place. Each is null when there is nothing to measure, so a page can
+ * show that rather than a zero that reads as a result.
+ */
+export function closureFigures(totalOrders: number, closed: ClosedOrder[]) {
+  const days = closed.map((o) => businessDaysBetween(o.created_at, closedAt(o)));
+  return {
+    closure_rate: totalOrders > 0 ? Math.round((closed.length / totalOrders) * 100) : null,
+    avg_cycle_days: days.length ? Number((days.reduce((s, d) => s + d, 0) / days.length).toFixed(1)) : null,
+  };
+}
+
 /** Latest moment any line item finished production (order fully produced). */
 export function lastProducedAt(order: any): Date | null {
   const times = (order.items ?? [])
