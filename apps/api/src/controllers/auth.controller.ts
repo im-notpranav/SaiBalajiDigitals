@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
+import { PASSWORD_HASH_ROUNDS } from "../utils/passwords";
 import jwt from "jsonwebtoken";
 import { prisma } from "../utils/prisma";
 import { JWT_SECRET, JWT_EXPIRES_IN } from "../utils/config";
@@ -31,7 +32,13 @@ export const login = async (req: Request, res: Response) => {
 
     await prisma.user.update({
       where: { id: user.id },
-      data: { last_login_at: new Date() },
+      data: {
+        last_login_at: new Date(),
+        // The only moment the plain password is at hand to move an older hash to the current cost.
+        ...(bcrypt.getRounds(user.password) > PASSWORD_HASH_ROUNDS
+          ? { password: await bcrypt.hash(password, PASSWORD_HASH_ROUNDS) }
+          : {}),
+      },
     });
 
     const payload = {

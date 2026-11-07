@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { PASSWORD_HASH_ROUNDS } from "../src/utils/passwords";
 
 const prisma = new PrismaClient();
 
@@ -29,7 +30,7 @@ async function main() {
     return;
   }
 
-  const password = await bcrypt.hash("demo1234", 12);
+  const password = await bcrypt.hash("demo1234", PASSWORD_HASH_ROUNDS);
 
   const users = [
     { name: "Bablu Goud", username: "employee", role: "CSM" },

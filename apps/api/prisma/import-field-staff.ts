@@ -15,6 +15,7 @@
  */
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { PASSWORD_HASH_ROUNDS } from "../src/utils/passwords";
 import { randomInt } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -98,7 +99,7 @@ async function main() {
     toCreate.map(async (u) => ({
       name: u.name,
       username: u.username,
-      password: await bcrypt.hash(u.password, 12),
+      password: await bcrypt.hash(u.password, PASSWORD_HASH_ROUNDS),
       role: u.role,
       phone: u.phone,
       emp_code: u.emp_code,

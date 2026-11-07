@@ -13,6 +13,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import bcrypt from "bcryptjs";
+import { PASSWORD_HASH_ROUNDS } from "../../src/utils/passwords";
 import jwt from "jsonwebtoken";
 import { Client } from "pg";
 import { config } from "dotenv";
@@ -100,7 +101,7 @@ async function seed(url: string) {
   const db = new Client({ connectionString: url });
   await db.connect();
   const fast = await bcrypt.hash(PASSWORD, 4);
-  const real = await bcrypt.hash(PASSWORD, 12);
+  const real = await bcrypt.hash(PASSWORD, PASSWORD_HASH_ROUNDS);
   try {
     let n = 0;
     for (const [role, count] of STAFF) {

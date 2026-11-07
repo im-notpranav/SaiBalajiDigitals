@@ -97,7 +97,9 @@ dashboard and user cache changes, which are not measured yet.
 | Everyone clicks every 1-3 s | 92 | 641 ms | 3.6 s | 36 of 4,128 | 2.4 cores | 1,326 MB |
 
 Twenty people signing in together took 9.9 s and 9.2 CPU seconds. Before the change to the login limit,
-10 of those 20 were refused.
+10 of those 20 were refused. That burst was at password cost 12. The cost is now 10, which should be about
+four times cheaper but has not been measured. Production's existing passwords move to 10 at each person's
+next login, so that first login after the release costs a little more than later ones.
 
 Render's free tier gives 0.1 core and 512 MB. At about 25 ms of CPU per request, that is roughly
 4 requests per second on this PC's speed. Treat these as limits to confirm, because Render's CPU differs,

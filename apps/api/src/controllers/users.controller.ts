@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { createHash } from "node:crypto";
 import bcrypt from "bcryptjs";
+import { PASSWORD_HASH_ROUNDS } from "../utils/passwords";
 import jwt from "jsonwebtoken";
 import { prisma } from "../utils/prisma";
 import { JWT_SECRET, JWT_EXPIRES_IN } from "../utils/config";
@@ -66,7 +67,7 @@ export const createUser = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Username already exists" });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 12);
+    const hashedPassword = await bcrypt.hash(password, PASSWORD_HASH_ROUNDS);
 
     const user = await prisma.user.create({
       data: {
@@ -158,7 +159,7 @@ export const updateMe = async (req: Request, res: Response) => {
         return res.status(400).json({ message: "Invalid current password" });
       }
 
-      updateData.password = await bcrypt.hash(new_password, 12);
+      updateData.password = await bcrypt.hash(new_password, PASSWORD_HASH_ROUNDS);
     }
 
     const updatedUser = await prisma.user.update({
@@ -310,7 +311,7 @@ export const resetUserPassword = async (req: Request, res: Response) => {
     const target = await prisma.user.findUnique({ where: { id }, select: { id: true, username: true } });
     if (!target) return res.status(404).json({ message: "User not found" });
 
-    const hashed = await bcrypt.hash(parseResult.data.new_password, 12);
+    const hashed = await bcrypt.hash(parseResult.data.new_password, PASSWORD_HASH_ROUNDS);
     await prisma.user.update({ where: { id }, data: { password: hashed } });
 
     return res.status(200).json({ message: `Password reset for ${target.username}.` });

@@ -1,7 +1,9 @@
 import { beforeAll, describe, expect, it } from "vitest";
+import bcrypt from "bcryptjs";
 import request from "supertest";
 import app from "../../src/app";
 import { objectStore } from "../../src/utils/object-store";
+import { PASSWORD_HASH_ROUNDS } from "../../src/utils/passwords";
 import { as, makeOrder, makeUser, prisma, uniq } from "./helpers";
 
 let csm: Awaited<ReturnType<typeof makeUser>>;
@@ -64,6 +66,37 @@ describe("login limits", () => {
     for (let i = 0; i < 10; i++) expect((await attempt(victim)).status).not.toBe(429);
     expect((await attempt(victim)).status).toBe(429);
     expect((await attempt(uniq("someone"))).status).not.toBe(429);
+  });
+});
+
+describe("password cost", () => {
+  it("moves an older hash to the current cost at login, and the password still works", async () => {
+    const user = await makeUser("CSM");
+    await prisma.user.update({ where: { id: user.id }, data: { password: await bcrypt.hash("right-password", 12) } });
+    const login = (password: string) => request(app).post("/api/auth/login").send({ username: user.username, password });
+
+    expect((await login("wrong-password")).status).toBe(401);
+    const unchanged = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+    expect(bcrypt.getRounds(unchanged.password)).toBe(12);
+
+    expect((await login("right-password")).status).toBe(200);
+    const moved = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+    expect(bcrypt.getRounds(moved.password)).toBe(PASSWORD_HASH_ROUNDS);
+
+    expect((await login("right-password")).status).toBe(200);
+    const again = await prisma.user.findUniqueOrThrow({ where: { id: user.id } });
+    expect(again.password).toBe(moved.password);
+  });
+
+  it("is what new accounts get", async () => {
+    const admin = await makeUser("ADMIN", { is_super_admin: true });
+    const username = uniq("newperson");
+    const res = await as(admin).post("/api/users").send({
+      name: "New Person", username, password: "a-good-password-1", role: "CSM", email: `${username}@example.com`, phone: "9000000000",
+    });
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
+    const saved = await prisma.user.findUniqueOrThrow({ where: { username } });
+    expect(bcrypt.getRounds(saved.password)).toBe(PASSWORD_HASH_ROUNDS);
   });
 });
 

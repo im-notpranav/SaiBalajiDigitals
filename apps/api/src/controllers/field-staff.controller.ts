@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
+import { PASSWORD_HASH_ROUNDS } from "../utils/passwords";
 import { prisma } from "../utils/prisma";
 import { createFieldStaffSchema, updateFieldStaffSchema, resetPasswordSchema } from "../utils/validators";
 import { sanitizeZodErrors } from "../utils/sanitize-errors";
@@ -82,7 +83,7 @@ export const createFieldStaff = async (req: Request, res: Response) => {
       data: {
         name,
         username,
-        password: await bcrypt.hash(password, 12),
+        password: await bcrypt.hash(password, PASSWORD_HASH_ROUNDS),
         role,
         phone,
         email,
@@ -149,7 +150,7 @@ export const resetFieldStaffPassword = async (req: Request, res: Response) => {
     }
     await prisma.user.update({
       where: { id: target.id },
-      data: { password: await bcrypt.hash(parsed.data.new_password, 12) },
+      data: { password: await bcrypt.hash(parsed.data.new_password, PASSWORD_HASH_ROUNDS) },
     });
     return res.status(200).json({ message: `Password reset for ${target.username}.` });
   } catch (err) {
