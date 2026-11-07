@@ -51,12 +51,10 @@ describe("approve", () => {
     expect(checkTransition(atCcm, "APPROVE", REQUESTER)).toMatchObject({ ok: false, status: 403 });
   });
 
-  it("holds a bill-route approval until a bill is attached (GAP-D01)", () => {
+  it("approves a bill request before its bill arrives", () => {
     const r = req({ status: "CCM_REVIEW", route: "CCM_ONLY", bill_details_required: true });
-    expect(checkTransition(r, "APPROVE", CCM, null, { billCount: 0 })).toMatchObject({ ok: false, status: 409 });
-    expect(blockedActions(r, CCM, { billCount: 0 }).APPROVE).toMatch(/Attach the bill/);
-    expect(checkTransition(r, "APPROVE", CCM, null, { billCount: 1 })).toEqual({ ok: true, to: "PAYMENT_PENDING" });
-    expect(blockedActions(r, CCM, { billCount: 1 })).toEqual({});
+    expect(checkTransition(r, "APPROVE", CCM, null, { billCount: 0 })).toEqual({ ok: true, to: "PAYMENT_PENDING" });
+    expect(blockedActions(r, CCM, { billCount: 0 })).toEqual({});
   });
 
   it("lets the Admin act for Cost Control only while no CCM is active (D-05)", () => {

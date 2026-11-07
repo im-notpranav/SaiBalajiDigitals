@@ -3,7 +3,7 @@ import { useState } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { OrdersTable } from "@/components/orders/OrdersTable";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { fetchOrders, exportOrders } from "@/api/orders";
 import { Globe, Search, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,7 @@ function AccountantOrders() {
       if (debouncedQ) params[searchField] = debouncedQ;
       return fetchOrders(params);
     },
+    placeholderData: keepPreviousData,
   });
 
   return (

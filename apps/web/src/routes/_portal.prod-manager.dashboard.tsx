@@ -115,7 +115,7 @@ function ProdManagerDashboard() {
           {/* Team breakdown */}
           {dash.team_stats.length > 0 && (
             <motion.div
-              initial={{ opacity: 0, y: 12 }}
+              initial={false}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
               className="mt-8"
@@ -132,7 +132,7 @@ function ProdManagerDashboard() {
           {/* Pending items table */}
           {dash.pending_items.length > 0 && (
             <motion.div
-              initial={{ opacity: 0, y: 12 }}
+              initial={false}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
               className="mt-8"
@@ -221,7 +221,7 @@ function TeamCard({ member, delay }: { member: ProdTeamStat; delay: number }) {
   const totalSft = member.pending_sft + member.completed_sft;
   return (
     <motion.div
-      initial={{ opacity: 0, y: 12 }}
+      initial={false}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay, duration: 0.4 }}
       className="rounded-xl border bg-card p-5 shadow-soft"

@@ -28,5 +28,5 @@ function LoginPage() {
     }
   }, [user, isLoading, redirect, navigate]);
 
-  return <LoginPageComponent redirect={redirect} />;
+  return <LoginPageComponent />;
 }

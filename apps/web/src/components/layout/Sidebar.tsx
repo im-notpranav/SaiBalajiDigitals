@@ -1,5 +1,5 @@
-import { Link, useLocation, useNavigate } from "@tanstack/react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link, useLocation, useNavigate, useRouter } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import type { LucideIcon } from "lucide-react";
@@ -186,6 +186,29 @@ function useNavItems(role: UserRole) {
 }
 
 /**
+ * Once the browser is idle, fetch the code of this person's other pages, so the first tap on each
+ * opens at once. Phones have no hover to do it for them. Skipped when the phone asks to save data.
+ */
+export function PreloadNavPages({ role }: { role: UserRole }) {
+  const router = useRouter();
+  const items = useNavItems(role);
+  const paths = items.map((i) => i.to).join();
+
+  useEffect(() => {
+    if ((navigator as { connection?: { saveData?: boolean } }).connection?.saveData) return;
+    const preload = () => paths.split(",").forEach((to) => void router.preloadRoute({ to } as never).catch(() => {}));
+    if (!("requestIdleCallback" in window)) {
+      const timer = setTimeout(preload, 1500);
+      return () => clearTimeout(timer);
+    }
+    const idle = requestIdleCallback(preload, { timeout: 3000 });
+    return () => cancelIdleCallback(idle);
+  }, [paths, router]);
+
+  return null;
+}
+
+/**
  * The sidebar's contents, shared by the permanent desktop rail and the mobile drawer so
  * the two can never drift apart.
  *
@@ -204,14 +227,12 @@ function SidebarBody({
 }) {
   const location = useLocation();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const { user, logout } = useAuth();
   const items = useNavItems(role);
   const home = items[0]!.to;
 
   const handleLogout = async () => {
     onNavigate?.();
-    queryClient.removeQueries({ queryKey: ["auth", "me"] });
     await logout();
     navigate({ to: "/login" });
   };
@@ -241,9 +262,7 @@ function SidebarBody({
           return (
             <motion.div
               key={item.to}
-              initial={{ opacity: 0, x: -8 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.02 * i, duration: 0.3 }}
+              initial={false}
             >
               {ruled && <div className="mx-3 my-2 border-t" />}
               {heading && (

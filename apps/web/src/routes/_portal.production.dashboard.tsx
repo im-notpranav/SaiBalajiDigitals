@@ -50,7 +50,7 @@ function ProductionDashboard() {
           return (
             <motion.div
               key={col.status}
-              initial={{ opacity: 0, y: 12 }}
+              initial={false}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 + ci * 0.06 }}
               className="surface-panel flex min-h-[400px] flex-col"

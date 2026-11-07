@@ -55,7 +55,7 @@ function Reports() {
                 contentStyle={{ background: "var(--color-card)", border: "1px solid var(--color-border)", borderRadius: 12, fontSize: 12 }}
                 formatter={(v: number) => inr(v)}
               />
-              <Bar dataKey="revenue" fill="var(--color-primary)" radius={[8, 8, 0, 0]} />
+              <Bar isAnimationActive={false} dataKey="revenue" fill="var(--color-primary)" radius={[8, 8, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>

@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useNavigate } from "@tanstack/react-router";
 import {
   User,
   Lock,
@@ -11,14 +10,13 @@ import {
   Check,
   AlertCircle,
 } from "lucide-react";
-import { useAuth, postLoginPath } from "@/lib/auth-store";
+import { useAuth } from "@/lib/auth-store";
 
 type FieldState = "idle" | "error" | "success";
 
 const easeOutExpo = [0.16, 1, 0.3, 1] as const;
 
-export default function LoginPage({ redirect }: { redirect?: string }) {
-  const navigate = useNavigate();
+export default function LoginPage() {
   const { login } = useAuth();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -53,9 +51,9 @@ export default function LoginPage({ redirect }: { redirect?: string }) {
 
     try {
       setSubmitting(true);
-      const user = await login(username, password);
+      // The /login route moves on as soon as it sees the signed-in user.
+      await login(username, password);
       setSuccess(true);
-      setTimeout(() => navigate({ to: postLoginPath(user, redirect) }), 500);
     } catch (err) {
       setSubmitting(false);
       setFormError(err instanceof Error ? err.message : "Sign in failed");

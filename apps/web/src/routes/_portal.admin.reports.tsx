@@ -40,7 +40,7 @@ function AdminReports() {
               <XAxis dataKey="month" stroke="var(--color-muted-foreground)" fontSize={12} />
               <YAxis stroke="var(--color-muted-foreground)" fontSize={12} />
               <Tooltip contentStyle={{ background: "var(--color-card)", border: "1px solid var(--color-border)", borderRadius: 12, fontSize: 12 }} />
-              <Bar dataKey="orders" fill="var(--color-brand-orange)" radius={[8, 8, 0, 0]} />
+              <Bar isAnimationActive={false} dataKey="orders" fill="var(--color-brand-orange)" radius={[8, 8, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>

@@ -1,4 +1,5 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { useAuth, roleHome } from "@/lib/auth-store";
 
 export const Route = createFileRoute("/")({
@@ -7,15 +8,9 @@ export const Route = createFileRoute("/")({
 
 function RedirectHome() {
   const { user, isLoading } = useAuth();
-  if (typeof window !== "undefined" && !isLoading) {
-    if (user) {
-      window.location.replace(roleHome[user.role]);
-    } else {
-      window.location.replace("/login");
-    }
-  }
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (!isLoading) navigate({ to: user ? roleHome[user.role] : "/login", replace: true });
+  }, [user, isLoading, navigate]);
   return null;
 }
-
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const _ = redirect;

@@ -239,7 +239,7 @@ function AdminDashboard() {
                 return (
                   <motion.button
                     key={stage.key}
-                    initial={{ opacity: 0, y: 12 }}
+                    initial={false}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.05 * i, duration: 0.4 }}
                     type="button"
@@ -297,7 +297,7 @@ function AdminDashboard() {
           {/* Payment overdue section */}
           {overduePayments.length > 0 && (
             <motion.div
-              initial={{ opacity: 0, y: 12 }}
+              initial={false}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
               className="mt-8"
@@ -353,7 +353,7 @@ function AdminDashboard() {
 
           {/* Revenue trend + Performance */}
           <motion.div
-            initial={{ opacity: 0, y: 12 }}
+            initial={false}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.35 }}
             className="mt-8 grid gap-6 lg:grid-cols-3"
@@ -376,7 +376,7 @@ function AdminDashboard() {
                       contentStyle={{ background: "var(--color-card)", border: "1px solid var(--color-border)", borderRadius: 12, fontSize: 12 }}
                       formatter={(v: number) => inr(v)}
                     />
-                    <Area type="monotone" dataKey="revenue" stroke="var(--color-primary)" strokeWidth={2.5} fill="url(#rev2)" />
+                    <Area isAnimationActive={false} type="monotone" dataKey="revenue" stroke="var(--color-primary)" strokeWidth={2.5} fill="url(#rev2)" />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>

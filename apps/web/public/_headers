@@ -1,0 +1,4 @@
+# Built files have their content's hash in the name, so a browser can keep them for good and never
+# has to ask again. A new build gets new names.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable

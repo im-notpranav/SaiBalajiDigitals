@@ -361,7 +361,7 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
     >
       <div className="space-y-6 lg:col-span-2">
         <motion.section
-          initial={{ opacity: 0, y: 10 }}
+          initial={false}
           animate={{ opacity: 1, y: 0 }}
           className="surface-panel p-6"
         >
@@ -418,7 +418,7 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
         {stores.map((store, storeIdx) => (
         <motion.section
           key={store.id}
-          initial={{ opacity: 0, y: 10 }}
+          initial={false}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.05 }}
           className="surface-panel p-6"
@@ -633,7 +633,7 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
       </div>
 
       <motion.aside
-        initial={{ opacity: 0, y: 10 }}
+        initial={false}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
         className="lg:sticky lg:top-24 lg:h-fit"

@@ -443,7 +443,7 @@ export function NewPaymentRequestDialog({
                 {
                   v: true,
                   label: "Need to submit details",
-                  hint: "Goes to Cost Control. The bill must be attached before it is approved. Large amounts go to the Admin first.",
+                  hint: "Goes to Cost Control. The bill must be attached before the request is closed. Large amounts go to the Admin first.",
                 },
                 {
                   v: false,

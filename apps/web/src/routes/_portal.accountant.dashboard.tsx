@@ -236,7 +236,7 @@ function AccountantDashboard() {
               return (
                 <motion.div
                   key={section.key}
-                  initial={{ opacity: 0, y: 12 }}
+                  initial={false}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.1 + idx * 0.05 }}
                   className="rounded-xl border overflow-hidden"

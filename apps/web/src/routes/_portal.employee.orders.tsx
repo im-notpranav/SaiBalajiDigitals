@@ -7,7 +7,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { fetchOrders, exportOrders } from "@/api/orders";
 import { useAuth } from "@/lib/auth-store";
 import { useDebounce } from "@/hooks/use-debounce";
@@ -35,6 +35,7 @@ function MyOrders() {
       if (debouncedQ) params[searchField] = debouncedQ;
       return fetchOrders(params);
     },
+    placeholderData: keepPreviousData,
   });
 
   const handleExport = async () => {

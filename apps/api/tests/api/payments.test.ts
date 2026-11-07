@@ -44,17 +44,22 @@ async function pendingPayment() {
 }
 
 describe("bill requests (GAP-D01) and the Admin threshold (D-07)", () => {
-  it("go straight to Cost Control, which needs the bill before approving", async () => {
+  it("go straight to Cost Control, which can approve and pay before the bill but not close", async () => {
     const r = await raise({ bill: true });
     expect(await statusOf(r.id)).toBe("CCM_REVIEW");
 
-    const held = await as(ccm).post(`/api/payment-requests/${r.id}/approve`).send({});
-    expect(held.status).toBe(409);
-    expect(held.body.message).toMatch(/Attach the bill/);
-
-    await addFile(r.id, r.orderId, csm.id);
     expect((await as(ccm).post(`/api/payment-requests/${r.id}/approve`).send({})).status).toBe(200);
     expect(await statusOf(r.id)).toBe("PAYMENT_PENDING");
+    expect((await as(ccm).post(`/api/payment-requests/${r.id}/mark-paid`).send({})).status).toBe(200);
+
+    const held = await as(ccm).post(`/api/payment-requests/${r.id}/close`).send({});
+    expect(held.status).toBe(409);
+    expect(held.body.message).toMatch(/Attach the bill/);
+    expect(await statusOf(r.id)).toBe("PAID");
+
+    await addFile(r.id, r.orderId, csm.id);
+    expect((await as(ccm).post(`/api/payment-requests/${r.id}/close`).send({})).status).toBe(200);
+    expect(await statusOf(r.id)).toBe("CLOSED");
   });
 
   it("start with the Admin above the threshold, bill or not", async () => {

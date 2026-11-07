@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { OrdersTable } from "@/components/orders/OrdersTable";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchOrders, closeOrder, exportOrders } from "@/api/orders";
 import { useDebounce } from "@/hooks/use-debounce";
 import { Input } from "@/components/ui/input";
@@ -67,6 +67,7 @@ function AdminOrders() {
       if (debouncedQ) params[searchField] = debouncedQ;
       return fetchOrders(params);
     },
+    placeholderData: keepPreviousData,
   });
 
   const handleClose = async () => {

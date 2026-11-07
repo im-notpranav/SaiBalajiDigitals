@@ -52,7 +52,6 @@ export function TopHeader() {
   }, [dark]);
 
   const handleLogout = async () => {
-    queryClient.removeQueries({ queryKey: ["auth", "me"] });
     await logout();
     navigate({ to: "/login" });
   };

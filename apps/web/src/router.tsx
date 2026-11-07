@@ -8,6 +8,9 @@ export const getRouter = (queryClient: QueryClient) => {
     routeTree,
     context: { queryClient },
     scrollRestoration: true,
+    // A page's code is fetched when the pointer rests on its link, so the click finds it ready.
+    defaultPreload: "intent",
+    defaultPreloadDelay: 50,
     defaultPreloadStaleTime: 0,
     // Render unknown URLs at the root. In the default "fuzzy" mode the pathless
     // _portal layout claims them, and its auth guard bounces the visitor to /login

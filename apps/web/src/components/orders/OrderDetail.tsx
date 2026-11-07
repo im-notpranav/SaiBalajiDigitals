@@ -273,7 +273,7 @@ export function OrderDetail({ order, actions, related, userRole, currentUserId }
   return (
     <div className="space-y-6">
       <motion.section
-        initial={{ opacity: 0, y: 10 }}
+        initial={false}
         animate={{ opacity: 1, y: 0 }}
         className="surface-panel p-4 sm:p-6"
       >
@@ -343,7 +343,7 @@ export function OrderDetail({ order, actions, related, userRole, currentUserId }
       </motion.section>
 
       <motion.section
-        initial={{ opacity: 0, y: 10 }}
+        initial={false}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.05 }}
         className="surface-panel p-0 overflow-hidden"
@@ -441,7 +441,7 @@ export function OrderDetail({ order, actions, related, userRole, currentUserId }
 
       {actions && (
         <motion.section
-          initial={{ opacity: 0, y: 10 }}
+          initial={false}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
           className="surface-panel p-4 sm:p-6"

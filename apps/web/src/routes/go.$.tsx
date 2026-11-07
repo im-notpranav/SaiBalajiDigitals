@@ -1,5 +1,4 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { Loader2 } from "lucide-react";
 import { FIELD_ROLES, roleHome, useAuth, type UserRole } from "@/lib/auth-store";
@@ -53,7 +52,6 @@ function GoLink() {
   const { _splat } = Route.useParams();
   const link = String(_splat ?? "").replace(/^\/+|\/+$/g, "");
   const { user, isLoading } = useAuth();
-  const qc = useQueryClient();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -62,10 +60,8 @@ function GoLink() {
       navigate({ href: destinationFor(user.role, link), replace: true });
       return;
     }
-    // Signed in, but the store has not caught up with the answer yet: wait a render.
-    if (qc.getQueryData(["auth", "me"])) return;
     navigate({ href: `/login?redirect=${encodeURIComponent(`/go/${link}`)}`, replace: true });
-  }, [user, isLoading, link, navigate, qc]);
+  }, [user, isLoading, link, navigate]);
 
   return (
     <div className="flex min-h-screen items-center justify-center gap-2 bg-background text-sm text-muted-foreground">

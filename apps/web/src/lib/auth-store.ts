@@ -1,7 +1,6 @@
-import { create } from "zustand";
-import { authApi } from "../api/auth";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { authApi } from "../api/auth";
+import { queryClient } from "./query-client";
 
 export type UserRole = "CSM" | "PRODUCTION" | "ACCOUNTS" | "ADMIN" | "OPERATION_MANAGER" | "PRODUCTION_MANAGER" | "COST_CONTROL_MANAGER" | "PASTER" | "HELPER" | "DRIVER";
 
@@ -25,26 +24,29 @@ export interface AuthUser {
   is_super_admin?: boolean;
 }
 
-interface AuthState {
-  user: AuthUser | null;
-  setUser: (user: AuthUser | null) => void;
-  login: (username: string, password: string) => Promise<AuthUser>;
-  logout: () => Promise<void>;
+const AUTH_KEY = ["auth", "me"];
+
+/**
+ * Who is signed in lives in one place, the /auth/me query. On a change of account everything cached
+ * goes too, so nobody sees the last person's orders. A check still on its way is cancelled first,
+ * or its out-of-date answer would land on top of the new one.
+ */
+async function setSignedInUser(user: AuthUser | null) {
+  await queryClient.cancelQueries({ queryKey: AUTH_KEY });
+  queryClient.removeQueries({ predicate: (q) => q.queryKey[0] !== AUTH_KEY[0] });
+  queryClient.setQueryData(AUTH_KEY, user);
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
-  user: null,
-  setUser: (user) => set({ user }),
-  login: async (username, password) => {
-    const user = await authApi.login(username, password);
-    set({ user });
-    return user;
-  },
-  logout: async () => {
-    await authApi.logout();
-    set({ user: null });
-  },
-}));
+const login = async (username: string, password: string): Promise<AuthUser> => {
+  const user: AuthUser = await authApi.login(username, password);
+  await setSignedInUser(user);
+  return user;
+};
+
+const logout = async () => {
+  await authApi.logout();
+  await setSignedInUser(null);
+};
 
 export const roleHome: Record<UserRole, string> = {
   CSM: "/employee/dashboard",
@@ -61,28 +63,15 @@ export const roleHome: Record<UserRole, string> = {
 };
 
 export const useAuth = () => {
-  const store = useAuthStore();
-
-  const { data, isLoading } = useQuery({
-    queryKey: ["auth", "me"],
+  const { data, isLoading } = useQuery<AuthUser | null>({
+    queryKey: AUTH_KEY,
     queryFn: authApi.getMe,
     retry: false,
+    // Used by nearly every component, so it must not ask the API each time one appears.
+    staleTime: 5 * 60_000,
   });
 
-  useEffect(() => {
-    if (data !== undefined && data !== store.user) {
-      store.setUser(data || null);
-    }
-  }, [data, store]);
-
-  return {
-    user: store.user,
-    login: store.login,
-    logout: store.logout,
-    // Still loading until /auth/me has answered *and* the store has caught up with it,
-    // so guards never see a signed-in user as null for the render in between.
-    isLoading: isLoading || (!!data && data !== store.user),
-  };
+  return { user: data ?? null, login, logout, isLoading };
 };
 
 /** Where to send a user after sign-in: the page they were sent away from, if it is a

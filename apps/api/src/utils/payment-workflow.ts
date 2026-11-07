@@ -13,8 +13,9 @@
  * and back to the same stage when the requester resubmits). Cost Control can still reject
  * after approving, until the request is marked paid.
  *
- * Gap-review decisions (2026-10-22): a bill request needs its bill before Cost Control
- * approves it; any request above the Admin threshold starts with the Admin; a resubmission
+ * Gap-review decisions (2026-10-22, the bill rule changed 2026-11-07): a bill request can be
+ * approved and paid before its bill arrives, but cannot close without it; any request above
+ * the Admin threshold starts with the Admin; a resubmission
  * asking for more or naming a new payee starts review again; once approved for payment only
  * Cost Control cancels; the Admin acts for Cost Control while none is active.
  */
@@ -190,12 +191,6 @@ export const PAYMENT_RULES: Record<Exclude<PaymentAction, "SUBMIT" | "ATTACH" | 
     allowed: isStageReviewer,
     to: (r) => (r.status === "ADMIN_REVIEW" ? "CCM_REVIEW" : "PAYMENT_PENDING"),
     who: "the reviewer for this stage",
-    // A request raised with bill details is approved for payment only once a bill is on it
-    // (GAP-D01): the bill is what lets it skip the Admin.
-    blockedBy: (r, ctx) =>
-      r.status === "CCM_REVIEW" && r.bill_details_required && !ctx.billCount
-        ? "Attach the bill before approving: this request needs details submitted."
-        : null,
   },
   REJECT: {
     // Once approved for payment, Cost Control can still reject until it is marked paid.
