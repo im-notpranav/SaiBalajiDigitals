@@ -1,8 +1,16 @@
 import { Request, Response } from "express";
 import { prisma } from "../utils/prisma";
 import { CLOSED_STATUSES, REVENUE_STATUSES, OPEN_STATUSES } from "../utils/order-status";
-import { businessDaysBetween, closureFigures, lastProducedAt } from "../utils/order-stage";
+import { averageCycleDays, businessDaysBetween, closureFigures, lastProducedAt } from "../utils/order-stage";
 import { rollupOrder, storeLabelOf } from "../utils/order-derive";
+
+/** What the cycle-time figures need to know about a closed order. */
+const CLOSED_ORDER_DATES = {
+  status: true,
+  created_at: true,
+  updated_at: true,
+  invoices: { select: { invoice_no: true, bill_amount: true, amount_received: true, payment_received_at: true } },
+} as const;
 
 /**
  * How an order's stores read on a dashboard row: the store itself when there is one, a
@@ -84,12 +92,7 @@ export const getDashboard = async (req: Request, res: Response) => {
 
     const closedOrders = await prisma.order.findMany({
       where: { ...baseWhere, status: { in: CLOSED_STATUSES } },
-      select: {
-        status: true,
-        created_at: true,
-        updated_at: true,
-        invoices: { select: { invoice_no: true, bill_amount: true, amount_received: true, payment_received_at: true } },
-      },
+      select: CLOSED_ORDER_DATES,
     });
 
     return res.status(200).json({
@@ -172,7 +175,7 @@ export const getAdminDashboard = async (req: Request, res: Response) => {
     // 5. Time-to-Close (average hours)
     const completedOrdersList = await prisma.order.findMany({
       where: { status: { in: CLOSED_STATUSES } },
-      select: { created_at: true, updated_at: true },
+      select: CLOSED_ORDER_DATES,
     });
     
     let totalHours = 0;
@@ -181,10 +184,11 @@ export const getAdminDashboard = async (req: Request, res: Response) => {
       totalHours += diffMs / (1000 * 60 * 60);
     });
     const averageTimeToClose = completedOrdersList.length > 0 
-      ? Number((totalHours / completedOrdersList.length).toFixed(1)) 
+      ? Number((totalHours / completedOrdersList.length).toFixed(1))
       : 0;
 
     return res.status(200).json({
+      avg_cycle_days: averageCycleDays(completedOrdersList),
       pendingAmount,
       revenueTrend,
       statusBreakdown,

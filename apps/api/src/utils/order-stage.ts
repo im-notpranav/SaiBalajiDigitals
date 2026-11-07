@@ -48,11 +48,15 @@ export function closedAt(order: ClosedOrder): Date {
  * show that rather than a zero that reads as a result.
  */
 export function closureFigures(totalOrders: number, closed: ClosedOrder[]) {
-  const days = closed.map((o) => businessDaysBetween(o.created_at, closedAt(o)));
   return {
     closure_rate: totalOrders > 0 ? Math.round((closed.length / totalOrders) * 100) : null,
-    avg_cycle_days: days.length ? Number((days.reduce((s, d) => s + d, 0) / days.length).toFixed(1)) : null,
+    avg_cycle_days: averageCycleDays(closed),
   };
+}
+
+export function averageCycleDays(closed: ClosedOrder[]): number | null {
+  const days = closed.map((o) => businessDaysBetween(o.created_at, closedAt(o)));
+  return days.length ? Number((days.reduce((s, d) => s + d, 0) / days.length).toFixed(1)) : null;
 }
 
 /** Latest moment any line item finished production (order fully produced). */

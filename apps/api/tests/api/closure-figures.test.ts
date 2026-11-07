@@ -44,6 +44,17 @@ describe("closure figures on GET /api/dashboard", () => {
     expect(res.body.avg_cycle_days).toBeGreaterThan(0);
   });
 
+  it("give the admin dashboard the same cycle time as Reports", async () => {
+    const { order } = await makeOrder(csm);
+    await prisma.order.update({ where: { id: order.id }, data: { status: "Completed" } });
+
+    const reports = await as(admin).get("/api/dashboard");
+    const dashboard = await as(admin).get("/api/dashboard/admin");
+    expect(dashboard.status).toBe(200);
+    expect(dashboard.body.avg_cycle_days).toBe(reports.body.avg_cycle_days);
+    expect(dashboard.body.avg_cycle_days).toBe((await expectedFigures()).avg_cycle_days);
+  });
+
   it("are not sent to a CSM, whose dashboard does not show them", async () => {
     const res = await as(csm).get("/api/dashboard");
     expect(res.status).toBe(200);
