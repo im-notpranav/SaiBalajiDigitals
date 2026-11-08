@@ -13,6 +13,9 @@ export default {
 
       const headers = new Headers(request.headers);
       headers.set("x-real-client-ip", request.headers.get("cf-connecting-ip") || "unknown");
+      // Prove the request came through this proxy; strip any client-supplied copy first.
+      headers.delete("x-proxy-auth");
+      if (env.PROXY_SHARED_SECRET) headers.set("x-proxy-auth", env.PROXY_SHARED_SECRET);
       // Remove host header so it matches the backend
       headers.delete("host");
 

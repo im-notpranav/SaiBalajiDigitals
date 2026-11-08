@@ -26,7 +26,7 @@ declare global {
  */
 const USER_CACHE_MS = NODE_ENV === "test" ? 0 : 15_000;
 const recentUsers = new Map<number, {
-  user: { id: number; username: string; name: string; role: string; is_active: boolean; is_super_admin: boolean };
+  user: { id: number; username: string; name: string; role: string; is_active: boolean; is_super_admin: boolean; password_changed_at: Date | null };
   until: number;
 }>();
 
@@ -37,7 +37,7 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
   }
 
   try {
-    const payload = jwt.verify(token, JWT_SECRET) as AuthUser;
+    const payload = jwt.verify(token, JWT_SECRET) as AuthUser & { iat?: number };
 
     // Re-validate against the database: ensure user is still active and role hasn't changed
     const recent = recentUsers.get(payload.id);
@@ -45,7 +45,7 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
     if (!dbUser) {
       dbUser = await prisma.user.findUnique({
         where: { id: payload.id },
-        select: { id: true, username: true, name: true, role: true, is_active: true, is_super_admin: true },
+        select: { id: true, username: true, name: true, role: true, is_active: true, is_super_admin: true, password_changed_at: true },
       });
       if (dbUser && USER_CACHE_MS > 0) recentUsers.set(payload.id, { user: dbUser, until: Date.now() + USER_CACHE_MS });
     }
@@ -53,6 +53,14 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
     if (!dbUser || !dbUser.is_active) {
       res.clearCookie("token");
       return res.status(401).json({ message: "Account is inactive or no longer exists. Please contact the administrator." });
+    }
+
+    // Tokens minted before the password last changed are stale: a password change or admin
+    // reset revokes existing sessions. A 1s allowance covers the token's whole-second `iat`
+    // against the millisecond timestamp so a freshly re-issued cookie is never rejected.
+    if (dbUser.password_changed_at && payload.iat && payload.iat * 1000 + 1000 < dbUser.password_changed_at.getTime()) {
+      res.clearCookie("token");
+      return res.status(401).json({ message: "Session expired. Please log in again." });
     }
 
     // Use live DB role, not the (possibly stale) JWT role

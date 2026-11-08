@@ -117,7 +117,10 @@ export const deleteUser = async (req: Request, res: Response) => {
     }
 
     const targetUser = await prisma.user.findUnique({ where: { id }, select: { is_super_admin: true } });
-    if (targetUser?.is_super_admin) {
+    if (!targetUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    if (targetUser.is_super_admin) {
       return res.status(400).json({ message: "You cannot delete the super administrator." });
     }
     const lastHolder = await lastHolderBlock(id);
@@ -160,6 +163,9 @@ export const updateMe = async (req: Request, res: Response) => {
       }
 
       updateData.password = await bcrypt.hash(new_password, PASSWORD_HASH_ROUNDS);
+      // Revoke other sessions. The fresh cookie issued below carries a newer timestamp, so the
+      // person changing their own password stays signed in here.
+      updateData.password_changed_at = new Date();
     }
 
     const updatedUser = await prisma.user.update({
@@ -312,7 +318,8 @@ export const resetUserPassword = async (req: Request, res: Response) => {
     if (!target) return res.status(404).json({ message: "User not found" });
 
     const hashed = await bcrypt.hash(parseResult.data.new_password, PASSWORD_HASH_ROUNDS);
-    await prisma.user.update({ where: { id }, data: { password: hashed } });
+    // Bumping password_changed_at revokes the reset account's existing sessions.
+    await prisma.user.update({ where: { id }, data: { password: hashed, password_changed_at: new Date() } });
 
     return res.status(200).json({ message: `Password reset for ${target.username}.` });
   } catch (err) {

@@ -196,7 +196,9 @@ function collect(body: any): { statuses: any[]; inbound: any[] } {
  */
 export const receiveWebhook = async (req: Request, res: Response) => {
   if (!ASKEVA_WEBHOOK_SECRET) return res.status(503).json({ message: "Webhook is not configured" });
-  if (!sameSecret(req.query.key, ASKEVA_WEBHOOK_SECRET)) return res.status(403).json({ message: "Forbidden" });
+  // Prefer the header (kept out of access logs); fall back to ?key= so existing AskEva setups work.
+  const presented = req.get("x-webhook-secret") ?? req.query.key;
+  if (!sameSecret(presented, ASKEVA_WEBHOOK_SECRET)) return res.status(403).json({ message: "Forbidden" });
 
   let updated = 0;
   let optChanges = 0;

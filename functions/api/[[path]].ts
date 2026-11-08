@@ -12,6 +12,8 @@
  */
 interface Env {
   API_ORIGIN: string;
+  /** Shared secret proving to the API that a request came through this proxy (see rate-limit.ts). */
+  PROXY_SHARED_SECRET?: string;
 }
 
 export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
@@ -28,6 +30,9 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
   // Preserve the real client address for rate limiting (see utils/rate-limit.ts).
   const clientIp = request.headers.get("CF-Connecting-IP");
   if (clientIp) headers.set("x-real-client-ip", clientIp);
+  // Prove the request came through this proxy; strip any client-supplied copy first.
+  headers.delete("x-proxy-auth");
+  if (env.PROXY_SHARED_SECRET) headers.set("x-proxy-auth", env.PROXY_SHARED_SECRET);
   headers.set("x-forwarded-proto", "https");
   headers.set("x-forwarded-host", incoming.host);
 

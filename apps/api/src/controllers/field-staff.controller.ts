@@ -150,7 +150,8 @@ export const resetFieldStaffPassword = async (req: Request, res: Response) => {
     }
     await prisma.user.update({
       where: { id: target.id },
-      data: { password: await bcrypt.hash(parsed.data.new_password, PASSWORD_HASH_ROUNDS) },
+      // Bumping password_changed_at revokes the staff member's existing sessions.
+      data: { password: await bcrypt.hash(parsed.data.new_password, PASSWORD_HASH_ROUNDS), password_changed_at: new Date() },
     });
     return res.status(200).json({ message: `Password reset for ${target.username}.` });
   } catch (err) {

@@ -90,6 +90,9 @@ model User {
   created_at    DateTime         @default(now())
   updated_at    DateTime         @updatedAt
   last_login_at DateTime?
+  /// When this account's password last changed. Tokens issued before this are rejected, so a
+  /// password change (or admin reset) revokes existing sessions. See middlewares/auth.middleware.ts.
+  password_changed_at DateTime?
   is_active     Boolean          @default(true)
   /// Company employee code (105–402 in the staff master). Optional: not everyone has one.
   emp_code      String?          @unique

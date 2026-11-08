@@ -2,3 +2,16 @@
 # has to ask again. A new build gets new names.
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
+
+# Security headers for every response (the SPA shell gets no headers otherwise — Helmet only
+# covers the API). The first group is zero-risk and enforced. The CSP is shipped Report-Only so
+# it cannot break the app: watch the browser console for violations, then rename the header to
+# `Content-Security-Policy` to enforce it. The script hash is of the inline dark-mode script in
+# index.html — recompute it if that script changes (see docs/security/assessment-2026-11-08.md).
+/*
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  Permissions-Policy: geolocation=(), microphone=(), camera=()
+  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self' 'sha256-h0JFJaY0/VmF5hOqYCsuJbyHHtMXm1Ku+hBVTPmIkxo='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'

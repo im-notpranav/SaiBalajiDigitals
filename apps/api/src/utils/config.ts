@@ -32,6 +32,19 @@ export const DATABASE_URL = required("DATABASE_URL");
 // ─── Optional with sensible defaults ─────────────────────────────────────────
 
 export const JWT_EXPIRES_IN = optional("JWT_EXPIRES_IN", "7d");
+
+/**
+ * Shared secret the Cloudflare Worker sends on `x-proxy-auth` so the API can tell a request
+ * really arrived through it. When set, the forwarded client address (`x-real-client-ip`) is
+ * trusted only on requests carrying this secret — otherwise anyone hitting the Render origin
+ * directly could forge that header and slip the login/rate limits (see utils/rate-limit.ts).
+ *
+ * Leave it empty to keep the previous behaviour (the forwarded header is always trusted).
+ * Roll out in this order so the office is never locked into one rate-limit bucket:
+ *   1. set the secret in Cloudflare and deploy the Worker (it starts sending the header),
+ *   2. then set PROXY_SHARED_SECRET in Render.
+ */
+export const PROXY_SHARED_SECRET = process.env.PROXY_SHARED_SECRET || "";
 export const PORT = optional("PORT", "3001");
 export const NODE_ENV = optional("NODE_ENV", "development");
 export const CLIENT_URL = optional("CLIENT_URL", "http://localhost:5173");

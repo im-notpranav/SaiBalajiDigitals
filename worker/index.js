@@ -17,6 +17,12 @@ export default {
         "x-real-client-ip",
         request.headers.get("cf-connecting-ip") || ""
       );
+      // Prove to the API that this request really came through the Worker, so it will trust the
+      // forwarded client IP above. Strip any client-supplied copy first, then set our own.
+      headers.delete("x-proxy-auth");
+      if (env.PROXY_SHARED_SECRET) {
+        headers.set("x-proxy-auth", env.PROXY_SHARED_SECRET);
+      }
       // Remove host header so it matches the API server
       headers.delete("host");
 

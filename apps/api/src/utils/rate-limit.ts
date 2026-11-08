@@ -6,11 +6,36 @@
  * request appears to originate from the proxy and all users share one bucket.
  */
 import type { Request } from "express";
+import { timingSafeEqual } from "node:crypto";
 import jwt from "jsonwebtoken";
-import { JWT_SECRET } from "./config";
+import { JWT_SECRET, PROXY_SHARED_SECRET } from "./config";
+
+/**
+ * True when the request carries the Worker's shared secret — i.e. it really came through
+ * Cloudflare, so its forwarded `x-real-client-ip` can be believed. When no secret is
+ * configured we keep trusting the header (the previous behaviour), so nothing breaks before
+ * the secret is set in both Cloudflare and Render.
+ */
+function fromTrustedProxy(req: Request): boolean {
+  if (!PROXY_SHARED_SECRET) return true;
+  const given = req.get("x-proxy-auth") || "";
+  if (given.length !== PROXY_SHARED_SECRET.length) return false;
+  try {
+    return timingSafeEqual(Buffer.from(given), Buffer.from(PROXY_SHARED_SECRET));
+  } catch {
+    return false;
+  }
+}
 
 export function clientIpKey(req: Request): string {
-  return req.get("x-real-client-ip") || req.ip || "unknown";
+  // Only believe the forwarded address when the request proves it came through our Worker.
+  // Otherwise fall back to the socket address, so hitting the Render origin directly and
+  // rotating `x-real-client-ip` no longer grants extra login/rate-limit buckets.
+  if (fromTrustedProxy(req)) {
+    const forwarded = req.get("x-real-client-ip");
+    if (forwarded) return forwarded;
+  }
+  return req.ip || "unknown";
 }
 
 /**
