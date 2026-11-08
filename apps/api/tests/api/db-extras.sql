@@ -44,6 +44,35 @@ CREATE TRIGGER trg_overtime_entry_audit AFTER UPDATE OR DELETE ON "OvertimeEntry
 CREATE TRIGGER trg_payment_request_audit AFTER UPDATE OR DELETE ON "PaymentRequest" FOR EACH ROW EXECUTE FUNCTION fn_audit_row();
 CREATE TRIGGER trg_payment_attachment_audit AFTER UPDATE OR DELETE ON "PaymentAttachment" FOR EACH ROW EXECUTE FUNCTION fn_audit_row();
 CREATE TRIGGER trg_app_setting_audit AFTER UPDATE OR DELETE ON "AppSetting" FOR EACH ROW EXECUTE FUNCTION fn_audit_row();
+CREATE TRIGGER trg_order_adjustment_audit AFTER UPDATE OR DELETE ON "OrderAdjustment" FOR EACH ROW EXECUTE FUNCTION fn_audit_row();
+
+-- 20261111000000_audit_user_table: audit User, redacting the password hash; skip login-only updates.
+CREATE OR REPLACE FUNCTION fn_audit_user_row() RETURNS TRIGGER AS $$
+DECLARE v_user_id INTEGER;
+DECLARE v_user_name TEXT;
+BEGIN
+  v_user_id := NULLIF(current_setting('app.current_user_id', true), '')::INTEGER;
+  IF v_user_id IS NOT NULL THEN
+    SELECT name INTO v_user_name FROM "User" WHERE id = v_user_id;
+  END IF;
+  IF (TG_OP = 'UPDATE') THEN
+    INSERT INTO "AuditLog"("table_name", "record_id", "action", "changed_by", "user_name", "old_data", "new_data")
+    VALUES (TG_TABLE_NAME, OLD.id, 'UPDATE', v_user_id, v_user_name, to_jsonb(OLD) - 'password', to_jsonb(NEW) - 'password');
+    RETURN NEW;
+  ELSIF (TG_OP = 'DELETE') THEN
+    INSERT INTO "AuditLog"("table_name", "record_id", "action", "changed_by", "user_name", "old_data", "new_data")
+    VALUES (TG_TABLE_NAME, OLD.id, 'DELETE', v_user_id, v_user_name, to_jsonb(OLD) - 'password', NULL);
+    RETURN OLD;
+  END IF;
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+CREATE TRIGGER trg_user_audit_update AFTER UPDATE ON "User" FOR EACH ROW
+  WHEN (OLD.role IS DISTINCT FROM NEW.role OR OLD.is_active IS DISTINCT FROM NEW.is_active
+    OR OLD.is_super_admin IS DISTINCT FROM NEW.is_super_admin OR OLD.username IS DISTINCT FROM NEW.username
+    OR OLD.password IS DISTINCT FROM NEW.password)
+  EXECUTE FUNCTION fn_audit_user_row();
+CREATE TRIGGER trg_user_audit_delete AFTER DELETE ON "User" FOR EACH ROW EXECUTE FUNCTION fn_audit_user_row();
 
 -- 20261021000000_add_work_jobs
 ALTER TABLE "WorkJob" ADD CONSTRAINT "WorkJob_dates_check" CHECK ("end_date" >= "start_date");

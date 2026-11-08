@@ -15,10 +15,10 @@ The application is in good shape. Access control is enforced server-side across 
 | Critical | 0 | — |
 | High | 2 | F1 login brute-force bypass *(fixed)*, F2 vulnerable `xlsx` reachable *(fixed)* |
 | Medium | 2 | F3 no session revocation on password change, F4 SPA has no security headers |
-| Low | 5 | F7 webhook secret in URL, F8 open email export, F9 username timing, F10 cookie flags, F15 500 on delete |
-| Info | 4 | F11 proxy-addr, F13 seed password, F14 password policy / stale-role window, F16 User table unaudited |
+| Low | 5 | F7 webhook secret in URL *(fixed)*, F8 open email export *(fixed)*, F9 username timing *(fixed)*, F10 cookie flags *(fixed)*, F15 500 on delete *(fixed)* |
+| Info | 4 | F11 proxy-addr, F13 seed password *(prod check)*, F14 password policy / stale-role window *(accepted)*, F16 User table unaudited *(fixed)* |
 
-Priority order to fix: **F1 → F2 → F3 → F4**, then the Low items.
+Priority order to fix: **F1 → F2 → F3 → F4**, then the Low items. **All of F1–F10, F15 and F16 are now fixed and committed; F11/F13/F14 are informational (no code change).**
 
 ---
 
@@ -56,18 +56,18 @@ Priority order to fix: **F1 → F2 → F3 → F4**, then the Low items.
 
 ## Low severity
 
-- **F7 — Webhook secret in the URL query** (`whatsapp.controller.ts:199`, `?key=`). Lands in Cloudflare/Render access logs. The compare itself is constant-time (good). Prefer a header (`X-Webhook-Secret`) over a query param. **CWE-598.**
-- **F8 — Email export to any address** (`orders.controller.ts:2639`): CSM/Accounts/Operation-Manager can mail an orders export anywhere (15 / 15 min). Insider data-exfiltration path and a business decision — consider restricting to a company-domain allowlist or logging recipients. **A04.**
-- **F9 — Username enumeration by timing** (`auth.controller.ts:19`): tested median 77 ms for a known user vs 4 ms for an unknown one — a valid username skips bcrypt. Optionally compare against a dummy hash for unknown users. **CWE-204.**
-- **F10 — Cookie policy** (`auth.controller.ts:53`): `maxAge` is hardcoded to 7 days and ignores `JWT_EXPIRES_IN`; `Secure` is set only when `NODE_ENV==="production"` — verify Render actually sets that. `HttpOnly` + `SameSite=Strict` confirmed present.
-- **F15 — 500 on deleting a missing user** (`users.controller.ts:126`): `DELETE /api/users/:id` with an unknown id throws Prisma P2025 → HTTP 500 instead of 404 (seen in the role matrix run). Handle P2025. **A09 / error handling.**
+- **F7 — Webhook secret in the URL query** (`whatsapp.controller.ts:199`, `?key=`). Lands in Cloudflare/Render access logs. The compare itself is constant-time (good). Prefer a header (`X-Webhook-Secret`) over a query param. **CWE-598.** — **FIXED 2026-11-08:** the webhook now accepts `x-webhook-secret` (still accepts `?key=` for AskEva compatibility).
+- **F8 — Email export to any address** (`orders.controller.ts:2639`): CSM/Accounts/Operation-Manager can mail an orders export anywhere (15 / 15 min). Insider data-exfiltration path and a business decision. **A04.** — **FIXED 2026-11-09:** optional `EXPORT_EMAIL_ALLOWED_DOMAINS` allowlist (enforced only when set, so default behaviour is unchanged), stricter recipient validation, and every export email is now logged (actor, recipient, counts).
+- **F9 — Username enumeration by timing** (`auth.controller.ts:19`): tested median 77 ms for a known user vs 4 ms for an unknown one — a valid username skipped bcrypt. **CWE-204.** — **FIXED 2026-11-09:** unknown usernames now run a dummy bcrypt compare; retested 101.7 ms vs 104.4 ms (gap closed).
+- **F10 — Cookie policy** (`auth.controller.ts:53`): `maxAge` was hardcoded to 7 days and ignored `JWT_EXPIRES_IN`; `Secure` is set only when `NODE_ENV==="production"`. — **FIXED 2026-11-09:** a shared `auth-cookie` util issues/clears the cookie everywhere; `maxAge` now follows `JWT_EXPIRES_IN` (retested 604800 s for the 7d default). `HttpOnly` + `SameSite=Strict` confirmed; still verify Render sets `NODE_ENV=production` for `Secure`.
+- **F15 — 500 on deleting a missing user** (`users.controller.ts:126`): `DELETE /api/users/:id` with an unknown id threw Prisma P2025 → HTTP 500. **A09.** — **FIXED 2026-11-08:** returns 404 now.
 
 ## Informational
 
 - **F11 — `proxy-addr` advisory (GHSA-jqcg-44mw-7w3h):** not exploitable here; `app.set("trust proxy", 1)` is a hop count, not a trusted-subnet list.
-- **F13 — Seed password `demo1234`** (`prisma/seed.ts:33`): confirm no production account still uses it (not checkable without prod access). The committed localhost DB creds in `kill-pg.cjs` are dev-only.
-- **F14 — Password policy / stale role:** 8-character minimum (`validators.ts`); and a 15 s window (`auth.middleware.ts`) where a demoted/deactivated user keeps old access. Both acceptable; noted.
-- **F16 — `User` table is not audited:** audit triggers (`tests/api/db-extras.sql`) cover orders, payments, jobs, masters, etc., but not `User`, so admin role changes / password resets leave no audit row. **A09.**
+- **F13 — Seed password `demo1234`** (`prisma/seed.ts:33`): confirm no production account still uses it (not checkable without prod access). The committed localhost DB creds in `kill-pg.cjs` are dev-only. *(Prod check — not a code change.)*
+- **F14 — Password policy / stale role:** 8-character minimum (`validators.ts`); and a 15 s window (`auth.middleware.ts`) where a demoted/deactivated user keeps old access. Both acceptable; left as-is pending a policy decision.
+- **F16 — `User` table is not audited:** audit triggers covered orders, payments, jobs, masters, etc., but not `User`. **A09.** — **FIXED 2026-11-09:** added `fn_audit_user_row()` + triggers that record role/active/super-admin/username/password changes to `User`, **stripping the `password` key so hashes never enter the audit log**, and skipping login-only (`last_login_at`) updates. Migration `20261111000000_audit_user_table`.
 
 ## Dependency audit (npm)
 

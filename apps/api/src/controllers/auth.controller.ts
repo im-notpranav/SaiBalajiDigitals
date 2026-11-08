@@ -1,12 +1,18 @@
 import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import { PASSWORD_HASH_ROUNDS } from "../utils/passwords";
-import jwt from "jsonwebtoken";
 import { prisma } from "../utils/prisma";
-import { JWT_SECRET, JWT_EXPIRES_IN } from "../utils/config";
+import { issueAuthCookie, clearAuthCookie } from "../utils/auth-cookie";
 
 import { loginSchema } from "../utils/validators";
 import { sanitizeZodErrors } from "../utils/sanitize-errors";
+
+/**
+ * A throwaway hash compared against when the username is unknown, so a missing account costs the
+ * same bcrypt time as a wrong password. Without it, unknown usernames answer noticeably faster and
+ * can be enumerated by timing (F9). Computed once at startup.
+ */
+const DUMMY_HASH = bcrypt.hashSync("no-such-account-placeholder", PASSWORD_HASH_ROUNDS);
 
 export const login = async (req: Request, res: Response) => {
   try {
@@ -18,6 +24,8 @@ export const login = async (req: Request, res: Response) => {
 
     const user = await prisma.user.findUnique({ where: { username } });
     if (!user) {
+      // Spend the same bcrypt time as a real check so unknown usernames can't be timed apart (F9).
+      await bcrypt.compare(password, DUMMY_HASH);
       return res.status(401).json({ message: "Invalid username or password" });
     }
 
@@ -41,21 +49,7 @@ export const login = async (req: Request, res: Response) => {
       },
     });
 
-    const payload = {
-      id: user.id,
-      username: user.username,
-      name: user.name,
-      role: user.role,
-    };
-
-    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN as any });
-
-    res.cookie("token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+    issueAuthCookie(res, user);
 
     return res.status(200).json({
       user: {
@@ -77,7 +71,7 @@ export const login = async (req: Request, res: Response) => {
 };
 
 export const logout = (req: Request, res: Response) => {
-  res.clearCookie("token");
+  clearAuthCookie(res);
   return res.status(200).json({ message: "Logged out successfully" });
 };
 

@@ -2,6 +2,7 @@ import { serializeDecimals } from "../utils/serialize";
 import { computeTotals } from "../utils/order-totals";
 import { isCsmEditable, isHeaderEditable, isBillingStarted, OPEN_STATUSES, CLOSED_STATUSES } from "../utils/order-status";
 import { Request, Response } from "express";
+import { EXPORT_EMAIL_ALLOWED_DOMAINS } from "../utils/config";
 import { prisma } from "../utils/prisma";
 import { generateOrderId } from "../utils/order-sequence";
 import { buildOrdersExport } from "../utils/order-template";
@@ -2316,8 +2317,17 @@ export const emailExport = async (req: Request, res: Response) => {
     };
     const user = req.user!;
 
-    if (!to || !to.includes("@")) {
+    const recipient = String(to ?? "").trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient)) {
       return res.status(400).json({ message: "A valid recipient email is required." });
+    }
+    // When an allowlist is configured, exports may only be mailed to those domains, so order
+    // data can't be sent to an arbitrary external address (F8). Empty list = no restriction.
+    if (EXPORT_EMAIL_ALLOWED_DOMAINS.length) {
+      const domain = recipient.slice(recipient.lastIndexOf("@") + 1);
+      if (!EXPORT_EMAIL_ALLOWED_DOMAINS.includes(domain)) {
+        return res.status(403).json({ message: "Exports can only be emailed to approved company domains." });
+      }
     }
 
     // Build the XLSX exactly like exportOrders
@@ -2340,17 +2350,20 @@ export const emailExport = async (req: Request, res: Response) => {
     const emailSubject = subject || `Orders Export — ${new Date().toLocaleDateString("en-IN")}`;
     const emailMessage = message || `Please find the attached orders export with ${orderCount} order(s) and ${itemCount} line item(s).`;
 
-    await sendExcelEmail(to, emailSubject, emailMessage, buffer, filename, user.name);
+    // Trace who sent order data where, so an export to an outside address is never invisible (F8).
+    console.info(`[export-email] user=${user.id}(${user.role}) to=${recipient} orders=${orderCount} items=${itemCount}`);
+
+    await sendExcelEmail(recipient, emailSubject, emailMessage, buffer, filename, user.name);
 
     // Save recipient for autocomplete (upsert to update last-used timestamp)
     await prisma.emailRecipient.upsert({
-      where: { email_used_by: { email: to.toLowerCase(), used_by: user.id } },
-      create: { email: to.toLowerCase(), used_by: user.id },
+      where: { email_used_by: { email: recipient, used_by: user.id } },
+      create: { email: recipient, used_by: user.id },
       update: { used_at: new Date() },
     });
 
     return res.status(200).json({
-      message: `Export emailed to ${to} successfully.`,
+      message: `Export emailed to ${recipient} successfully.`,
       orders_count: orderCount,
       items_count: itemCount,
     });

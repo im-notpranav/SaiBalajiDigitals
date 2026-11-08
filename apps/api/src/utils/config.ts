@@ -50,6 +50,16 @@ export const NODE_ENV = optional("NODE_ENV", "development");
 export const CLIENT_URL = optional("CLIENT_URL", "http://localhost:5173");
 export const ADMIN_EMAIL = optional("ADMIN_EMAIL", "admin@saibalaji.com");
 
+/**
+ * Domains an emailed orders export may be sent to (comma-separated, e.g. "saibalaji.com,gmail.com").
+ * Empty means no restriction — the previous behaviour, where an export can be mailed anywhere.
+ * Set it to keep order data from being mailed off to arbitrary external addresses (F8).
+ */
+export const EXPORT_EMAIL_ALLOWED_DOMAINS = (process.env.EXPORT_EMAIL_ALLOWED_DOMAINS || "")
+  .split(",")
+  .map((d) => d.trim().toLowerCase())
+  .filter(Boolean);
+
 // ─── SMTP (warn, don't crash — emails will fail gracefully) ─────────────────
 
 export const SMTP_HOST = process.env.SMTP_HOST || "";

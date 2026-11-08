@@ -2,9 +2,8 @@ import { Request, Response } from "express";
 import { createHash } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { PASSWORD_HASH_ROUNDS } from "../utils/passwords";
-import jwt from "jsonwebtoken";
 import { prisma } from "../utils/prisma";
-import { JWT_SECRET, JWT_EXPIRES_IN } from "../utils/config";
+import { issueAuthCookie } from "../utils/auth-cookie";
 import { objectStore } from "../utils/object-store";
 import { detectFileType } from "../utils/payment-files";
 
@@ -174,21 +173,9 @@ export const updateMe = async (req: Request, res: Response) => {
       select: { id: true, name: true, username: true, role: true, email: true, phone: true, whatsapp_opt_out: true, photo_url: true, is_super_admin: true },
     });
 
-    const payload = {
-      id: updatedUser.id,
-      username: updatedUser.username,
-      name: updatedUser.name,
-      role: updatedUser.role,
-    };
-
-    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN as any });
-
-    res.cookie("token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+    // Re-issue the cookie so a self password change (which bumps password_changed_at) keeps
+    // this session alive while revoking the person's other tokens.
+    issueAuthCookie(res, updatedUser);
 
     return res.status(200).json(updatedUser);
   } catch (err) {
