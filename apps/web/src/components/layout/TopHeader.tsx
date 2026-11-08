@@ -15,7 +15,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth-store";
 import { fetchMyNotifications, markNotificationRead } from "@/api/notifications";
-import { useGoToOrder } from "@/lib/use-order-nav";
+import { notificationsPath, orderLinkLabel, useGoToOrder } from "@/lib/use-order-nav";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
 import { roleLabel } from "@/lib/constants";
@@ -155,9 +155,20 @@ export function TopHeader() {
                   <span className="ml-auto text-[10px] text-muted-foreground">{formatDistanceToNow(new Date(n.created_at), { addSuffix: true })}</span>
                 </div>
                 <span className="line-clamp-2 text-xs text-muted-foreground">{n.body}</span>
-                {n.order_id ? <span className="text-[11px] font-medium text-primary">View order →</span> : null}
+                {n.order_id ? <span className="text-[11px] font-medium text-primary">{orderLinkLabel(user?.role)}</span> : null}
               </DropdownMenuItem>
             ))}
+            {user && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onSelect={() => navigate({ to: notificationsPath(user.role) })}
+                  className="justify-center text-xs font-medium text-primary"
+                >
+                  See all notifications
+                </DropdownMenuItem>
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
 

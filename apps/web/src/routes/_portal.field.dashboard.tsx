@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/dialog";
 import { JobStatusBadge, LocalityTag } from "@/components/allocation/JobBits";
 import { TimeOffSummary } from "@/components/allocation/FieldTimeOff";
+import { DashboardGuide } from "@/components/dashboard/DashboardBits";
 import { EmptyState, ErrorState, LoadingState } from "@/components/layout/PageStates";
 import { useAuth } from "@/lib/auth-store";
 import { roleLabel } from "@/lib/constants";
@@ -74,11 +75,25 @@ function FieldDashboard() {
         crumbs={[{ label: "My Work" }]}
       />
 
+      <DashboardGuide title="How this page works">
+        <p>
+          <strong>Today</strong> shows your work for today. Tap <strong>Start job</strong> when you begin, and{" "}
+          <strong>Mark completed</strong> when you finish. The CSM and the Operations Manager are told straight away.
+        </p>
+        <p>
+          <strong>Coming up</strong> shows your next jobs. You can start a job from its first day.
+        </p>
+        <p>
+          <strong>Call</strong> rings the CSM or a teammate on that job. Use the top strip to ask for leave or check your
+          overtime.
+        </p>
+      </DashboardGuide>
+
       {!user?.phone && (
         <div className="mb-4 flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm">
           <Phone className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
           <span>
-            Your WhatsApp number is missing. Add it on your Profile page so you receive job alerts.
+            Your WhatsApp number is missing, so job alerts can't reach you. Ask the Operations Manager to add it.
           </span>
         </div>
       )}

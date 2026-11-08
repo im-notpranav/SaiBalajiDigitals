@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -61,9 +62,17 @@ export function OperationsOverview() {
   return (
     <section className="surface-panel mb-6 grid gap-4 p-4 sm:p-5" aria-label="Field work overview">
       <div className="flex flex-wrap items-end gap-3">
-        <Button size="lg" className="rounded-xl" onClick={() => setAssigning(true)}>
-          <Plus className="mr-2 h-5 w-5" /> Assign Work
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button size="lg" className="rounded-xl" onClick={() => setAssigning(true)}>
+            <Plus className="mr-2 h-5 w-5" aria-hidden /> Assign Work
+          </Button>
+          <Button asChild variant="outline" size="lg" className="rounded-xl">
+            <Link to="/admin/board" search={{ date: from }}>Daily Board</Link>
+          </Button>
+          <Button asChild variant="outline" size="lg" className="rounded-xl">
+            <Link to="/admin/grid">Weekly Grid</Link>
+          </Button>
+        </div>
         <div className="flex flex-wrap items-end gap-2 sm:ml-auto">
           <label className="grid gap-1 text-xs text-muted-foreground">
             From
@@ -128,6 +137,9 @@ export function OperationsOverview() {
               >
                 <div className="text-2xl font-bold tabular-nums">{data.jobs[t.key]}</div>
                 <div className="truncate text-xs text-muted-foreground sm:text-sm">{t.label}</div>
+                <div className="mt-1 text-xs font-medium text-primary">
+                  {tile === t.key ? "Hide jobs" : "List jobs"}
+                </div>
               </button>
             ))}
           </div>
@@ -152,6 +164,7 @@ export function OperationsOverview() {
                   >
                     ({data.free[r].length})
                   </span>
+                  <span className="ml-1 text-xs font-normal text-muted-foreground">on all of these dates</span>
                 </div>
                 {data.free[r].length === 0 ? (
                   <p className="text-sm text-muted-foreground">

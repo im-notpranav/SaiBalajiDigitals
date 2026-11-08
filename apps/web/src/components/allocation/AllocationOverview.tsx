@@ -47,30 +47,44 @@ export function AllocationOverviewCard() {
         <h3 className="flex items-center gap-2 text-sm font-semibold">
           <CalendarRange className="h-4 w-4 text-primary" /> Work allocation
         </h3>
-        <Link to="/admin/grid" className="text-sm font-medium text-primary hover:underline">
-          Open Weekly Grid
-        </Link>
+        <div className="flex flex-wrap gap-3 text-sm font-medium">
+          <Link to="/admin/board" className="py-0.5 text-primary hover:underline">
+            Open Daily Board
+          </Link>
+          <Link to="/admin/grid" className="py-0.5 text-primary hover:underline">
+            Open Weekly Grid
+          </Link>
+        </div>
       </div>
+      <p className="-mt-1 mb-3 text-xs text-muted-foreground">
+        Who is free today and where this week's field jobs stand. Click a number to see the jobs or people behind it.
+      </p>
       <div className="grid gap-4 md:grid-cols-2">
         <div className="min-w-0">
           <div className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
             Today
           </div>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <Stat label="Jobs" value={board?.counts.jobs} />
+            <Stat label="Jobs" value={board?.counts.jobs} to="/admin/board" search={{ date: today }} />
             {ROLES.map((r) => (
               <Stat
                 key={r}
                 label={`Free ${FIELD_ROLE_LABELS[r].toLowerCase()}s`}
                 value={free?.[r]}
                 warn={free?.[r] === 0}
+                to="/admin/board"
+                search={{ date: today }}
               />
             ))}
           </div>
           {!!board?.counts.double_booked && (
-            <p className="mt-2 text-xs font-medium text-destructive">
-              {board.counts.double_booked} double-booked today
-            </p>
+            <Link
+              to="/admin/board"
+              search={{ date: today }}
+              className="mt-2 inline-block text-xs font-medium text-destructive hover:underline"
+            >
+              {board.counts.double_booked} double-booked today. See who
+            </Link>
           )}
         </div>
         <div className="min-w-0">
@@ -79,7 +93,13 @@ export function AllocationOverviewCard() {
           </div>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {STATUSES.map((s) => (
-              <Stat key={s} label={JOB_STATUS_LABELS[s]} value={week ? byStatus(s) : undefined} />
+              <Stat
+                key={s}
+                label={JOB_STATUS_LABELS[s]}
+                value={week ? byStatus(s) : undefined}
+                to="/admin/jobs"
+                search={{ status: s, from: today, to: weekEnd }}
+              />
             ))}
           </div>
         </div>
@@ -88,9 +108,26 @@ export function AllocationOverviewCard() {
   );
 }
 
-function Stat({ label, value, warn }: { label: string; value?: number; warn?: boolean }) {
+function Stat({
+  label,
+  value,
+  warn,
+  to,
+  search,
+}: {
+  label: string;
+  value?: number;
+  warn?: boolean;
+  to: string;
+  search: Record<string, unknown>;
+}) {
   return (
-    <div className="min-w-0 rounded-xl border px-3 py-2">
+    <Link
+      to={to}
+      search={search as never}
+      aria-label={`${label}: ${value ?? "loading"}. Open`}
+      className="min-w-0 rounded-xl border px-3 py-2 transition-colors hover:border-primary/40 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
       <div className="truncate text-xs text-muted-foreground" title={label}>
         {label}
       </div>
@@ -100,6 +137,6 @@ function Stat({ label, value, warn }: { label: string; value?: number; warn?: bo
       >
         {value ?? "–"}
       </div>
-    </div>
+    </Link>
   );
 }

@@ -30,7 +30,7 @@ const MAX_ORDERS_PER_PAGE = 200;
 
 export const getOrders = async (req: Request, res: Response) => {
   try {
-    const { section, order_no, client, store, status, q, page = "1", limit = "50" } = req.query;
+    const { section, order_no, client, store, status, q, creator, from, to, page = "1", limit = "50" } = req.query;
     const user = req.user!;
 
     const where: any = {};
@@ -46,6 +46,19 @@ export const getOrders = async (req: Request, res: Response) => {
     if (order_no) where.order_no = { contains: String(order_no), mode: "insensitive" };
     if (client) where.client_name = { contains: String(client), mode: "insensitive" };
     if (status) where.status = status;
+    if (creator) where.creator_name = String(creator);
+
+    // The same order-date window the dashboards count over, so a number on a dashboard and the
+    // list it links to agree. A date that doesn't parse is ignored rather than failing the list.
+    const date: { gte?: Date; lte?: Date } = {};
+    const fromDate = from ? new Date(String(from)) : null;
+    if (fromDate && !Number.isNaN(fromDate.getTime())) date.gte = fromDate;
+    const toDate = to ? new Date(String(to)) : null;
+    if (toDate && !Number.isNaN(toDate.getTime())) {
+      toDate.setHours(23, 59, 59, 999);
+      date.lte = toDate;
+    }
+    if (date.gte || date.lte) where.date = date;
 
     // A store match may sit on any of the order's stores. Collected under AND so that a
     // store filter and a free-text search can both apply instead of overwriting each other.

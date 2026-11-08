@@ -24,7 +24,9 @@ export function PageHeader({ title, description, crumbs = [], actions, className
           aria-label="Breadcrumb"
           className="mb-1.5 flex flex-wrap items-center gap-x-1 gap-y-0.5 text-xs text-muted-foreground"
         >
-          <Home className="h-3.5 w-3.5 shrink-0" />
+          <Link to="/" aria-label="Home" className="-m-1.5 rounded p-1.5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <Home className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          </Link>
           {crumbs.map((c, i) => (
             <span key={i} className="flex min-w-0 items-center gap-1">
               <ChevronRight className="h-3 w-3 shrink-0" />

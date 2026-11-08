@@ -1,95 +1,210 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { motion } from "framer-motion";
-import { Factory, Timer, Receipt, CheckCircle2 } from "lucide-react";
-import { PageHeader } from "@/components/layout/PageHeader";
-import { KpiCard } from "@/components/kpi/KpiCard";
-import { StatusBadge } from "@/components/orders/StatusBadge";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { ArrowRight, CheckCircle2, Factory, Flag, Ruler, Workflow } from "lucide-react";
+import { format } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
-import { fetchDashboard } from "@/api/dashboard";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { EmptyState, ErrorState, LoadingState } from "@/components/layout/PageStates";
+import { KpiCard } from "@/components/kpi/KpiCard";
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 import { fetchOrders } from "@/api/orders";
-import type { OrderStatus, Order } from "@sb-oms/shared-types";
+import { storeLabel } from "@/lib/stores";
+import { cn } from "@/lib/utils";
+import type { Order, OrderItem } from "@sb-oms/shared-types";
+import {
+  AttentionList,
+  DashboardGuide,
+  SectionHeading,
+  type AttentionItem,
+} from "@/components/dashboard/DashboardBits";
 
 export const Route = createFileRoute("/_portal/production/dashboard")({
   head: () => ({ meta: [{ title: "Production Dashboard — SB OMS" }] }),
   component: ProductionDashboard,
 });
 
-const KANBAN: { status: OrderStatus; label: string }[] = [
-  { status: "Active", label: "In Production" },
-];
+/** "Mine" is this person's own assignment, which can finish before the item as a whole does. */
+const isMineDone = (item: OrderItem) => item.my_assignment_completed ?? item.production_completed ?? false;
 
+/** This person's own work: the API returns only the orders and items assigned to them. */
 function ProductionDashboard() {
-  const { data: dash } = useQuery({ queryKey: ["dashboard"], queryFn: fetchDashboard });
-  const { data: ordersData } = useQuery({ queryKey: ["orders", "Active"], queryFn: () => fetchOrders({ status: "Active", limit: 50 }) });
+  const { data, isLoading, error, refetch } = useQuery({
+    queryKey: ["orders", "Active"],
+    queryFn: () => fetchOrders({ status: "Active" }),
+  });
+  const orders: Order[] = data?.orders ?? [];
+  const items = orders.flatMap((o) => o.items ?? []);
+  const toDo = items.filter((i) => !isMineDone(i));
+  const flagged = toDo.filter((i) => i.is_flagged).length;
+  const done = items.length - toDo.length;
+  const sftToDo = toDo.reduce((sum, i) => sum + (Number(i.total_sft) || 0), 0);
 
-  const active = dash?.active_orders || 0;
-  const pending = dash?.pending_orders || 0;
-  const completed = dash?.completed_orders || 0;
-  const total = dash?.total_orders || 0;
-  
-  const allOrders = ordersData?.orders || [];
+  const leftOn = (o: Order) => (o.items ?? []).filter((i) => !isMineDone(i)).length;
+  // Unfinished orders first; the order finished long ago has nothing to say.
+  const sorted = [...orders].sort((a, b) => Number(leftOn(b) > 0) - Number(leftOn(a) > 0));
+
+  const attention: AttentionItem[] =
+    flagged > 0
+      ? [
+          {
+            key: "flagged",
+            tone: "danger",
+            title: `${flagged} of your ${flagged === 1 ? "items is" : "items are"} flagged and on hold`,
+            detail: "You can't finish a flagged item until an admin resolves it.",
+            cta: "See which",
+            to: "/production/queue",
+            search: { filter: "flagged" },
+          },
+        ]
+      : [];
 
   return (
     <>
       <PageHeader
-        title="Production Dashboard"
-        description="Move orders through production stages. Backend enforces valid next actions."
-        crumbs={[{ label: "Production" }, { label: "Dashboard" }]}
+        title="My Production"
+        description="The work assigned to you and how far along it is."
+        crumbs={[{ label: "Dashboard" }]}
+        actions={
+          <Button asChild size="lg" className="rounded-xl shadow-soft">
+            <Link to="/production/queue">
+              <Workflow className="mr-2 h-4 w-4" aria-hidden /> Open my queue
+            </Link>
+          </Button>
+        }
       />
 
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-        <KpiCard label="Active Workload" value={active} icon={Factory} accent="info" delay={0} />
-        <KpiCard label="Pending Billing" value={pending} icon={Receipt} accent="warning" delay={0.05} />
-        <KpiCard label="Completed" value={completed} icon={CheckCircle2} accent="success" delay={0.1} />
-        <KpiCard label="Total Orders" value={total} icon={Timer} accent="primary" delay={0.15} />
-      </div>
+      <DashboardGuide>
+        <p>
+          <strong>Your queue</strong> is where you mark each item finished. This page shows how much is left.
+        </p>
+        <p>
+          <strong>SFT</strong> means square feet, the size of the print work.
+        </p>
+        <p>
+          <strong>Order cards:</strong> click one to see the order's sizes and details. An item is complete once
+          everyone assigned to it has finished their part.
+        </p>
+      </DashboardGuide>
 
-      <div className="mt-8 grid gap-4 md:grid-cols-1">
-        {KANBAN.map((col, ci) => {
-          const items = allOrders.filter((o: Order) => o.status === col.status).slice(0, 8);
-          return (
-            <motion.div
-              key={col.status}
-              initial={false}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 + ci * 0.06 }}
-              className="surface-panel flex min-h-[400px] flex-col"
-            >
-              <div className="flex items-center justify-between border-b p-4">
-                <div>
-                  <div className="text-sm font-semibold">{col.label}</div>
-                  <div className="text-xs text-muted-foreground">{items.length} recent orders</div>
-                </div>
-                <StatusBadge status={col.status} />
-              </div>
-              <div className="flex-1 space-y-2 p-3">
-                {items.length === 0 ? (
-                  <div className="p-4 text-center text-xs text-muted-foreground">No orders</div>
-                ) : items.map((o: Order) => (
-                  <div
-                    key={o.id}
-                    className="group cursor-pointer rounded-xl border bg-background p-3 transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-soft"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="font-mono text-xs font-semibold text-primary">{o.order_no}</div>
-                      <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
-                        Normal
-                      </span>
-                    </div>
-                    <div className="mt-1 truncate text-sm font-medium">{o.client_name}</div>
-                    <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
-                      <span>{o.items.length} items</span>
-                      <span>
-                        {new Date(o.date || "").toLocaleDateString()}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </motion.div>
-          );
-        })}
-      </div>
+      {isLoading ? (
+        <LoadingState label="Loading your work…" />
+      ) : error && !data ? (
+        <ErrorState title="Couldn't load your work" error={error} onRetry={() => refetch()} />
+      ) : (
+        <>
+          <AttentionList items={attention} className="mb-6" />
+
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+            <KpiCard
+              label="Items To Do"
+              value={toDo.length}
+              icon={Factory}
+              accent="info"
+              hint="Assigned to you, not finished"
+              cta="Open the list"
+              to="/production/queue"
+              search={{ filter: "todo" }}
+            />
+            <KpiCard
+              label="SFT To Do"
+              value={sftToDo.toFixed(1)}
+              icon={Ruler}
+              accent="primary"
+              hint="Square feet left in those items"
+              cta="Open the list"
+              to="/production/queue"
+              search={{ filter: "todo" }}
+            />
+            <KpiCard
+              label="On Hold"
+              value={flagged}
+              icon={Flag}
+              accent="warning"
+              hint="Flagged, waiting for an admin"
+              cta="See which"
+              to="/production/queue"
+              search={{ filter: "flagged" }}
+            />
+            <KpiCard
+              label="Finished"
+              value={done}
+              icon={CheckCircle2}
+              accent="success"
+              hint="Your part done, order still active"
+              cta="See which"
+              to="/production/queue"
+              search={{ filter: "done" }}
+            />
+          </div>
+
+          <section className="mt-8" aria-labelledby="my-orders-heading">
+            <SectionHeading
+              id="my-orders-heading"
+              title="My orders"
+              description="Orders with work still to do come first. Click one to see its details."
+            />
+            {sorted.length === 0 ? (
+              <EmptyState
+                icon={CheckCircle2}
+                title="Nothing is assigned to you right now"
+                description="When the Production Manager assigns you an item, its order appears here."
+              />
+            ) : (
+              <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {sorted.map((o) => {
+                  const total = o.items?.length ?? 0;
+                  const left = leftOn(o);
+                  const finished = total - left;
+                  const percent = total === 0 ? 0 : Math.round((finished / total) * 100);
+                  const held = (o.items ?? []).some((i) => i.is_flagged && !isMineDone(i));
+                  return (
+                    <li key={o.id}>
+                      <Link
+                        to="/production/orders/$id"
+                        params={{ id: String(o.id) }}
+                        aria-label={`Open order ${o.order_no}, ${o.client_name}. ${finished} of ${total} of your items finished${held ? ", on hold" : ""}`}
+                        className="group grid gap-2 rounded-xl border bg-card p-4 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      >
+                        <span className="flex items-center justify-between gap-2">
+                          <span className="font-mono text-xs font-semibold text-primary">{o.order_no}</span>
+                          {held ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-[11px] font-medium text-destructive">
+                              <Flag className="h-3 w-3" aria-hidden /> On hold
+                            </span>
+                          ) : (
+                            <span
+                              className={cn(
+                                "rounded-full px-2 py-0.5 text-[11px] font-medium",
+                                left === 0 ? "bg-success/15 text-success" : "bg-muted text-muted-foreground",
+                              )}
+                            >
+                              {left === 0 ? "All finished" : `${left} to do`}
+                            </span>
+                          )}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-medium">{o.client_name}</span>
+                          <span className="block truncate text-xs text-muted-foreground">
+                            {storeLabel(o as never)}
+                            {o.date ? ` · ${format(new Date(o.date), "dd MMM yyyy")}` : ""}
+                          </span>
+                        </span>
+                        <Progress value={percent} className="h-1.5" aria-hidden />
+                        <span className="flex items-center justify-between text-[11px] text-muted-foreground">
+                          <span>
+                            {finished} of {total} of your items finished
+                          </span>
+                          <ArrowRight className="h-3.5 w-3.5 text-primary transition-transform group-hover:translate-x-0.5" aria-hidden />
+                        </span>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+        </>
+      )}
     </>
   );
 }

@@ -172,20 +172,11 @@ export const getAdminDashboard = async (req: Request, res: Response) => {
       .sort((a, b) => b.ordersCompleted - a.ordersCompleted)
       .slice(0, 5);
 
-    // 5. Time-to-Close (average hours)
+    // 5. Cycle time (average working days), the same figure as Admin Reports
     const completedOrdersList = await prisma.order.findMany({
       where: { status: { in: CLOSED_STATUSES } },
       select: CLOSED_ORDER_DATES,
     });
-    
-    let totalHours = 0;
-    completedOrdersList.forEach(o => {
-      const diffMs = o.updated_at.getTime() - o.created_at.getTime();
-      totalHours += diffMs / (1000 * 60 * 60);
-    });
-    const averageTimeToClose = completedOrdersList.length > 0 
-      ? Number((totalHours / completedOrdersList.length).toFixed(1))
-      : 0;
 
     return res.status(200).json({
       avg_cycle_days: averageCycleDays(completedOrdersList),
@@ -193,7 +184,6 @@ export const getAdminDashboard = async (req: Request, res: Response) => {
       revenueTrend,
       statusBreakdown,
       performanceLeaderboard,
-      averageTimeToClose,
     });
   } catch (err) {
     console.error(err);
@@ -405,16 +395,21 @@ export const getProdManagerDashboard = async (req: Request, res: Response) => {
     let totalSftCompleted = 0;
     let totalItemsPending = 0;
     let totalItemsCompleted = 0;
+    let totalItemsUnassigned = 0;
+    let totalItemsFlagged = 0;
 
     for (const order of orders) {
       for (const item of order.items) {
         const sft = Number(item.total_sft);
+        if (item.is_flagged) totalItemsFlagged++;
         if (item.production_completed) {
           totalSftCompleted += sft;
           totalItemsCompleted++;
         } else if (item.assignments.length > 0) {
           totalSftPending += sft;
           totalItemsPending++;
+        } else {
+          totalItemsUnassigned++;
         }
         for (const assignment of item.assignments) {
           allAssignments.push({ assignment, item, order });
@@ -480,6 +475,7 @@ export const getProdManagerDashboard = async (req: Request, res: Response) => {
           item_s_no: item.s_no,
           media: item.media,
           total_sft: Number(item.total_sft),
+          is_flagged: item.is_flagged,
           assigned_to: item.assignments.map((a: any) => ({
             name: a.user?.name ?? `#${a.user_id}`,
             completed: a.completed,
@@ -497,6 +493,8 @@ export const getProdManagerDashboard = async (req: Request, res: Response) => {
         total_sft_completed: Math.round(totalSftCompleted * 100) / 100,
         total_items_pending: totalItemsPending,
         total_items_completed: totalItemsCompleted,
+        total_items_unassigned: totalItemsUnassigned,
+        total_items_flagged: totalItemsFlagged,
       },
       team_stats: teamStats,
       pending_items: pendingItems,

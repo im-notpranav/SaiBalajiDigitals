@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 import { fetchMyNotifications, markAllNotificationsRead, markNotificationRead } from "@/api/notifications";
-import { useGoToOrder } from "@/lib/use-order-nav";
+import { useAuth } from "@/lib/auth-store";
+import { orderLinkLabel, useGoToOrder } from "@/lib/use-order-nav";
 
 function iconFor(kind: string) {
   if (kind === "success") return <CheckCircle2 className="h-4 w-4 text-success" />;
@@ -22,6 +23,7 @@ interface NotificationsListProps {
 export function NotificationsList({ title = "Notifications", crumbs = [{ label: "Notifications" }] }: NotificationsListProps) {
   const queryClient = useQueryClient();
   const goToOrder = useGoToOrder();
+  const { user } = useAuth();
 
   const { data: notifications = [], isLoading, isError, error, refetch } = useQuery({
     queryKey: ["notifications"],
@@ -85,14 +87,14 @@ export function NotificationsList({ title = "Notifications", crumbs = [{ label: 
           notifications.map((n) => (
             <div
               key={n.id}
-              role={n.order_id ? "button" : undefined}
-              tabIndex={n.order_id ? 0 : undefined}
+              role={n.order_id || !n.read ? "button" : undefined}
+              tabIndex={n.order_id || !n.read ? 0 : undefined}
               onClick={() => handleOpen(n)}
-              onKeyDown={(e) => { if (n.order_id && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); handleOpen(n); } }}
+              onKeyDown={(e) => { if ((n.order_id || !n.read) && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); handleOpen(n); } }}
               className={cn(
-                "flex items-start gap-3 p-4 transition hover:bg-muted/40",
+                "flex items-start gap-3 p-4 transition",
                 !n.read && "bg-primary/5",
-                n.order_id && "cursor-pointer",
+                (n.order_id || !n.read) && "cursor-pointer hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
               )}
             >
               <div className="mt-0.5 rounded-lg border bg-card p-2">{iconFor(n.kind)}</div>
@@ -110,7 +112,9 @@ export function NotificationsList({ title = "Notifications", crumbs = [{ label: 
                 </div>
                 <p className="mt-0.5 text-sm text-muted-foreground">{n.body}</p>
                 {n.order_id ? (
-                  <p className="mt-1 text-xs font-medium text-primary">View order →</p>
+                  <p className="mt-1 text-xs font-medium text-primary">{orderLinkLabel(user?.role)}</p>
+                ) : !n.read ? (
+                  <p className="mt-1 text-xs text-muted-foreground">Click to mark as read</p>
                 ) : null}
               </div>
             </div>

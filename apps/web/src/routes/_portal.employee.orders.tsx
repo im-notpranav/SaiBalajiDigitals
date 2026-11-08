@@ -1,47 +1,30 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
-import { Search, Download, Edit } from "lucide-react";
+import { Download, Edit } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { OrdersFilterBar, parseOrdersSearch, useOrdersFilters } from "@/components/orders/OrdersListFilters";
 import { OrdersTable } from "@/components/orders/OrdersTable";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { fetchOrders, exportOrders } from "@/api/orders";
-import { useAuth } from "@/lib/auth-store";
-import { useDebounce } from "@/hooks/use-debounce";
 
 export const Route = createFileRoute("/_portal/employee/orders")({
   head: () => ({ meta: [{ title: "My Orders — SB OMS" }] }),
-  validateSearch: (search: Record<string, unknown>) => ({
-    q: (search.q as string) || "",
-  }),
+  validateSearch: parseOrdersSearch,
   component: MyOrders,
 });
 
 function MyOrders() {
-  const { user } = useAuth();
-  const search = Route.useSearch();
-  const [q, setQ] = useState(search.q || "");
-  const [searchField, setSearchField] = useState<"client" | "store" | "order_no">("client");
-  const debouncedQ = useDebounce(q, 300);
-  const [section, setSection] = useState<"active" | "completed">("active");
+  const filters = useOrdersFilters(Route.useSearch());
+  const { section, debouncedQ, params } = filters;
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ["orders", "employee", section, searchField, debouncedQ],
-    queryFn: () => {
-      const params: any = { section };
-      if (debouncedQ) params[searchField] = debouncedQ;
-      return fetchOrders(params);
-    },
+    queryKey: ["orders", "employee", params],
+    queryFn: () => fetchOrders(params),
     placeholderData: keepPreviousData,
   });
 
   const handleExport = async () => {
-    const params: any = { section };
-    if (q) params[searchField] = q;
-    await exportOrders(params);
+    await exportOrders({ section, q: debouncedQ || undefined });
   };
 
   const orders = data?.orders || [];
@@ -65,44 +48,7 @@ function MyOrders() {
         }
       />
 
-      <div className="surface-panel mb-4 flex flex-wrap items-center gap-3 p-3">
-        <Tabs value={section} onValueChange={(v) => setSection(v as "active" | "completed")} className="w-full sm:w-[300px]">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="active">Active</TabsTrigger>
-            <TabsTrigger value="completed">Completed</TabsTrigger>
-          </TabsList>
-        </Tabs>
-
-        {/* Takes its own line on a phone: the select plus a 200px-minimum search box is
-            wider than the content column at 375px. */}
-        <div className="flex w-full min-w-0 flex-1 items-center gap-2 sm:w-auto">
-          <Select value={searchField} onValueChange={(v: any) => setSearchField(v)}>
-            <SelectTrigger aria-label="Search in" className="w-[120px] shrink-0 sm:w-[140px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="client">Client Name</SelectItem>
-              <SelectItem value="store">Store Name</SelectItem>
-              <SelectItem value="order_no">Order No</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <div className="relative min-w-0 flex-1 sm:min-w-[200px]">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              aria-label="Search orders"
-              placeholder={`Search by ${searchField === 'client' ? 'client name' : searchField === 'store' ? 'store name' : 'order number'}...`}
-              className="pl-9"
-            />
-          </div>
-        </div>
-
-        <div className="w-full text-xs text-muted-foreground sm:ml-auto sm:w-auto">
-          {total} orders found
-        </div>
-      </div>
+      <OrdersFilterBar filters={filters} total={total} shown={orders.length} />
       <OrdersTable
         loading={isLoading}
         error={error}

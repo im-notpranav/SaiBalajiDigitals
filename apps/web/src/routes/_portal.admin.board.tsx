@@ -35,6 +35,9 @@ import {
 
 export const Route = createFileRoute("/_portal/admin/board")({
   head: () => ({ meta: [{ title: "Daily Board — SB OMS" }] }),
+  validateSearch: (search: Record<string, unknown>): { date?: string } => ({
+    date: typeof search.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(search.date) ? search.date : undefined,
+  }),
   component: DailyBoardPage,
 });
 
@@ -43,7 +46,8 @@ const ROLES: FieldRole[] = ["PASTER", "HELPER", "DRIVER"];
 /** One day at a glance: every job running, who is free by role, and who is double-booked. */
 function DailyBoardPage() {
   const today = todayIST();
-  const [date, setDate] = useState(today);
+  const linked = Route.useSearch();
+  const [date, setDate] = useState(linked.date ?? today);
   const [dialog, setDialog] = useState<{ job: WorkJob | null } | null>(null);
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["work-jobs", "board", date],

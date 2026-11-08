@@ -146,8 +146,8 @@ function SummaryLink({
         <Icon className="h-4 w-4" />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-xs text-muted-foreground">{label}</span>
-        <span className="block truncate text-sm font-semibold">{value}</span>
+        <span className="block text-xs text-muted-foreground">{label}</span>
+        <span className="block break-words text-sm font-semibold">{value}</span>
       </span>
       <ChevronRight className="hidden h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 sm:block" />
     </Link>

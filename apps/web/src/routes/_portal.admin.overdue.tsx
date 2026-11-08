@@ -14,12 +14,17 @@ import { format } from "date-fns";
 
 export const Route = createFileRoute("/_portal/admin/overdue")({
   head: () => ({ meta: [{ title: "Overdue Orders — SB OMS" }] }),
+  validateSearch: (search: Record<string, unknown>): { days?: number } => {
+    const days = Number(search.days);
+    return { days: Number.isInteger(days) && days >= 0 && search.days != null ? days : undefined };
+  },
   component: OverduePage,
 });
 
 function OverduePage() {
-  const [daysInput, setDaysInput] = useState("5");
-  const [threshold, setThreshold] = useState(5);
+  const { days = 5 } = Route.useSearch();
+  const [daysInput, setDaysInput] = useState(String(days));
+  const [threshold, setThreshold] = useState(days);
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["overdue-report", threshold],

@@ -151,6 +151,7 @@ const NAV: Record<UserRole, NavItem[]> = {
     ...DASHBOARD,
     ...ORDER_SYSTEM,
     ...WORK_ALLOCATION,
+    { to: "/admin/notifications", label: "Notifications", icon: Bell },
     { to: "/profile", label: "Profile", icon: UserCircle },
   ],
   ADMIN: [
@@ -162,6 +163,7 @@ const NAV: Record<UserRole, NavItem[]> = {
     { to: "/admin/settings", label: "Settings", icon: Settings, group: "Automated System" },
     ...WORK_ALLOCATION,
     { to: "/admin/payments", label: "Payment Requests", icon: Wallet, group: "Payment Request" },
+    { to: "/admin/notifications", label: "Notifications", icon: Bell },
     { to: "/profile", label: "Profile", icon: UserCircle },
   ],
 };

@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, ArrowRight, Banknote, Hourglass, Inbox, Wallet } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ErrorState } from "@/components/layout/PageStates";
 import {
   CATEGORY_LABELS,
   PAYMENT_STATUS_LABELS,
@@ -26,6 +27,9 @@ const dashboardQuery = { queryKey: ["payment-requests", "dashboard"], queryFn: f
 
 const SHOWN = 6;
 
+const STAT_LINK =
+  "block p-3 transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring";
+
 function Tile({
   label,
   value,
@@ -33,6 +37,7 @@ function Tile({
   icon: Icon,
   alert,
   onClick,
+  cta,
 }: {
   label: string;
   value: string | number;
@@ -40,6 +45,8 @@ function Tile({
   icon: LucideIcon;
   alert?: boolean;
   onClick?: () => void;
+  /** What clicking does, in a few words. */
+  cta?: string;
 }) {
   const Box = onClick ? "button" : "div";
   return (
@@ -47,8 +54,9 @@ function Tile({
       type={onClick ? "button" : undefined}
       onClick={onClick}
       className={cn(
-        "surface-panel p-4 text-left",
-        onClick && "transition-colors hover:bg-muted/40",
+        "surface-panel flex flex-col p-4 text-left",
+        onClick &&
+          "transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         alert && "border-destructive/40 bg-destructive/5",
       )}
     >
@@ -60,6 +68,11 @@ function Tile({
         {value}
       </div>
       <div className="text-xs text-muted-foreground">{hint}</div>
+      {onClick && (
+        <div className="mt-auto flex items-center gap-1 pt-2 text-xs font-medium text-primary">
+          {cta ?? "See which"} <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+        </div>
+      )}
     </Box>
   );
 }
@@ -111,13 +124,21 @@ export function PaymentDashboard({
   onOpen,
   onStage,
   onOverdueOnly,
+  onWaitingOnYou,
+  onPaid,
 }: {
   onOpen: (id: number) => void;
   onStage: (status: WaitingStatus) => void;
   onOverdueOnly: () => void;
+  onWaitingOnYou: () => void;
+  onPaid: () => void;
 }) {
-  const { data } = useQuery(dashboardQuery);
-  if (!data) return null;
+  const { data, error, refetch } = useQuery(dashboardQuery);
+  if (!data) {
+    return error ? (
+      <ErrorState className="mb-6" title="Couldn't load the overview" error={error} onRetry={() => refetch()} />
+    ) : null;
+  }
   const { overdue, waiting_on_you: mine, money, stages, threshold } = data;
   const overdueRequests = byRequest(overdue.items);
   const paidChange = money.paid_this_month.amount - money.paid_last_month.amount;
@@ -130,6 +151,7 @@ export function PaymentDashboard({
           value={mine.count}
           icon={Inbox}
           alert={mine.overdue > 0}
+          onClick={onWaitingOnYou}
           hint={
             <>
               {mine.overdue > 0 && <span className={overdueText(true)}>{mine.overdue} overdue · </span>}
@@ -149,12 +171,15 @@ export function PaymentDashboard({
           label="To be paid"
           value={formatRupees(money.pending_payout)}
           icon={Wallet}
+          onClick={() => onStage("PAYMENT_PENDING")}
           hint={`${stages.PAYMENT_PENDING.count} approved ${stages.PAYMENT_PENDING.count === 1 ? "request" : "requests"}`}
         />
         <Tile
           label="Paid this month"
           value={formatRupees(money.paid_this_month.amount)}
           icon={Banknote}
+          onClick={onPaid}
+          cta="See paid requests"
           hint={`${money.paid_this_month.count} paid · last month ${formatRupees(money.paid_last_month.amount)}${
             paidChange === 0 ? "" : paidChange > 0 ? " ↑" : " ↓"
           }`}
@@ -233,8 +258,10 @@ export function PaymentDashboard({
 /** A short card for the Admin dashboard: counts and the longest-waiting overdue items. */
 export function PaymentOverviewCard() {
   const navigate = useNavigate();
-  const { data } = useQuery(dashboardQuery);
-  if (!data) return null;
+  const { data, error, refetch } = useQuery(dashboardQuery);
+  if (!data) {
+    return error ? <ErrorState title="Couldn't load payment requests" error={error} onRetry={() => refetch()} /> : null;
+  }
   const d: PaymentDashboardData = data;
   const open = (id: number) => navigate({ href: `/admin/payments?open=${id}` });
   const overdueRequests = byRequest(d.overdue.items);
@@ -245,25 +272,28 @@ export function PaymentOverviewCard() {
         <div className="flex items-center gap-2 text-sm font-semibold">
           <Hourglass className="h-4 w-4" /> Payment requests
         </div>
-        <Link to="/admin/payments" className="flex items-center gap-1 text-xs font-medium text-primary hover:underline">
+        <Link to="/admin/payments" className="flex items-center gap-1 py-1 text-xs font-medium text-primary hover:underline">
           Open <ArrowRight className="h-3.5 w-3.5" />
         </Link>
       </div>
+      <p className="border-b px-4 py-2 text-xs text-muted-foreground">
+        Money staff have asked to be paid back. Click a number to see the requests behind it.
+      </p>
       <div className="grid grid-cols-3 divide-x border-b text-center">
-        <div className="p-3">
+        <Link to="/admin/payments" className={STAT_LINK}>
           <div className="text-xl font-semibold tabular-nums">{d.waiting_on_you.count}</div>
           <div className="text-[11px] text-muted-foreground">Waiting on you</div>
-        </div>
-        <div className="p-3">
+        </Link>
+        <Link to="/admin/payments" search={{ overdue: 1 } as never} className={STAT_LINK}>
           <div className={cn("text-xl font-semibold tabular-nums", overdueText(overdueRequests.length > 0))}>
             {overdueRequests.length}
           </div>
           <div className="text-[11px] text-muted-foreground">Overdue</div>
-        </div>
-        <div className="p-3">
+        </Link>
+        <Link to="/admin/payments" search={{ status: "PAYMENT_PENDING" } as never} className={STAT_LINK}>
           <div className="text-xl font-semibold tabular-nums">{formatRupees(d.money.pending_payout)}</div>
           <div className="text-[11px] text-muted-foreground">To be paid</div>
-        </div>
+        </Link>
       </div>
       {overdueRequests.length === 0 ? (
         <div className="p-4 text-center text-xs text-muted-foreground">

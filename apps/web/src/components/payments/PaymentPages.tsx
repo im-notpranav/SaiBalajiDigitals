@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, Paperclip, Plus, Search, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -45,6 +45,17 @@ function openFromUrl(): number | null {
   if (typeof window === "undefined") return null;
   const n = Number(new URLSearchParams(window.location.search).get("open"));
   return Number.isInteger(n) && n > 0 ? n : null;
+}
+
+/** The list a dashboard number links to: ?status=<status> or ?overdue=1. */
+function listFromUrl(): { status: string | null; overdue: boolean } {
+  if (typeof window === "undefined") return { status: null, overdue: false };
+  const search = new URLSearchParams(window.location.search);
+  const status = search.get("status");
+  return {
+    status: status && status in PAYMENT_STATUS_LABELS ? status : null,
+    overdue: search.get("overdue") === "1",
+  };
 }
 
 /** Once that request is closed, drop ?open= so a reload doesn't bring it back. */
@@ -177,6 +188,8 @@ export function MyPaymentRequests({ crumbs }: { crumbs: Crumbs }) {
 /* ------------------------------------------------------------------ reviewers */
 
 const ALL = "__all__";
+/** Both statuses a request can have once its money has gone out. */
+const PAID_OR_CLOSED = "PAID,CLOSED";
 
 const QUEUE_HINTS: Partial<Record<PaymentStatus, string>> = {
   ADMIN_REVIEW: "No-bill requests waiting for the Admin",
@@ -193,23 +206,38 @@ export function PaymentReviewQueue({
   title,
   description,
   crumbs,
+  guide,
 }: {
   title: string;
   description: string;
   crumbs: Crumbs;
+  /** Shown under the header: how to read the page. */
+  guide?: ReactNode;
 }) {
-  const [tab, setTab] = useState<"queue" | "all">("queue");
-  const [status, setStatus] = useState<string>(ALL);
+  const [linked] = useState(listFromUrl);
+  const [tab, setTab] = useState<"queue" | "all">(linked.status || linked.overdue ? "all" : "queue");
+  const [status, setStatus] = useState<string>(linked.status ?? ALL);
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
   const [openId, setOpenId] = useState<number | null>(openFromUrl);
-  const [overdueOnly, setOverdueOnly] = useState(false);
+  const [overdueOnly, setOverdueOnly] = useState(linked.overdue);
   const tableRef = useRef<HTMLDivElement>(null);
+  const scrollToTable = () => {
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    tableRef.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+  };
   const showInTable = (next: { status?: string; overdue?: boolean }) => {
     setTab("all");
     setStatus(next.status ?? ALL);
     setOverdueOnly(next.overdue ?? false);
-    tableRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    scrollToTable();
+  };
+  /** What waits on this person, cleared of any other filter so the count on the tile matches. */
+  const showQueue = (next?: string) => {
+    setTab("queue");
+    setStatus(next ?? ALL);
+    setOverdueOnly(false);
+    scrollToTable();
   };
 
   useEffect(() => {
@@ -233,11 +261,14 @@ export function PaymentReviewQueue({
   return (
     <>
       <PageHeader title={title} description={description} crumbs={crumbs} />
+      {guide}
 
       <PaymentDashboard
         onOpen={setOpenId}
         onStage={(s) => showInTable({ status: s })}
         onOverdueOnly={() => showInTable({ overdue: true })}
+        onWaitingOnYou={() => showQueue()}
+        onPaid={() => showInTable({ status: PAID_OR_CLOSED })}
       />
 
       <div className="mb-4 grid gap-3 sm:grid-cols-3">
@@ -245,12 +276,10 @@ export function PaymentReviewQueue({
           <button
             key={s}
             type="button"
-            onClick={() => {
-              setTab("queue");
-              setStatus(s);
-            }}
+            aria-pressed={tab === "queue" && status === s}
+            onClick={() => showQueue(s)}
             className={cn(
-              "surface-panel p-4 text-left transition-colors hover:bg-muted/40",
+              "surface-panel p-4 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               tab === "queue" && status === s && "ring-2 ring-primary/40",
             )}
           >
@@ -296,13 +325,14 @@ export function PaymentReviewQueue({
           />
         </div>
         <Select value={status} onValueChange={setStatus}>
-          <SelectTrigger className="sm:w-48">
+          <SelectTrigger className="sm:w-48" aria-label="Filter by status">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={ALL}>
               {tab === "queue" ? "Everything waiting" : "All statuses"}
             </SelectItem>
+            {tab === "all" && <SelectItem value={PAID_OR_CLOSED}>Paid or closed</SelectItem>}
             {(tab === "queue"
               ? queueStatuses
               : (Object.keys(PAYMENT_STATUS_LABELS) as PaymentStatus[])
@@ -436,6 +466,7 @@ export function PaymentReviewQueue({
                     r.overdue && "bg-destructive/5 hover:bg-destructive/10",
                   )}
                   tabIndex={0}
+                  aria-label={`Open request on ${r.order.order_no} from ${r.requester.name}, ${formatRupees(r.amount)}`}
                   onClick={() => setOpenId(r.id)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" || e.key === " ") {

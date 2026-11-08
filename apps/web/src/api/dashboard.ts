@@ -5,8 +5,17 @@ export async function fetchDashboard() {
   return apiFetch<DashboardData>("/dashboard");
 }
 
+export interface AdminDashboardData {
+  pendingAmount: number;
+  revenueTrend: { date: string; revenue: number }[];
+  statusBreakdown: { name: string; count: number }[];
+  performanceLeaderboard: { name: string; ordersCompleted: number; revenueGenerated: number }[];
+  /** Average working days from creation to closure; null when no order has closed. */
+  avg_cycle_days: number | null;
+}
+
 export async function fetchAdminDashboard() {
-  return apiFetch<any>("/dashboard/admin");
+  return apiFetch<AdminDashboardData>("/dashboard/admin");
 }
 
 export async function fetchAuditLog(page = 1, limit = 50) {
@@ -99,6 +108,7 @@ export interface ProdPendingItem {
   item_s_no: number;
   media: string;
   total_sft: number;
+  is_flagged: boolean;
   assigned_to: Array<{ name: string; completed: boolean }>;
   days_since_assigned: number;
 }
@@ -110,6 +120,8 @@ export interface ProdManagerDashboardData {
     total_sft_completed: number;
     total_items_pending: number;
     total_items_completed: number;
+    total_items_unassigned: number;
+    total_items_flagged: number;
   };
   team_stats: ProdTeamStat[];
   pending_items: ProdPendingItem[];

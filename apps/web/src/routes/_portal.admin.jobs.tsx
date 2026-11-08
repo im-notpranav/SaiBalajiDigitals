@@ -35,8 +35,17 @@ import {
   type WorkJobStatus,
 } from "@/api/allocation";
 
+const isDay = (v: unknown): v is string => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
+
 export const Route = createFileRoute("/_portal/admin/jobs")({
   head: () => ({ meta: [{ title: "Field Jobs — SB OMS" }] }),
+  validateSearch: (search: Record<string, unknown>): { status?: WorkJobStatus; from?: string; to?: string } => ({
+    status: Object.keys(JOB_STATUS_LABELS).includes(String(search.status))
+      ? (search.status as WorkJobStatus)
+      : undefined,
+    from: isDay(search.from) ? search.from : undefined,
+    to: isDay(search.to) ? search.to : undefined,
+  }),
   component: JobsPage,
 });
 
@@ -46,9 +55,10 @@ const ALL = "__all__";
 /** Every field job in a date window: the Operation Manager's replacement for the Task Log sheet. */
 function JobsPage() {
   const today = todayIST();
-  const [from, setFrom] = useState(addDays(today, -7));
-  const [to, setTo] = useState(addDays(today, 14));
-  const [status, setStatus] = useState(OPEN);
+  const linked = Route.useSearch();
+  const [from, setFrom] = useState(linked.from ?? addDays(today, -7));
+  const [to, setTo] = useState(linked.to ?? addDays(today, 14));
+  const [status, setStatus] = useState<string>(linked.status ?? OPEN);
   const [locality, setLocality] = useState(ALL);
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
