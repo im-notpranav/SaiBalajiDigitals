@@ -13,7 +13,7 @@ The application is in good shape. Access control is enforced server-side across 
 | Severity | Count | Items |
 |---|---|---|
 | Critical | 0 | — |
-| High | 2 | F1 login brute-force bypass, F2 vulnerable `xlsx` (reachable) |
+| High | 2 | F1 login brute-force bypass *(fixed)*, F2 vulnerable `xlsx` reachable *(fixed)* |
 | Medium | 2 | F3 no session revocation on password change, F4 SPA has no security headers |
 | Low | 5 | F7 webhook secret in URL, F8 open email export, F9 username timing, F10 cookie flags, F15 500 on delete |
 | Info | 4 | F11 proxy-addr, F13 seed password, F14 password policy / stale-role window, F16 User table unaudited |
@@ -32,12 +32,12 @@ Priority order to fix: **F1 → F2 → F3 → F4**, then the Low items.
 - **Impact:** unlimited offline-speed credential guessing against any username; with an 8-character password minimum this is a realistic account-takeover path.
 - **Fix:** do not trust `x-real-client-ip` unless the request actually came from Cloudflare. Either (a) restrict the Render service so only Cloudflare can reach it (Render private networking, or a shared secret header the Worker sets and the API requires), or (b) in `clientIpKey`, only honor `x-real-client-ip` when a Worker-only shared secret header is present, else fall back to `req.ip`. Keep `trust proxy` as is.
 
-### F2 — Vulnerable `xlsx` (SheetJS) reachable through bulk upload  (High)
+### F2 — Vulnerable `xlsx` (SheetJS) reachable through bulk upload  (High) — FIXED 2026-11-08
 - **OWASP:** A06 Vulnerable & Outdated Components. **CWE-1321** (prototype pollution), **CWE-400** (ReDoS).
 - **Where:** `xlsx@0.18.5` parsed at `apps/api/src/utils/order-template.ts:112` (`xlsx.read(file, { type: "buffer" })`), reached by `POST /api/orders/bulk/preview` and `POST /api/orders/bulk` (`orders.routes.ts:67-68`), open to any CSM (and the super-admin). Advisories: GHSA-4r6h-8v6p-xvw6 (prototype pollution), GHSA-5pgg-2g8v-p4x9 (ReDoS). **No fixed version is published on npm.**
 - **Validation status:** confirmed reachable and confirmed-vulnerable version; a working exploit was deliberately not built. Exploitability is *potential* — treat as present because the code path accepts an attacker-controlled workbook.
 - **Impact:** a malicious `.xlsx` from a logged-in CSM could pollute `Object.prototype` or hang the single-core free-tier instance.
-- **Fix:** move to the maintained distribution (`xlsx` from the SheetJS CDN) which carries the prototype-pollution fix, or replace with `exceljs`. Keep the existing 10 MB cap and consider a row cap.
+- **Resolution:** upgraded to the maintained SheetJS distribution `xlsx@0.20.3` from the vendor CDN (`https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz`), which carries the prototype-pollution and ReDoS fixes. The API uses the same `xlsx.*` API, so no code changed. `npm audit` no longer flags `xlsx`; all 153 tests pass. **Deploy note:** the dependency is a CDN tarball URL, so Render's `npm install` must reach `cdn.sheetjs.com` at build time (it is a public CDN). The 10 MB upload cap stays; a row cap is still worth adding later.
 
 ### F3 — Sessions are not revoked when the password changes  (Medium)
 - **OWASP:** A07. **CWE-613** (insufficient session expiration).
