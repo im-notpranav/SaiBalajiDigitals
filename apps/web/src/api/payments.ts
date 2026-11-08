@@ -183,7 +183,7 @@ export interface PaymentList {
 }
 
 export const fetchPaymentRequests = (
-  params: { scope?: "queue"; status?: string; q?: string; overdue?: "1"; order_id?: string } = {},
+  params: { scope?: "queue"; status?: string; q?: string; overdue?: "1"; order_id?: string; paid?: "month" } = {},
 ) => apiFetch<PaymentList>("/payment-requests", { params });
 
 export type WaitingStatus = "ADMIN_REVIEW" | "CCM_REVIEW" | "INFO_REQUESTED" | "PAYMENT_PENDING" | "PAID";

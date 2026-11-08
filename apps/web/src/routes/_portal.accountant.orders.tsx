@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { OrdersFilterBar, parseOrdersSearch, useOrdersFilters } from "@/components/orders/OrdersListFilters";
+import { OrdersFilterBar, OrdersPager, parseOrdersSearch, useOrdersFilters } from "@/components/orders/OrdersListFilters";
 import { OrdersTable } from "@/components/orders/OrdersTable";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { fetchOrders, exportOrders } from "@/api/orders";
@@ -53,6 +53,7 @@ function AccountantOrders() {
         orders={data?.orders || []} 
         showCreator 
       />
+      <OrdersPager filters={filters} total={data?.pagination?.total || 0} />
     </>
   );
 }

@@ -229,8 +229,9 @@ export const getCsmDashboard = async (req: Request, res: Response) => {
       include: orderInclude,
     });
 
-    type StageKey = "production" | "installation" | "billing" | "payment";
+    type StageKey = "unassigned" | "production" | "installation" | "billing" | "payment";
     const stageMap: Record<StageKey, any[]> = {
+      unassigned: [],
       production: [],
       installation: [],
       billing: [],
@@ -257,22 +258,22 @@ export const getCsmDashboard = async (req: Request, res: Response) => {
         stageSince = new Date(rollupOrder(order).installed_at ?? order.updated_at);
       } else {
         // Active
-        if (hasProduction && assignedItems.every((i: any) => i.production_completed)) {
+        if (!hasProduction) {
+          // Nobody has been given any of its items yet. Accounts may bill it straight away.
+          stageKey = "unassigned";
+          stageSince = order.created_at;
+        } else if (assignedItems.every((i: any) => i.production_completed)) {
           stageKey = "installation";
           const lp = lastProducedAt(order);
           stageSince = lp ?? order.created_at;
         } else {
           stageKey = "production";
-          if (hasProduction) {
-            const times = assignedItems
-              .flatMap((i: any) => i.assignments ?? [])
-              .map((a: any) => a.assigned_at)
-              .filter(Boolean)
-              .map((d: any) => new Date(d).getTime());
-            stageSince = times.length ? new Date(Math.max(...times)) : order.created_at;
-          } else {
-            stageSince = order.created_at;
-          }
+          const times = assignedItems
+            .flatMap((i: any) => i.assignments ?? [])
+            .map((a: any) => a.assigned_at)
+            .filter(Boolean)
+            .map((d: any) => new Date(d).getTime());
+          stageSince = times.length ? new Date(Math.max(...times)) : order.created_at;
         }
       }
 
@@ -348,6 +349,7 @@ export const getCsmDashboard = async (req: Request, res: Response) => {
         total_qty: allItems.reduce((s, i: any) => s + Number(i.qty), 0),
       },
       stages: {
+        unassigned: buildStageSummary(stageMap.unassigned),
         production: buildStageSummary(stageMap.production),
         installation: buildStageSummary(stageMap.installation),
         billing: buildStageSummary(stageMap.billing),
@@ -359,6 +361,7 @@ export const getCsmDashboard = async (req: Request, res: Response) => {
         },
       },
       stage_orders: {
+        unassigned: stageMap.unassigned,
         production: stageMap.production,
         installation: stageMap.installation,
         billing: stageMap.billing,

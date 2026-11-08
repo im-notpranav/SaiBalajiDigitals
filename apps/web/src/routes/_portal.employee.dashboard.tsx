@@ -63,7 +63,9 @@ function EmployeeDashboard() {
   const returnedRequests = requests.filter((r) => r.status === "INFO_REQUESTED").length;
 
   // An order an admin started has a number and a client, and waits for this person's stores.
-  const needStores = (dash?.stage_orders.production ?? []).filter((o) => o.store_count === 0).length;
+  const needStores = [...(dash?.stage_orders.unassigned ?? []), ...(dash?.stage_orders.production ?? [])].filter(
+    (o) => o.store_count === 0,
+  ).length;
 
   const attention: AttentionItem[] = [];
   if (returnedRequests > 0) {
@@ -126,7 +128,8 @@ function EmployeeDashboard() {
           with it. No rows means nothing is waiting.
         </p>
         <p>
-          <strong>Where orders are:</strong> your orders move left to right through five stages. Click a stage to see
+          <strong>Where orders are:</strong> your orders move left to right through six stages, starting at “Not assigned”
+          until production work is given out. Click a stage to see
           its orders, then click an order number to open it.
         </p>
         <p>

@@ -4,6 +4,7 @@ import {
   ArrowRight,
   CheckCircle2,
   ChevronDown,
+  CircleDashed,
   ChevronUp,
   CreditCard,
   Factory,
@@ -24,11 +25,11 @@ import {
 } from "./DashboardBits";
 
 /**
- * The five stages every order passes through, shared by the Admin's and the CSM's dashboards.
+ * The six stages every order passes through, shared by the Admin's and the CSM's dashboards.
  * A stage opens its orders underneath, and each order links to its own page.
  */
 
-export type StageKey = "production" | "installation" | "billing" | "payment" | "completed";
+export type StageKey = "unassigned" | "production" | "installation" | "billing" | "payment" | "completed";
 export type ViewMode = "amount" | "qty";
 
 /** Where this person opens an order, and where their full order list lives. */
@@ -49,6 +50,7 @@ const STAGES: {
   bg: string;
   border: string;
 }[] = [
+  { key: "unassigned", label: "Not assigned", means: "No production work given out yet", icon: CircleDashed, accent: "text-slate-500", bg: "bg-slate-500/10", border: "border-slate-500/20" },
   { key: "production", label: "Production", means: "Being made", icon: Factory, accent: "text-blue-500", bg: "bg-blue-500/10", border: "border-blue-500/20" },
   { key: "installation", label: "Installation", means: "Made, waiting to be installed", icon: PackageCheck, accent: "text-amber-500", bg: "bg-amber-500/10", border: "border-amber-500/20" },
   { key: "billing", label: "Billing", means: "Installed, waiting for an invoice", icon: Receipt, accent: "text-purple-500", bg: "bg-purple-500/10", border: "border-purple-500/20" },
@@ -78,7 +80,7 @@ export function PipelineStages({
         title="Where orders are"
         description="Every order sits in one stage, left to right. Click a stage to see its orders."
       />
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
         {STAGES.map((stage) => {
           const summary = data.stages[stage.key];
           const open = expanded === stage.key;
@@ -124,7 +126,7 @@ export function PipelineStages({
           {expanded === "completed" ? (
             <CompletedOrders orders={data.stage_orders.completed} viewMode={viewMode} routes={routes} />
           ) : (
-            <StageOrders stage={expanded} orders={data.stage_orders[expanded]} viewMode={viewMode} routes={routes} />
+            <StageOrders stage={expanded} orders={data.stage_orders[expanded] ?? []} viewMode={viewMode} routes={routes} />
           )}
         </div>
       )}

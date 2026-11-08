@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { OrdersTable } from "@/components/orders/OrdersTable";
 import { buttonVariants } from "@/components/ui/button";
-import { Receipt, IndianRupee } from "lucide-react";
+import { Receipt, IndianRupee, Store } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchOrders } from "@/api/orders";
 import { inr } from "@/lib/format";
@@ -66,6 +66,17 @@ function BillingQueue() {
         orders={queue}
         showCreator
         action={(o) => {
+          // No stores means no items either: nothing to invoice until the CSM adds them.
+          if ((o.store_count ?? o.stores?.length ?? 1) === 0) {
+            return (
+              <span
+                title="The CSM has to add this order's stores and items before it can be invoiced."
+                className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-700 dark:text-amber-400"
+              >
+                <Store className="h-3.5 w-3.5" aria-hidden /> Needs stores
+              </span>
+            );
+          }
           const awaitingPay = o.status === "BillingCompleted";
           return (
             <Link

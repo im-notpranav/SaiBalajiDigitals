@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Download, Edit } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { OrdersFilterBar, parseOrdersSearch, useOrdersFilters } from "@/components/orders/OrdersListFilters";
+import { OrdersFilterBar, OrdersPager, parseOrdersSearch, useOrdersFilters } from "@/components/orders/OrdersListFilters";
 import { OrdersTable } from "@/components/orders/OrdersTable";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
@@ -69,6 +69,7 @@ function MyOrders() {
           </div>
         )}
       />
+      <OrdersPager filters={filters} total={total} />
     </>
   );
 }

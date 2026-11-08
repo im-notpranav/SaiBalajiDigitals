@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { format } from "date-fns";
-import { Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { FilterChip } from "@/components/dashboard/DashboardBits";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -24,7 +25,12 @@ export interface OrdersSearch {
   to?: string;
   /** The exact name of the person who created the order. */
   creator?: string;
+  /** Which page of results, from 2 up; page 1 leaves it out. */
+  page?: number;
 }
+
+/** Orders per page. The API's own default, so a list without a page asks for the same 50. */
+export const ORDERS_PAGE_SIZE = 50;
 
 const text = (v: unknown) => (typeof v === "string" && v ? v : undefined);
 const day = (v: unknown) => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : undefined);
@@ -37,10 +43,12 @@ export function parseOrdersSearch(search: Record<string, unknown>): OrdersSearch
     from: day(search.from),
     to: day(search.to),
     creator: text(search.creator),
+    page: Number.isInteger(Number(search.page)) && Number(search.page) > 1 ? Number(search.page) : undefined,
   };
 }
 
 export function useOrdersFilters(search: OrdersSearch) {
+  const navigate = useNavigate();
   const [section, setSection] = useState<OrdersSection>(search.section ?? "active");
   const [q, setQ] = useState(search.q ?? "");
   const [field, setField] = useState<SearchField>("any");
@@ -52,15 +60,34 @@ export function useOrdersFilters(search: OrdersSearch) {
     if (search.section) setSection(search.section);
   }, [search.section]);
 
+  // The page lives in the URL, so Back, a reload or a shared link return to it.
+  const page = search.page ?? 1;
+  const setPage = (next: number) => {
+    navigate({ to: ".", search: ((prev: OrdersSearch) => ({ ...prev, page: next > 1 ? next : undefined })) as never });
+    document.querySelector("main")?.scrollTo({ top: 0 });
+    window.scrollTo({ top: 0 });
+  };
+
+  // A new search, tab or filter starts again at page 1.
+  const filterKey = [section, field, debouncedQ, search.from, search.to, search.creator].join("|");
+  const lastKey = useRef(filterKey);
+  useEffect(() => {
+    if (lastKey.current === filterKey) return;
+    lastKey.current = filterKey;
+    if (search.page) navigate({ to: ".", search: ((prev: OrdersSearch) => ({ ...prev, page: undefined })) as never, replace: true });
+  }, [filterKey, search.page, navigate]);
+
   const params: Record<string, string | undefined> = {
     section,
     from: search.from,
     to: search.to,
     creator: search.creator,
+    limit: String(ORDERS_PAGE_SIZE),
+    page: page > 1 ? String(page) : undefined,
   };
   if (debouncedQ) params[field === "any" ? "q" : field] = debouncedQ;
 
-  return { search, section, setSection, q, setQ, field, setField, debouncedQ, params };
+  return { search, section, setSection, q, setQ, field, setField, debouncedQ, params, page, setPage };
 }
 
 const showDay = (iso: string) => format(new Date(`${iso}T00:00:00`), "dd MMM yyyy");
@@ -82,7 +109,7 @@ export function OrdersFilterBar({
   shown: number;
 }) {
   const navigate = useNavigate();
-  const { search, section, setSection, q, setQ, field, setField, debouncedQ } = filters;
+  const { search, section, setSection, q, setQ, field, setField, debouncedQ, page } = filters;
   const clear = (keys: (keyof OrdersSearch)[]) =>
     navigate({
       to: ".",
@@ -136,6 +163,11 @@ export function OrdersFilterBar({
 
         <div className="w-full text-xs text-muted-foreground sm:ml-auto sm:w-auto" role="status">
           {total} {total === 1 ? "order" : "orders"} found
+          {total > shown && shown > 0 && (
+            <>
+              {" · "}showing {(page - 1) * ORDERS_PAGE_SIZE + 1}–{(page - 1) * ORDERS_PAGE_SIZE + shown}
+            </>
+          )}
           {debouncedQ && (
             <>
               {" · "}
@@ -164,11 +196,26 @@ export function OrdersFilterBar({
         </div>
       )}
 
-      {total > shown && (
-        <p className="text-xs text-muted-foreground">
-          Showing the first {shown} of {total}. Search or narrow the dates to find the rest.
-        </p>
-      )}
     </div>
+  );
+}
+
+/** Previous and Next under an order list, when it runs past one page. */
+export function OrdersPager({ filters, total }: { filters: ReturnType<typeof useOrdersFilters>; total: number }) {
+  const { page, setPage } = filters;
+  const pages = Math.max(1, Math.ceil(total / ORDERS_PAGE_SIZE));
+  if (pages <= 1 && page <= 1) return null;
+  return (
+    <nav aria-label="Pages of orders" className="mt-4 flex items-center justify-between gap-3">
+      <Button variant="outline" size="sm" className="rounded-lg" disabled={page <= 1} onClick={() => setPage(page - 1)}>
+        <ChevronLeft className="mr-1 h-4 w-4" aria-hidden /> Previous
+      </Button>
+      <span className="text-sm text-muted-foreground" aria-current="page">
+        Page {page} of {pages}
+      </span>
+      <Button variant="outline" size="sm" className="rounded-lg" disabled={page >= pages} onClick={() => setPage(page + 1)}>
+        Next <ChevronRight className="ml-1 h-4 w-4" aria-hidden />
+      </Button>
+    </nav>
   );
 }

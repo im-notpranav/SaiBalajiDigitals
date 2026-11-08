@@ -545,6 +545,10 @@ export const listRequests = async (req: Request, res: Response) => {
     const orderId = parseInt(String(req.query.order_id ?? ""), 10);
     if (Number.isInteger(orderId)) and.push({ order_id: orderId });
 
+    // ?paid=month: paid out since the start of this month, India time, the same span as the
+    // dashboard's "Paid this month" figure.
+    if (req.query.paid === "month") and.push({ paid_at: { gte: istMonthStarts().thisMonth } });
+
     const q = String(req.query.q ?? "").trim().slice(0, 60);
     if (q) {
       and.push({

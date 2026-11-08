@@ -75,6 +75,8 @@ export interface CsmDashboardData {
   summary: { total_orders: number; total_amount: number; total_qty: number };
   stages: Record<string, CsmStageSummary>;
   stage_orders: {
+    /** Active orders nobody has been given any production work on yet. */
+    unassigned?: CsmStageOrder[];
     production: CsmStageOrder[];
     installation: CsmStageOrder[];
     billing: CsmStageOrder[];

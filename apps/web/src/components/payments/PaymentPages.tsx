@@ -35,6 +35,7 @@ import {
 } from "@/api/payments";
 import { NewPaymentRequestDialog, PaymentStatusBadge } from "./PaymentBits";
 import { PaymentDashboard } from "./PaymentDashboard";
+import { FilterChip } from "@/components/dashboard/DashboardBits";
 import { TimerChips, overdueText } from "./PaymentTimers";
 import { PaymentRequestSheet } from "./PaymentRequestSheet";
 
@@ -47,14 +48,15 @@ function openFromUrl(): number | null {
   return Number.isInteger(n) && n > 0 ? n : null;
 }
 
-/** The list a dashboard number links to: ?status=<status> or ?overdue=1. */
-function listFromUrl(): { status: string | null; overdue: boolean } {
-  if (typeof window === "undefined") return { status: null, overdue: false };
+/** The list a dashboard number links to: ?status=<status>, ?overdue=1 or ?paid=month. */
+function listFromUrl(): { status: string | null; overdue: boolean; paidMonth: boolean } {
+  if (typeof window === "undefined") return { status: null, overdue: false, paidMonth: false };
   const search = new URLSearchParams(window.location.search);
   const status = search.get("status");
   return {
     status: status && status in PAYMENT_STATUS_LABELS ? status : null,
     overdue: search.get("overdue") === "1",
+    paidMonth: search.get("paid") === "month",
   };
 }
 
@@ -215,21 +217,24 @@ export function PaymentReviewQueue({
   guide?: ReactNode;
 }) {
   const [linked] = useState(listFromUrl);
-  const [tab, setTab] = useState<"queue" | "all">(linked.status || linked.overdue ? "all" : "queue");
+  const [tab, setTab] = useState<"queue" | "all">(linked.status || linked.overdue || linked.paidMonth ? "all" : "queue");
   const [status, setStatus] = useState<string>(linked.status ?? ALL);
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
   const [openId, setOpenId] = useState<number | null>(openFromUrl);
   const [overdueOnly, setOverdueOnly] = useState(linked.overdue);
+  /** Only requests paid out since the start of this month, as the "Paid this month" tile counts them. */
+  const [paidMonth, setPaidMonth] = useState(linked.paidMonth);
   const tableRef = useRef<HTMLDivElement>(null);
   const scrollToTable = () => {
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     tableRef.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
   };
-  const showInTable = (next: { status?: string; overdue?: boolean }) => {
+  const showInTable = (next: { status?: string; overdue?: boolean; paidMonth?: boolean }) => {
     setTab("all");
     setStatus(next.status ?? ALL);
     setOverdueOnly(next.overdue ?? false);
+    setPaidMonth(next.paidMonth ?? false);
     scrollToTable();
   };
   /** What waits on this person, cleared of any other filter so the count on the tile matches. */
@@ -237,6 +242,7 @@ export function PaymentReviewQueue({
     setTab("queue");
     setStatus(next ?? ALL);
     setOverdueOnly(false);
+    setPaidMonth(false);
     scrollToTable();
   };
 
@@ -250,6 +256,7 @@ export function PaymentReviewQueue({
     status: status === ALL ? undefined : status,
     q: debouncedQ || undefined,
     overdue: overdueOnly ? ("1" as const) : undefined,
+    paid: paidMonth ? ("month" as const) : undefined,
   };
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["payment-requests", "review", params],
@@ -268,7 +275,7 @@ export function PaymentReviewQueue({
         onStage={(s) => showInTable({ status: s })}
         onOverdueOnly={() => showInTable({ overdue: true })}
         onWaitingOnYou={() => showQueue()}
-        onPaid={() => showInTable({ status: PAID_OR_CLOSED })}
+        onPaid={() => showInTable({ paidMonth: true })}
       />
 
       <div className="mb-4 grid gap-3 sm:grid-cols-3">
@@ -304,6 +311,7 @@ export function PaymentReviewQueue({
               onClick={() => {
                 setTab(t);
                 setStatus(ALL);
+                setPaidMonth(false);
               }}
               className={cn(
                 "rounded-lg px-3 py-1 text-sm",
@@ -358,6 +366,11 @@ export function PaymentReviewQueue({
           <AlertTriangle className="h-4 w-4" />
           Overdue{data ? ` (${data.overdue_count})` : ""}
         </button>
+        {paidMonth && (
+          <div className="sm:col-span-4">
+            <FilterChip label="Paid this month" onClear={() => setPaidMonth(false)} />
+          </div>
+        )}
       </div>
 
       {/* Phones: one card per request, like the requester's own list, instead of a
@@ -373,7 +386,9 @@ export function PaymentReviewQueue({
             title={
               overdueOnly
                 ? "Nothing here is overdue."
-                : tab === "queue"
+                : paidMonth
+                  ? "Nothing has been paid out this month."
+                  : tab === "queue"
                   ? "Nothing is waiting on you."
                   : "No requests match."
             }
@@ -452,7 +467,9 @@ export function PaymentReviewQueue({
                 <TableCell colSpan={6} className="p-8 text-center text-muted-foreground">
                   {overdueOnly
                     ? "Nothing here is overdue."
-                    : tab === "queue"
+                    : paidMonth
+                      ? "Nothing has been paid out this month."
+                      : tab === "queue"
                       ? "Nothing is waiting on you."
                       : "No requests match."}
                 </TableCell>

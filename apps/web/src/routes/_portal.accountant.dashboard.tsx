@@ -8,6 +8,7 @@ import {
   ChevronUp,
   IndianRupee,
   Receipt,
+  Store,
   Wallet,
 } from "lucide-react";
 import { format } from "date-fns";
@@ -148,7 +149,8 @@ function AccountantDashboard() {
         </p>
         <p>
           <strong>In each list:</strong> click an order number or “Invoice” to raise an invoice, or “Record payment” to
-          enter money received.
+          enter money received. “Needs stores” means the CSM hasn’t added the order’s stores and items yet, so there
+          is nothing to invoice until they do.
         </p>
         <AgingLegend thresholds={PAYMENT_AGING} />
       </DashboardGuide>
@@ -301,6 +303,20 @@ function OrderCell({ id, orderNo }: { id: number; orderNo: string }) {
   );
 }
 
+/** In place of "Invoice" for an order with no stores: there is nothing to bill until the CSM adds them. */
+function NeedsStoresCell() {
+  return (
+    <td className="whitespace-nowrap px-4 py-2.5 text-right">
+      <span
+        title="The CSM has to add this order's stores and items before it can be invoiced."
+        className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-400"
+      >
+        <Store className="h-3 w-3" aria-hidden /> Needs stores
+      </span>
+    </td>
+  );
+}
+
 function ActionCell({ id, label, orderNo, icon: Icon }: { id: number; label: string; orderNo: string; icon: typeof Receipt }) {
   return (
     <td className="whitespace-nowrap px-4 py-2.5 text-right">
@@ -344,7 +360,11 @@ function BillingTable({ items }: { items: AcctBillingItem[] }) {
               <td className="px-4 py-2.5 text-right">
                 <AgingBadge days={item.days_waiting} thresholds={BILLING_AGING} />
               </td>
-              <ActionCell id={item.id} orderNo={item.order_no} label="Invoice" icon={Receipt} />
+              {item.store_count === 0 ? (
+                <NeedsStoresCell />
+              ) : (
+                <ActionCell id={item.id} orderNo={item.order_no} label="Invoice" icon={Receipt} />
+              )}
             </tr>
           ))}
         </tbody>

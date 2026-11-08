@@ -29,7 +29,7 @@ import { EmptyState, ErrorState, LoadingState } from "@/components/layout/PageSt
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { fetchAdminDashboard, fetchCsmDashboard } from "@/api/dashboard";
+import { fetchAdminDashboard, fetchCsmDashboard, fetchOverdueReport } from "@/api/dashboard";
 import { fetchUsers } from "@/api/users";
 import { inr } from "@/lib/format";
 import { useAuth } from "@/lib/auth-store";
@@ -106,12 +106,13 @@ function AdminDashboard() {
     [stageOrders?.payment],
   );
 
-  const stuck = useMemo(() => {
-    if (!stageOrders) return 0;
-    return [stageOrders.production, stageOrders.installation, stageOrders.billing, stageOrders.payment]
-      .flat()
-      .filter((o) => o.days_in_stage > STAGE_AGING.severe).length;
-  }, [stageOrders]);
+  // Every open order, whatever the dates above, so an old order stuck for weeks can't hide
+  // behind the date filter. Same report, and the same cache, as the Overdue Orders page.
+  const { data: overdueReport } = useQuery({
+    queryKey: ["overdue-report", STAGE_AGING.severe],
+    queryFn: () => fetchOverdueReport(STAGE_AGING.severe),
+  });
+  const stuck = overdueReport?.count ?? 0;
 
   const activeUsers =
     usersData?.users?.filter((u: { last_login_at?: string | null }) => {
@@ -130,7 +131,7 @@ function AdminDashboard() {
       key: "stuck",
       tone: "warning",
       title: `${stuck} ${stuck === 1 ? "order has" : "orders have"} waited over ${STAGE_AGING.severe} working days in one stage`,
-      detail: "Counted across these dates. The Overdue Orders page shows every open order.",
+      detail: "Counted across every open order, whatever the dates above.",
       cta: "See overdue orders",
       to: "/admin/overdue",
       search: { days: STAGE_AGING.severe },
@@ -175,7 +176,8 @@ function AdminDashboard() {
           dated in the range you choose under “Orders dated”.
         </p>
         <p>
-          <strong>Where orders are:</strong> every order sits in one of five stages. Click a stage to see its orders,
+          <strong>Where orders are:</strong> every order sits in one of six stages. “Not assigned” means nobody has been given
+          any of its production work yet; Accounts can bill those straight away. Click a stage to see its orders,
           with the longest wait first, then click an order number to open it.
         </p>
         <p>

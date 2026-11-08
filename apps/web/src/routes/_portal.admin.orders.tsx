@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { ShieldAlert, Edit, Lock, Download, Plus } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { OrdersFilterBar, parseOrdersSearch, useOrdersFilters } from "@/components/orders/OrdersListFilters";
+import { OrdersFilterBar, OrdersPager, parseOrdersSearch, useOrdersFilters } from "@/components/orders/OrdersListFilters";
 import { OrdersTable } from "@/components/orders/OrdersTable";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -137,6 +137,7 @@ function AdminOrders() {
           </div>
         )}
       />
+      <OrdersPager filters={filters} total={data?.pagination?.total || 0} />
 
       <StartOrderDialog open={starting} onClose={() => setStarting(false)} />
 
