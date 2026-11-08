@@ -13,6 +13,7 @@
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
+    "db:seed:lists": "tsx prisma/seed-media-clients.ts",
     "db:seed:allocation": "tsx prisma/seed-allocation-masters.ts",
     "import:field-staff": "tsx prisma/import-field-staff.ts"
   },
