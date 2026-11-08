@@ -1,537 +1,363 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/Sai_Balaji_Digitals-Order_Management_System-blue?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PHBhdGggZD0iTTkgNWgxMGEyIDIgMCAwIDEgMiAydjEwYTIgMiAwIDAgMS0yIDJIMTUiLz48cGF0aCBkPSJNOSAzdjRsLTItMi0yIDIiLz48cmVjdCB3aWR0aD0iMTAiIGhlaWdodD0iMTQiIHg9IjMiIHk9IjciIHJ4PSIyIi8+PC9zdmc+" alt="SBD OMS" />
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="apps/web/public/logo-dark.webp" />
+    <img src="apps/web/public/logo.png" alt="Sai Balaji Digitals" height="64" />
+  </picture>
+</p>
+
+<h1 align="center">Sai Balaji Digitals — Order Management System</h1>
+
+<p align="center">
+  Internal system for a signage and printing company. It follows every order from creation through
+  production, field installation, billing and payment, and runs the field team's jobs, leave and
+  expense payouts alongside it.
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/React_19-61DAFB?style=flat-square&logo=react&logoColor=black" alt="React" />
-  <img src="https://img.shields.io/badge/Express_4-000000?style=flat-square&logo=express&logoColor=white" alt="Express" />
-  <img src="https://img.shields.io/badge/PostgreSQL-4169E1?style=flat-square&logo=postgresql&logoColor=white" alt="PostgreSQL" />
-  <img src="https://img.shields.io/badge/Prisma-2D3748?style=flat-square&logo=prisma&logoColor=white" alt="Prisma" />
+  <img src="https://img.shields.io/badge/React_19-61DAFB?style=flat-square&logo=react&logoColor=black" alt="React 19" />
   <img src="https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
-  <img src="https://img.shields.io/badge/Tailwind_CSS_4-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white" alt="Tailwind" />
-  <img src="https://img.shields.io/badge/TanStack-FF4154?style=flat-square&logo=react-query&logoColor=white" alt="TanStack" />
-</p>
-
-<p align="center">
-  <em>Internal order management system for <strong>Sai Balaji Digitals</strong>, a signage & printing company.<br/>
-  Tracks orders from creation through production, billing, payment, and completion — with role-based dashboards, email notifications, TAT tracking, and Excel import/export.</em>
-</p>
-
-<p align="center">
-  <strong>Built for 50–60 employees across 6 roles</strong>
+  <img src="https://img.shields.io/badge/Express-000000?style=flat-square&logo=express&logoColor=white" alt="Express" />
+  <img src="https://img.shields.io/badge/Prisma-2D3748?style=flat-square&logo=prisma&logoColor=white" alt="Prisma" />
+  <img src="https://img.shields.io/badge/PostgreSQL-4169E1?style=flat-square&logo=postgresql&logoColor=white" alt="PostgreSQL" />
+  <img src="https://img.shields.io/badge/Tailwind_CSS_4-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white" alt="Tailwind CSS 4" />
+  <img src="https://img.shields.io/badge/Cloudflare-F38020?style=flat-square&logo=cloudflare&logoColor=white" alt="Cloudflare" />
 </p>
 
 ---
 
-## 📋 Table of Contents
+## Contents
 
-- [✨ Highlights](#-highlights)
-- [🏗️ Architecture](#️-architecture)
-- [🚀 Getting Started](#-getting-started)
-- [👥 User Roles](#-user-roles)
-- [📦 Order Pipeline](#-order-pipeline)
-- [🎯 Key Features](#-key-features)
-- [🔌 API Reference](#-api-reference)
-- [🗄️ Database Schema](#️-database-schema)
-- [🔒 Security](#-security)
-- [🏭 Production Build](#-production-build)
-- [📄 License](#-license)
-
----
-
-## ✨ Highlights
-
-<table>
-  <tr>
-    <td width="50%">
-
-**🎯 6 Role-Based Portals**
-Admin, Operation Manager, CSM, Accounts, Production Manager, Production — each with a tailored dashboard and scoped permissions.
-
-</td>
-    <td width="50%">
-
-**📊 Real-Time Dashboards**
-Pipeline KPIs, revenue trends, leaderboards, overdue tracking — with clickable drill-downs and amount/quantity toggles.
-
-</td>
-  </tr>
-  <tr>
-    <td>
-
-**⏱️ TAT Tracking**
-Business-day calculations (excluding Sundays) with per-stage aging, configurable thresholds, and overdue Excel exports.
-
-</td>
-    <td>
-
-**📧 Branded Email System**
-HTML templates for every workflow event — order changes, billing diffs, invoice mismatches, and Excel export delivery.
-
-</td>
-  </tr>
-  <tr>
-    <td>
-
-**📥 Excel Import/Export**
-Bulk order import with all-or-nothing validation, line-item import into forms, filtered exports, and downloadable templates.
-
-</td>
-    <td>
-
-**🏪 Multi-Store Orders**
-Each order supports multiple stores with independent installations, POs, invoices, and line items.
-
-</td>
-  </tr>
-</table>
+- [What it does](#what-it-does)
+- [Roles and portals](#roles-and-portals)
+- [Order lifecycle](#order-lifecycle)
+- [Payment requests](#payment-requests)
+- [Tech stack](#tech-stack)
+- [Project structure](#project-structure)
+- [Getting started](#getting-started)
+- [Environment variables](#environment-variables)
+- [Scripts](#scripts)
+- [Testing](#testing)
+- [Deployment](#deployment)
+- [API overview](#api-overview)
+- [Data model](#data-model)
+- [Security](#security)
+- [Further documentation](#further-documentation)
 
 ---
 
-## 🏗️ Architecture
+## What it does
 
-<details open>
-<summary><strong>Tech Stack</strong></summary>
-
-| Layer | Technology |
-|:------|:-----------|
-| **Frontend** | React 19 · TanStack Router · TanStack Query · Tailwind CSS 4 · shadcn/ui (Radix) · Recharts |
-| **Backend** | Express 4 · Prisma ORM · PostgreSQL |
-| **Auth** | JWT (httpOnly cookie) · bcrypt (cost 12) · Role-based authorization |
-| **Email** | Nodemailer 9 with branded HTML templates |
-| **Monorepo** | npm workspaces (`apps/api` · `apps/web` · `packages/shared-types`) |
-
-</details>
-
-<details>
-<summary><strong>📂 Project Structure</strong></summary>
-
-```
-sb-oms-monorepo/
-├── 📁 apps/
-│   ├── 📁 api/                    # Express + Prisma backend
-│   │   ├── 📁 prisma/
-│   │   │   ├── schema.prisma     # Database schema (12 models)
-│   │   │   ├── seed.ts           # Production seed (users)
-│   │   │   └── seed-test-data.ts # Test data seeder
-│   │   └── 📁 src/
-│   │       ├── server.ts         # Express app entry point
-│   │       ├── controllers/      # Route handlers (11 controllers)
-│   │       ├── middlewares/      # Auth, rate limiting
-│   │       ├── routes/           # API route definitions (8 route files)
-│   │       ├── services/         # Email & notification services
-│   │       └── utils/            # Config, validators, helpers
-│   └── 📁 web/                    # React frontend
-│       └── 📁 src/
-│           ├── api/              # API client functions
-│           ├── components/       # Reusable UI components
-│           ├── lib/              # Hooks and utilities
-│           └── routes/           # File-based routing (TanStack)
-├── 📁 packages/
-│   └── 📁 shared-types/           # Shared TypeScript types
-├── package.json                  # Workspace root
-└── .env.example                  # Frontend env template
-```
-
-</details>
+| Area | Highlights |
+|:-----|:-----------|
+| **Orders** | Multi-store orders with line items, POs and invoices per store. Order numbers follow `ORD{YY}{NNNN}`. Excel import, Excel export and emailed exports. |
+| **Production** | Line items are assigned to one or more production staff, either one at a time or a whole order in one save with team suggestions. Completion is tracked per assignment. |
+| **Field work** | Jobs for pasters, helpers and drivers with dates, vehicles, areas and stores, and an `ASSIGNED → STARTED → COMPLETED` flow (or `HOLD` / `CANCELLED`). |
+| **People** | Leave requests, overtime entries for Admin approval, and field-staff masters (CSM codes, areas, vehicles). |
+| **Billing** | Invoice reconciliation with mismatch detection, payment recording, follow-up remarks, and line adjustments. |
+| **Expense payouts** | Field staff and CSMs raise payment requests, which are paid by UPI ID or UPI mobile number, with bill attachments. |
+| **Dashboards** | Every role has its own dashboard. Every number on it links to the list behind it, and an in-page guide explains each figure. |
+| **Turn-around time** | Measured in working days (Sundays excluded). Stage aging badges, an overdue report and a loss report. |
+| **Notifications** | In-app notifications, branded HTML email, and WhatsApp through AskEva. WhatsApp runs in log-only mode until switched to live. |
+| **Audit** | Database triggers keep full before/after snapshots, and orders also keep a field-level change log. |
+| **Theme** | Light and dark themes. The choice is remembered and applied before the page paints. |
 
 ---
 
-## 🚀 Getting Started
+## Roles and portals
 
-### Prerequisites
-
-| Requirement | Version |
-|:------------|:--------|
-| ![Node](https://img.shields.io/badge/Node.js-≥18-339933?style=flat-square&logo=node.js&logoColor=white) | `v18` or newer |
-| ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-≥14-4169E1?style=flat-square&logo=postgresql&logoColor=white) | `v14` or newer |
-| ![npm](https://img.shields.io/badge/npm-≥9-CB3837?style=flat-square&logo=npm&logoColor=white) | `v9` or newer |
-
-### 1️⃣ Clone & Install
-
-```bash
-git clone https://github.com/im-notpranav/SaiBalajiDigitals.git
-cd SaiBalajiDigitals
-npm install
-```
-
-### 2️⃣ Configure Environment
-
-```bash
-cp apps/api/.env.example apps/api/.env
-```
-
-<details>
-<summary><strong>📋 Environment Variables</strong></summary>
-
-**Required:**
-
-| Variable | Description |
-|:---------|:------------|
-| `DATABASE_URL` | PostgreSQL connection string |
-| `JWT_SECRET` | Random string, ≥ 32 characters — **server will not start without this** |
-
-**Optional (defaults shown):**
-
-| Variable | Default | Description |
-|:---------|:--------|:------------|
-| `JWT_EXPIRES_IN` | `7d` | Token expiry duration |
-| `PORT` | `3001` | API server port |
-| `NODE_ENV` | `development` | Environment mode |
-| `CLIENT_URL` | `http://localhost:5173` | Frontend URL (CORS origin) |
-| `SMTP_HOST` | — | SMTP server for email notifications |
-| `SMTP_PORT` | `587` | SMTP port |
-| `SMTP_USER` | — | SMTP username |
-| `SMTP_PASS` | — | SMTP password |
-| `ADMIN_EMAIL` | `admin@saibalaji.com` | Admin notification recipient |
-
-</details>
-
-### 3️⃣ Set Up the Database
-
-```bash
-cd apps/api
-npx prisma migrate dev
-npx tsx prisma/seed.ts
-```
-
-### 4️⃣ Run Development Servers
-
-```bash
-# From the project root
-npm run dev
-```
-
-> **🌐 Your app is now running!**
->
-> | Service | URL |
-> |:--------|:----|
-> | 🖥️ Web App | [`http://localhost:5173`](http://localhost:5173) |
-> | ⚙️ API Server | [`http://localhost:3001`](http://localhost:3001) |
-
----
-
-## 👥 User Roles
-
-```mermaid
-graph LR
-    A["🔑 ADMIN<br/><i>Full access</i>"] --> P["/admin"]
-    B["👁️ OPERATION_MANAGER<br/><i>Read-only oversight</i>"] --> P
-    C["📋 CSM<br/><i>Create & manage orders</i>"] --> Q["/employee"]
-    D["💰 ACCOUNTS<br/><i>Billing & payments</i>"] --> R["/accountant"]
-    E["🏭 PROD_MANAGER<br/><i>Assign production</i>"] --> S["/prod-manager"]
-    F["🔧 PRODUCTION<br/><i>Execute production</i>"] --> T["/production"]
-
-    style A fill:#ef4444,color:#fff
-    style B fill:#f97316,color:#fff
-    style C fill:#3b82f6,color:#fff
-    style D fill:#10b981,color:#fff
-    style E fill:#8b5cf6,color:#fff
-    style F fill:#6366f1,color:#fff
-```
-
-| Role | Portal | Capabilities |
+| Role | Portal | What they do |
 |:-----|:-------|:-------------|
-| **ADMIN** | `/admin` | Full access — orders, users, dashboards, audit log, settings, bulk import, force-close |
-| **OPERATION_MANAGER** | `/admin` _(read-only)_ | View everything, modify nothing — oversight role |
-| **CSM** _(Client Service Manager)_ | `/employee` | Create/edit orders, flag items, view own dashboard |
-| **ACCOUNTS** | `/accountant` | Invoice reconciliation, payment recording, billing edits, follow-ups |
-| **PRODUCTION_MANAGER** | `/prod-manager` | Assign production items to staff, view team workload |
-| **PRODUCTION** | `/production` | View assigned items, mark production complete |
+| `ADMIN` | `/admin` | Everything: orders, the grid and board, jobs, field staff, leave, overtime, payments, reports, overdue and loss reports, audit log, masters, users, import, financial year, WhatsApp and settings. A super-admin can also manage users and run bulk imports. |
+| `OPERATION_MANAGER` | `/admin` | The same screens, read-only. The API rejects every request that isn't a `GET`. |
+| `CSM` | `/employee` | Creates and edits orders, uploads orders from Excel, marks installs, books field jobs and raises payment requests. |
+| `ACCOUNTS` | `/accountant` | Billing queue, invoices, payments, follow-ups, reports and the financial year. |
+| `PRODUCTION_MANAGER` | `/prod-manager` | Assigns line items to production staff and watches team workload. |
+| `PRODUCTION` | `/production` | Works through their queue and marks items complete. |
+| `COST_CONTROL_MANAGER` | `/cost-control` | Reviews, pays and closes payment requests. |
+| `PASTER` · `HELPER` · `DRIVER` | `/field` | See their own jobs, apply for leave and raise payment requests. |
+
+Every portal also has `/profile` and a notifications page.
 
 ---
 
-## 📦 Order Pipeline
+## Order lifecycle
 
 ```mermaid
 stateDiagram-v2
     direction LR
     [*] --> Active : CSM creates order
     Active --> Installed : CSM marks installed
-    Installed --> BillingCompleted : Invoice amount matches
+    Installed --> BillingCompleted : Invoice matches
     Installed --> Pending : Invoice mismatch
     Pending --> BillingCompleted : Resolved
     BillingCompleted --> PaymentReceived : Payment recorded
-    PaymentReceived --> Completed : Admin closes order
-    
-    Active --> Completed : Force-close (Admin)
-    Installed --> Completed : Force-close (Admin)
-    BillingCompleted --> Completed : Force-close (Admin)
-    Pending --> Completed : Force-close (Admin)
-    PaymentReceived --> Completed : Force-close (Admin)
+    PaymentReceived --> Completed : Admin closes
 ```
 
-<details>
-<summary><strong>📋 Stage Details</strong></summary>
+While an order is `Active`, the dashboards split it into pipeline stages:
 
-| Stage | Trigger | Who |
-|:------|:--------|:----|
-| **Active** | Order created by CSM | CSM, Admin |
-| **Installed** | CSM marks installation complete | CSM, Admin |
-| **BillingCompleted** | Accountant submits invoice (amount matches) | Accounts, Admin |
-| **Pending** | Invoice amount doesn't match order total | Accounts, Admin |
-| **PaymentReceived** | Accountant records payment | Accounts, Admin |
-| **Completed** | Admin closes the order with a remark | Admin |
+| Stage | Meaning |
+|:------|:--------|
+| **Not assigned** | No production work has been given out yet. |
+| **Production** | Items are assigned and some are still open. |
+| **Installation** | Production is done and the order is waiting for the install. |
+| **Billing** | The order is installed and waiting for an invoice. |
+| **Payment** | The order is billed and waiting for payment. |
 
-> 💡 Orders can be **force-closed** by Admin at any stage with a reason:
-> _Reprint · Sample · Under Warranty · Free of Cost · Revised · Extra/Less Amount · Other_
-
-</details>
+An Admin can force-close an order at any stage with a reason: Reprint, Sample, Under Warranty, Free of Cost, Revised, Extra/Less Amount or Other.
 
 ---
 
-## 🎯 Key Features
+## Payment requests
 
-<details open>
-<summary><strong>📊 Dashboards</strong></summary>
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> ADMIN_REVIEW : No bill details
+    [*] --> CCM_REVIEW : Bill details given
+    ADMIN_REVIEW --> CCM_REVIEW : Admin approves
+    CCM_REVIEW --> PAYMENT_PENDING : Cost Control approves
+    PAYMENT_PENDING --> PAID : Paid by UPI
+    PAID --> CLOSED : Closed
+    ADMIN_REVIEW --> INFO_REQUESTED : Needs more info
+    CCM_REVIEW --> INFO_REQUESTED : Needs more info
+    INFO_REQUESTED --> ADMIN_REVIEW : Resubmitted
+    INFO_REQUESTED --> CCM_REVIEW : Resubmitted
+```
 
-| Dashboard | Key Metrics |
-|:----------|:------------|
-| **Admin** | Pipeline overview · KPIs · Revenue trends · CSM leaderboard · Payment overdue tracking |
-| **CSM** | Personal pipeline by stage · Date range filtering · Amount/quantity toggle · Drill-down tables |
-| **Production Manager** | Active orders · Team workload cards · Pending items with aging badges |
-| **Accountant** | Billing queue · Payment queue · Overdue (>30 days) · Collected amounts |
-
-</details>
-
-<details>
-<summary><strong>⏱️ TAT (Turn-Around Time) Tracking</strong></summary>
-
-- 📅 Business days calculated **excluding Sundays**
-- 📊 Per-stage aging with configurable thresholds
-- ⚠️ `>7 days` in any stage = severe (badge indicator)
-- 🏭 Production TAT: ≤ 2 days · Payment TAT: ≤ 30 days
-- 📥 Overdue report with Excel export
-
-</details>
-
-<details>
-<summary><strong>📧 Email Notifications</strong></summary>
-
-- 🎨 Branded HTML email templates for all workflow events
-- 📝 Order creation, edits, status transitions, flag alerts
-- 💰 Billing/payment edit diffs sent to admin
-- ⚠️ Invoice mismatch alerts
-- 📎 Excel export attachment delivery
-
-</details>
-
-<details>
-<summary><strong>📥 Excel Features</strong></summary>
-
-| Feature | Description |
-|:--------|:------------|
-| **Export** | Download or email filtered order data as `.xlsx` |
-| **Line-item import** | CSMs can import items from Excel into the order form |
-| **Bulk import** | Super-admin can import full orders (all-or-nothing validation) |
-| **Templates** | Pre-formatted downloadable templates for both import types |
-
-</details>
-
-<details>
-<summary><strong>💰 Billing & Payments</strong></summary>
-
-- 📄 Invoice reconciliation with mismatch detection
-- ✏️ Billing and payment edit history with admin notifications
-- 💬 Payment follow-up remarks timeline (1st, 2nd, 3rd… with date & author)
-- 📅 Financial year configuration (June 1 – May 31)
-- 🏪 Multi-invoice support per order (one per store group)
-
-</details>
-
-<details>
-<summary><strong>🏭 Production Management</strong></summary>
-
-- 👥 Multi-team assignment per line item
-- ✅ Production completion tracking per assignment
-- 📊 Team workload visualization
-- 📏 SFT (Square Foot) calculations and reporting
-
-</details>
-
-<details>
-<summary><strong>🛡️ Audit & Compliance</strong></summary>
-
-- 📝 Database-level audit triggers (full before/after JSON snapshots)
-- 🔍 Order change log with field-level diffs
-- 🔔 In-app notifications with bell icon and unread count
-
-</details>
+The route is fixed when the request is submitted. A request can also end as `REJECTED` or `CANCELLED`. Each request refers to its order by the order number.
 
 ---
 
-## 🔌 API Reference
+## Tech stack
 
-<details>
-<summary><strong>🔐 Auth</strong></summary>
-
-| Method | Path | Auth | Description |
-|:-------|:-----|:-----|:------------|
-| `POST` | `/api/auth/login` | ❌ | Login _(rate limited: 10/15min)_ |
-| `POST` | `/api/auth/logout` | ✅ | Logout |
-| `GET` | `/api/auth/me` | ✅ | Current user info |
-
-</details>
-
-<details>
-<summary><strong>📦 Orders</strong> — 14 endpoints</summary>
-
-| Method | Path | Roles | Description |
-|:-------|:-----|:------|:------------|
-| `GET` | `/api/orders` | All | List orders (paginated, filterable) |
-| `GET` | `/api/orders/:id` | All | Order detail |
-| `POST` | `/api/orders` | CSM, Admin | Create order |
-| `PUT` | `/api/orders/:id` | CSM, Admin | Update order |
-| `DELETE` | `/api/orders/:id` | Admin | Delete order |
-| `PUT` | `/api/orders/:id/install` | CSM, Admin | Mark installed |
-| `PUT` | `/api/orders/:id/invoice` | Accounts, Admin | Submit invoice |
-| `PUT` | `/api/orders/:id/payment` | Accounts, Admin | Record payment |
-| `PATCH` | `/api/orders/:id/billing` | Accounts, Admin | Edit billing |
-| `PATCH` | `/api/orders/:id/payment-edit` | Accounts, Admin | Edit payment |
-| `PUT` | `/api/orders/:id/close` | Admin | Close order |
-| `PUT` | `/api/orders/:id/force-close` | Admin | Force-close order |
-| `PATCH` | `/api/orders/:orderId/items/:itemId/flag` | CSM, Admin | Flag line item |
-| `PATCH` | `/api/orders/:orderId/items/:itemId/assign` | Prod Manager, Admin | Assign production |
-| `PATCH` | `/api/orders/:orderId/items/:itemId/complete` | Production, Prod Mgr, Admin | Mark complete |
-| `GET` | `/api/orders/export` | CSM, Admin, OpMgr, Accounts | Download Excel |
-| `POST` | `/api/orders/export/email` | CSM, Admin, OpMgr, Accounts | Email Excel _(rate limited)_ |
-| `POST` | `/api/orders/import` | Super-admin | Bulk import from Excel |
-
-</details>
-
-<details>
-<summary><strong>📊 Dashboards</strong></summary>
-
-| Method | Path | Roles | Description |
-|:-------|:-----|:------|:------------|
-| `GET` | `/api/dashboard/admin` | Admin, OpMgr | Admin dashboard |
-| `GET` | `/api/dashboard/csm` | CSM, Admin, OpMgr | CSM dashboard |
-| `GET` | `/api/dashboard/prod-manager` | Prod Manager, Admin | Production dashboard |
-| `GET` | `/api/dashboard/accountant` | Accounts, Admin | Accountant dashboard |
-
-</details>
-
-<details>
-<summary><strong>👤 Users</strong></summary>
-
-| Method | Path | Roles | Description |
-|:-------|:-----|:------|:------------|
-| `GET` | `/api/users` | Admin, OpMgr | List all users |
-| `POST` | `/api/users` | Super-admin | Create user |
-| `PUT` | `/api/users/:id` | Super-admin | Update user |
-| `DELETE` | `/api/users/:id` | Admin | Delete user |
-| `PUT` | `/api/users/:id/status` | Admin | Activate/deactivate |
-| `PUT` | `/api/users/:id/password` | Super-admin | Reset password |
-
-</details>
+| Layer | Technology |
+|:------|:-----------|
+| **Web** | React 19, Vite, TanStack Router and Query, Tailwind CSS 4, shadcn/ui (Radix), Recharts, React Hook Form with Zod, Sonner |
+| **API** | Node.js, Express, Prisma, PostgreSQL, Zod, Helmet, express-rate-limit |
+| **Auth** | JWT in an httpOnly cookie, bcrypt, role-based middleware |
+| **Files** | Cloudflare R2 (S3-compatible, signed with `aws4fetch`) |
+| **Messaging** | Nodemailer (SMTP), WhatsApp through AskEva |
+| **Excel** | SheetJS (`xlsx`) |
+| **Hosting** | Web on Cloudflare Workers with static assets; API on Render |
+| **Monorepo** | npm workspaces: `apps/api`, `apps/web`, `packages/shared-types` |
 
 ---
 
-## 🗄️ Database Schema
+## Project structure
+
+```
+.
+├── apps/
+│   ├── api/                       Express + Prisma backend
+│   │   ├── prisma/
+│   │   │   ├── schema.prisma      Database schema
+│   │   │   ├── migrations/        SQL migrations (applied by hand in production)
+│   │   │   ├── seed.ts            Office logins
+│   │   │   └── seed-test-data.ts  Sample orders across every stage
+│   │   ├── src/
+│   │   │   ├── app.ts             Express app and route mounting
+│   │   │   ├── server.ts          Entry point
+│   │   │   ├── controllers/       Route handlers
+│   │   │   ├── middlewares/       Auth, roles, read-only guard
+│   │   │   ├── routes/            Route definitions
+│   │   │   ├── services/          Email, WhatsApp, storage, notifications
+│   │   │   └── utils/             Config, validators, working-day maths
+│   │   └── tests/
+│   │       ├── unit/              Pure-function tests
+│   │       └── api/               HTTP tests against a test database
+│   └── web/                       React frontend
+│       ├── public/                Logos, favicons
+│       └── src/
+│           ├── api/               API client functions
+│           ├── components/        UI, layout, dashboards, orders, payments
+│           ├── lib/               Hooks, theme, helpers
+│           └── routes/            File-based routes, one folder prefix per portal
+├── packages/shared-types/         Types shared by web and API
+├── worker/index.js                Cloudflare Worker: serves the web app, proxies /api
+├── wrangler.json                  Cloudflare config
+└── docs/                          Runbooks and analysis
+```
+
+---
+
+## Getting started
+
+**Requirements:** Node.js 18 or newer, npm 9 or newer, PostgreSQL 14 or newer.
+
+```bash
+# 1. Install
+git clone https://github.com/im-notpranav/SaiBalajiDigitals.git
+cd SaiBalajiDigitals
+npm install
+
+# 2. Configure the API
+cp apps/api/.env.example apps/api/.env
+#    then set DATABASE_URL and JWT_SECRET at least
+
+# 3. Create the database and logins
+cd apps/api
+npx prisma migrate dev
+npm run db:seed
+npm run db:seed:allocation       # optional: field-staff masters
+npx tsx prisma/seed-test-data.ts # optional: sample orders (remove with --cleanup)
+cd ../..
+
+# 4. Run web and API together
+npm run dev
+```
+
+| Service | URL |
+|:--------|:----|
+| Web app | http://localhost:5173 |
+| API | http://localhost:3001 |
+
+In development, Vite proxies `/api` to the API, so the web app needs no environment variables.
+
+---
+
+## Environment variables
+
+These go in `apps/api/.env`. See `apps/api/.env.example` for comments on each one.
+
+| Variable | Required | Default | Purpose |
+|:---------|:--------:|:--------|:--------|
+| `DATABASE_URL` | Yes | — | PostgreSQL connection string |
+| `JWT_SECRET` | Yes | — | At least 32 random characters. The server refuses to start without it. |
+| `JWT_EXPIRES_IN` | | `7d` | Session length |
+| `PORT` | | `3001` | API port |
+| `NODE_ENV` | | `development` | `production` turns on secure cookies |
+| `CLIENT_URL` | | `http://localhost:5173` | Allowed CORS origin(s) |
+| `APP_URL` | | first `CLIENT_URL` | Public web address, used for "Open in app" links |
+| `R2_ACCOUNT_ID` · `R2_ACCESS_KEY_ID` · `R2_SECRET_ACCESS_KEY` · `R2_BUCKET` | For uploads | — | Cloudflare R2 storage for photos and bill attachments |
+| `SMTP_HOST` · `SMTP_PORT` · `SMTP_USER` · `SMTP_PASS` | | — · `587` | Email. Leave `SMTP_HOST` empty to turn email off. |
+| `ADMIN_EMAIL` | | — | Recipient of admin notifications |
+| `WHATSAPP_MODE` | | `log` | `log` records messages without sending them; `live` sends them. |
+| `ASKEVA_SEND_URL` · `ASKEVA_TOKEN` · `ASKEVA_WEBHOOK_SECRET` | For WhatsApp | — | AskEva sending and the delivery webhook |
+
+The web app reads only `VITE_API_URL`, and only when the API is on a different origin.
+
+---
+
+## Scripts
+
+| Where | Command | Does |
+|:------|:--------|:-----|
+| root | `npm run dev` | Runs the web app and the API together |
+| root | `npm run build` | Builds every workspace |
+| `apps/api` | `npm run typecheck` | Type-checks the API |
+| `apps/api` | `npm test` | Runs the unit tests, then the API tests |
+| `apps/api` | `npm run db:migrate` | Creates and applies a migration (development only) |
+| `apps/api` | `npm run db:seed` | Seeds office logins |
+| `apps/api` | `npm run import:field-staff` | Imports field staff from the old sheets |
+| `apps/web` | `npm run lint` · `npm run format` | ESLint and Prettier |
+
+---
+
+## Testing
+
+```bash
+cd apps/api
+npm run test:unit   # pure functions, no database
+npm run test:api    # HTTP tests through the real app against a test database
+```
+
+The API tests cover orders, assignments, dashboards, payment requests, jobs, leave and permissions. They need a reachable PostgreSQL test database; see `vitest.api.config.ts`.
+
+---
+
+## Deployment
+
+| Part | Host | How |
+|:-----|:-----|:----|
+| Web | Cloudflare Workers | `wrangler.json` serves `apps/web/dist` as a single-page app. `worker/index.js` proxies `/api/*` to `API_ORIGIN`. |
+| API | Render | `npm run build`, then `node dist/server.js` in `apps/api` |
+| Database | PostgreSQL | Migrations are **not** run on deploy |
+
+**Apply migrations by hand before each release:**
+
+```bash
+cd apps/api
+DATABASE_URL="<production url>" npx prisma migrate deploy
+```
+
+Back up production first. The full checklist is in [`docs/release-runbook.md`](docs/release-runbook.md): backup, migrations, Render variables, deploy, keeping the API awake, and WhatsApp go-live.
+
+---
+
+## API overview
+
+All routes are under `/api` and need a signed-in user, except login and the webhooks.
+
+| Prefix | Covers |
+|:-------|:-------|
+| `/auth` | Login (rate limited), logout, current user |
+| `/orders` | Orders, stores, items, install, invoice, payment, close, force-close, flags, assignment (single and bulk), assignment suggestions, Excel export and import |
+| `/dashboard` | One summary endpoint per role |
+| `/admin` | Overdue report, audit, reports, settings and other Admin tools |
+| `/users` | User management |
+| `/clients` · `/media` · `/masters` | Lookups and field-staff masters |
+| `/field-staff` · `/work-jobs` · `/csm-jobs` | Field staff and their jobs |
+| `/leave` · `/overtime` | Leave requests and overtime approvals |
+| `/payment-requests` | Expense payouts: create, review, pay, close, attachments, dashboard |
+| `/my` | The signed-in user's own jobs, leave and requests |
+| `/notifications` | In-app notifications |
+| `/whatsapp` · `/webhooks` | WhatsApp templates and log; AskEva delivery reports |
+
+Route files live in `apps/api/src/routes/`. Each one lists the roles allowed on each endpoint.
+
+---
+
+## Data model
 
 ```mermaid
 erDiagram
     User ||--o{ Order : creates
-    User ||--o{ Notification : receives
-    Order ||--|{ OrderStore : contains
-    Order ||--o{ Invoice : "has invoices"
-    Order ||--o{ OrderChangeLog : "tracked by"
-    Order ||--o{ PaymentFollowUp : "followed up"
-    OrderStore ||--|{ OrderItem : contains
+    Order ||--|{ OrderStore : has
+    OrderStore ||--|{ OrderItem : has
+    Order ||--o{ Invoice : billed
     OrderStore }o--o| Invoice : "billed on"
     OrderItem ||--o{ OrderItemAssignment : "assigned to"
-    User ||--o{ OrderItemAssignment : "works on"
+    Order ||--o{ OrderAdjustment : adjusts
+    Order ||--o{ WorkJob : "field jobs"
+    WorkJob ||--|{ WorkJobMember : crew
+    WorkJob ||--o{ WorkJobStore : stores
+    Order ||--o{ PaymentRequest : expenses
+    PaymentRequest ||--o{ PaymentRequestEvent : history
+    PaymentRequest ||--o{ PaymentAttachment : bills
+    User ||--o{ LeaveRecord : leave
+    User ||--o{ OvertimeEntry : overtime
+    User ||--o{ Notification : receives
 ```
 
-<details>
-<summary><strong>📋 Model Details</strong></summary>
-
-| Model | Purpose |
-|:------|:--------|
-| **User** | Employees with roles, credentials, active status, profile info |
-| **Order** | Main order record — client, status, PO number, remarks |
-| **OrderStore** | Physical stores within an order — each with own location, PO, installation |
-| **OrderItem** | Line items — media, dimensions, qty, rate, SFT, amount |
-| **Invoice** | Invoices raised against store groups — bill amount, payment tracking |
-| **OrderItemAssignment** | Production assignment per item per team member |
-| **OrderChangeLog** | Field-level change tracking (old → new) |
-| **AuditLog** | Database-trigger audit trail (full JSON snapshots) |
-| **PaymentFollowUp** | Remarks timeline after billing |
-| **Notification** | In-app notification bell |
-| **EmailRecipient** | Recently-used export email addresses (autocomplete) |
-| **Client / Media** | Lookup tables for autocomplete suggestions |
-| **OrderSequence** | Tracks order numbering per financial year |
-
-</details>
+Other models are `OrderChangeLog`, `AuditLog`, `PaymentFollowUp`, `OrderSequence`, `Client`, `Media`, `CsmCode`, `Area`, `Vehicle`, `EmailRecipient`, `WhatsAppMessage` and `AppSetting`. The source of truth is `apps/api/prisma/schema.prisma`.
 
 ---
 
-## 🔒 Security
+## Security
 
-| Measure | Implementation |
-|:--------|:---------------|
-| 🔐 **Authentication** | JWT in httpOnly cookie, `sameSite: strict`, `secure` in production |
-| 🔑 **Password hashing** | bcrypt with cost factor 12 |
-| 🛡️ **Authorization** | Role-based middleware on every route; read-only enforcement for OpMgr |
-| 🚦 **Rate limiting** | Global (200 req/min) · Login (10/15min) · Email export (15/15min) |
-| ✅ **Input validation** | Zod schemas on all mutating endpoints with sanitized error responses |
-| 💉 **SQL injection** | Prisma ORM with parameterized queries |
-| 🧹 **XSS** | React auto-escaping; no `dangerouslySetInnerHTML`; API returns JSON only |
-| 🛡️ **CSRF** | `sameSite: strict` cookie policy |
-| 🪖 **Security headers** | Helmet middleware (X-Frame-Options, HSTS, CSP, etc.) |
-| 🔒 **Secrets** | All secrets via env vars; server crashes at boot if `JWT_SECRET` is missing |
-| 🔄 **JWT re-validation** | Every request checks `is_active` and current `role` from database |
-| 📝 **Audit trail** | Database triggers record all changes with full before/after snapshots |
+| Concern | Measure |
+|:--------|:--------|
+| Sessions | JWT in an httpOnly cookie, `sameSite` strict, `secure` in production. The user's `is_active` and role are re-checked on every request. |
+| Passwords | bcrypt hashes |
+| Access | Role checks on every route. `OPERATION_MANAGER` is blocked from every write. |
+| Abuse | Rate limits on all API traffic, login and emailed exports |
+| Input | Zod validation on every write endpoint |
+| Database | Prisma parameterised queries; audit triggers on key tables |
+| Headers | Helmet (HSTS, frame and content-type protections) |
+| Secrets | Environment variables only. The server won't boot without `JWT_SECRET`. |
 
 ---
 
-## 🔢 Order Numbering
+## Further documentation
 
-Orders follow the format **`ORD{YY}{NNNN}`** where:
-
-- `YY` = 2-digit financial year code (FY starts **June 1**)
-- `NNNN` = sequential number, starting from **13** each new FY (first 12 reserved)
-
-> **Example:** `ORD260013` = first order of FY 2026–27
-
----
-
-## 🧪 Test Data
-
-```bash
-# Seed 16 test orders across all pipeline stages
-cd apps/api
-npx tsx prisma/seed-test-data.ts
-
-# Remove all test data
-npx tsx prisma/seed-test-data.ts --cleanup
-```
-
-> Test orders use `TEST` prefix numbers (TEST0001–TEST0016) and `[TEST]` client name prefix for easy identification.
+| File | Contents |
+|:-----|:---------|
+| [`docs/release-runbook.md`](docs/release-runbook.md) | Step-by-step production release |
+| [`docs/analysis/`](docs/analysis) | Project analysis and gap review |
+| [`ROADMAP_V2.md`](ROADMAP_V2.md) | Roadmap of the V2 build |
+| [`AGENTS.md`](AGENTS.md) | Conventions for working in this repo |
 
 ---
 
-## 🏭 Production Build
-
-```bash
-# Build both apps
-npm run build
-
-# Start the API server
-cd apps/api
-node dist/server.js
-```
-
-> The web app builds to `apps/web/dist/` — serve with any static file server (Nginx, Vercel, Netlify, etc.).
-
----
-
-## 📄 License
-
-**Private** — internal use only.
-
----
-
-<p align="center">
-  <sub>Built with ❤️ for <strong>Sai Balaji Digitals</strong></sub>
-</p>
+**Private** — internal use by Sai Balaji Digitals only.
