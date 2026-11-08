@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -6,7 +6,7 @@ import { OrderDetail } from "@/components/orders/OrderDetail";
 import { fetchOrder, markOrderInstalled, getFollowUps, createFollowUp } from "@/api/orders";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, PackageCheck, CheckCircle2, MessageSquarePlus, Clock } from "lucide-react";
+import { Loader2, Store, PackageCheck, CheckCircle2, MessageSquarePlus, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-store";
 import { formatDistanceToNow } from "date-fns";
@@ -78,6 +78,10 @@ function OrderDetailEmployee() {
   const storeCount = order.stores?.length ?? 1;
   const lastInstalledAt = installedAt(order);
   const canInstall = hasProduction && allProduced && order.status === "Active" && storeCount <= 1;
+
+  const needsStores =
+    (order.store_count ?? order.stores?.length ?? 0) === 0 &&
+    ["Active", "Installed", "BillingCompleted", "Pending"].includes(order.status);
 
   const actions =
     order.status === "Installed" ? (
@@ -175,6 +179,23 @@ function OrderDetailEmployee() {
         description="Order details and line items."
         crumbs={[{ label: "Employee" }, { label: "Orders", to: "/employee/orders" }, { label: "Details" }]}
       />
+      {needsStores && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-warning/40 bg-warning/10 p-4 text-sm">
+          <div>
+            <div className="flex items-center gap-2 font-semibold">
+              <Store className="h-4 w-4" aria-hidden /> This order has no stores yet
+            </div>
+            <p className="mt-0.5 text-muted-foreground">
+              Add the stores and items before production can begin.
+            </p>
+          </div>
+          <Button asChild size="sm">
+            <Link to="/employee/edit-order/$id" params={{ id: String(order.id) }}>
+              Add stores
+            </Link>
+          </Button>
+        </div>
+      )}
       <OrderDetail order={order} userRole={user?.role} currentUserId={user?.id} actions={<>{actions}{followUpSection}</>} />
     </>
   );
