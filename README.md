@@ -137,7 +137,7 @@ The route is fixed when the request is submitted. A request can also end as `REJ
 | **API** | Node.js, Express, Prisma, PostgreSQL, Zod, Helmet, express-rate-limit |
 | **Auth** | JWT in an httpOnly cookie, bcrypt, role-based middleware |
 | **Files** | Cloudflare R2 (S3-compatible, signed with `aws4fetch`) |
-| **Messaging** | Nodemailer (SMTP), WhatsApp through AskEva |
+| **Messaging** | Brevo (email API), WhatsApp through AskEva |
 | **Excel** | SheetJS (`xlsx`) |
 | **Hosting** | Web on Cloudflare Workers with static assets; API on Render |
 | **Monorepo** | npm workspaces: `apps/api`, `apps/web`, `packages/shared-types` |
@@ -230,7 +230,8 @@ These go in `apps/api/.env`. See `apps/api/.env.example` for comments on each on
 | `CLIENT_URL` | | `http://localhost:5173` | Allowed CORS origin(s) |
 | `APP_URL` | | first `CLIENT_URL` | Public web address, used for "Open in app" links |
 | `R2_ACCOUNT_ID` · `R2_ACCESS_KEY_ID` · `R2_SECRET_ACCESS_KEY` · `R2_BUCKET` | For uploads | — | Cloudflare R2 storage for photos and bill attachments |
-| `SMTP_HOST` · `SMTP_PORT` · `SMTP_USER` · `SMTP_PASS` | | — · `587` | Email. Leave `SMTP_HOST` empty to turn email off. |
+| `BREVO_API_KEY` | | — | Email through Brevo. Leave empty to turn email off. |
+| `EMAIL_FROM_ADDRESS` · `EMAIL_FROM_NAME` | | `noreply@saibalaji.com` · `Sai Balaji OMS` | Sender. The address must be verified in Brevo. |
 | `ADMIN_EMAIL` | | — | Recipient of admin notifications |
 | `WHATSAPP_MODE` | | `log` | `log` records messages without sending them; `live` sends them. |
 | `ASKEVA_SEND_URL` · `ASKEVA_TOKEN` · `ASKEVA_WEBHOOK_SECRET` | For WhatsApp | — | AskEva sending and the delivery webhook |

@@ -293,7 +293,7 @@ async function main() {
   const api = spawn(process.execPath, ["--import", "tsx", "src/server.ts"], {
     cwd: API_DIR,
     stdio: "ignore",
-    env: { ...process.env, NODE_ENV: "test", PORT: String(PORT), DATABASE_URL: `${loadUrl.toString()}?connection_limit=5`, SMTP_HOST: "", WHATSAPP_MODE: "log" },
+    env: { ...process.env, NODE_ENV: "test", PORT: String(PORT), DATABASE_URL: `${loadUrl.toString()}?connection_limit=5`, BREVO_API_KEY: "", WHATSAPP_MODE: "log" },
   });
 
   try {

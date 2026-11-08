@@ -1,28 +1,44 @@
-import nodemailer from "nodemailer";
-import { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, ADMIN_EMAIL } from "../utils/config";
-
-const transporter = nodemailer.createTransport({
-  host: SMTP_HOST,
-  port: parseInt(SMTP_PORT),
-  auth: {
-    user: SMTP_USER,
-    pass: SMTP_PASS,
-  },
-});
+import { BREVO_API_KEY, EMAIL_FROM_ADDRESS, EMAIL_FROM_NAME, ADMIN_EMAIL } from "../utils/config";
 
 const adminEmail = ADMIN_EMAIL;
-const FROM = '"Sai Balaji OMS" <noreply@saibalaji.com>';
+const BREVO_BASE = "https://api.brevo.com/v3";
+const SENDER = { name: EMAIL_FROM_NAME, email: EMAIL_FROM_ADDRESS };
+
+interface BrevoAttachment {
+  name: string;
+  /** Base64-encoded file content. */
+  content: string;
+}
+
+/** Sends one transactional email through Brevo's HTTP API. Throws on any failure. */
+async function brevoSend(to: string, subject: string, html: string, attachment?: BrevoAttachment[]) {
+  if (!BREVO_API_KEY) throw new Error("BREVO_API_KEY is not set");
+  const res = await fetch(`${BREVO_BASE}/smtp/email`, {
+    method: "POST",
+    headers: { "api-key": BREVO_API_KEY, "content-type": "application/json", accept: "application/json" },
+    body: JSON.stringify({ sender: SENDER, to: [{ email: to }], subject, htmlContent: html, ...(attachment ? { attachment } : {}) }),
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`Brevo ${res.status}: ${detail.slice(0, 300)}`);
+  }
+}
 
 export async function initEmailService() {
-  if (!SMTP_HOST) {
-    console.warn("⚠️  SMTP is not configured — email notifications are disabled.");
+  if (!BREVO_API_KEY) {
+    console.warn("⚠️  Brevo is not configured — email notifications are disabled.");
     return;
   }
   try {
-    await transporter.verify();
-    console.log("✅ Email service initialized successfully");
+    const res = await fetch(`${BREVO_BASE}/account`, {
+      headers: { "api-key": BREVO_API_KEY, accept: "application/json" },
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    console.log("✅ Email service initialized successfully (Brevo)");
   } catch (err) {
-    console.error("❌ Email service failed to connect:", err);
+    console.error("❌ Email service could not reach Brevo / API key rejected:", err);
   }
 }
 
@@ -125,7 +141,7 @@ function itemsTable(items: OrderItemSummary[]): string {
 }
 
 function sendMail(to: string, subject: string, html: string) {
-  return transporter.sendMail({ from: FROM, to, subject, html }).catch((err) => {
+  return brevoSend(to, subject, html).catch((err) => {
     console.error(`Email send failed [${subject}]:`, err.message);
   });
 }
@@ -346,19 +362,9 @@ export async function sendExcelEmail(
       infoRow("Attachment", `📎 ${filename}`)
     )}
   `;
-  await transporter.sendMail({
-    from: FROM,
-    to,
-    subject,
-    html: wrap("Excel Export", body),
-    attachments: [
-      {
-        filename,
-        content: xlsxBuffer,
-        contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      },
-    ],
-  });
+  await brevoSend(to, subject, wrap("Excel Export", body), [
+    { name: filename, content: xlsxBuffer.toString("base64") },
+  ]);
 }
 
 export { adminEmail };

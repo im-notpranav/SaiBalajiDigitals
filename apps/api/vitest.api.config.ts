@@ -19,7 +19,7 @@ export default defineConfig({
       DATABASE_URL: testDatabaseUrl(),
       JWT_SECRET: "test-secret-not-for-production",
       WHATSAPP_MODE: "log",
-      SMTP_HOST: "",
+      BREVO_API_KEY: "",
     },
   },
 });

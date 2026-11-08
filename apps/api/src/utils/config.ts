@@ -60,15 +60,15 @@ export const EXPORT_EMAIL_ALLOWED_DOMAINS = (process.env.EXPORT_EMAIL_ALLOWED_DO
   .map((d) => d.trim().toLowerCase())
   .filter(Boolean);
 
-// ─── SMTP (warn, don't crash — emails will fail gracefully) ─────────────────
+// ─── Email via Brevo (warn, don't crash — emails will fail gracefully) ──────
 
-export const SMTP_HOST = process.env.SMTP_HOST || "";
-export const SMTP_PORT = process.env.SMTP_PORT || "587";
-export const SMTP_USER = process.env.SMTP_USER || "";
-export const SMTP_PASS = process.env.SMTP_PASS || "";
+export const BREVO_API_KEY = process.env.BREVO_API_KEY || "";
+/** Must be a sender (or on an authenticated domain) verified in the Brevo account. */
+export const EMAIL_FROM_ADDRESS = process.env.EMAIL_FROM_ADDRESS || "noreply@saibalaji.com";
+export const EMAIL_FROM_NAME = process.env.EMAIL_FROM_NAME || "Sai Balaji OMS";
 
-if (!SMTP_HOST) {
-  console.warn("⚠️  SMTP_HOST is not set — email notifications will not be sent.");
+if (!BREVO_API_KEY) {
+  console.warn("⚠️  BREVO_API_KEY is not set — email notifications will not be sent.");
 }
 
 // ─── WhatsApp via AskEva (log-only until switched on) ───────────────────────
