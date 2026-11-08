@@ -279,14 +279,14 @@ function SidebarBody({
                   // min-h-11 keeps every row at a comfortable touch target on a phone.
                   "group relative flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all",
                   active
-                    ? "bg-primary/10 text-primary shadow-sm"
+                    ? "bg-primary/10 text-primary shadow-sm dark:bg-transparent dark:text-foreground dark:shadow-none"
                     : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
                 )}
               >
                 {active && (
                   <motion.span
                     layoutId={`${layoutGroup}-active`}
-                    className="absolute inset-y-1.5 left-0 w-1 rounded-r-full bg-primary"
+                    className="nav-glide absolute inset-y-1.5 left-0 w-1 rounded-r-full bg-primary"
                     transition={{ type: "spring", stiffness: 380, damping: 30 }}
                   />
                 )}
@@ -338,7 +338,7 @@ export function FieldTabBar() {
   return (
     <nav
       aria-label="Main"
-      className="fixed inset-x-0 bottom-0 z-30 border-t bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden"
+      className="liquid-bar fixed inset-x-0 bottom-0 z-30 border-t bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden"
     >
       <ul className="grid grid-cols-5">
         {FIELD_NAV.map((item) => {
@@ -359,7 +359,7 @@ export function FieldTabBar() {
                 {active && (
                   <motion.span
                     layoutId="field-tab-active"
-                    className="absolute inset-x-4 top-0 h-0.5 rounded-b-full bg-primary"
+                    className="tab-glide absolute inset-x-4 top-0 h-0.5 rounded-b-full bg-primary"
                     transition={{ type: "spring", stiffness: 380, damping: 30 }}
                   />
                 )}

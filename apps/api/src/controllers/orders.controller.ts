@@ -8,7 +8,7 @@ import { buildOrdersExport } from "../utils/order-template";
 import { recomputeOrderStatus, rollupOrder, storeLabelOf, storeLocationOf } from "../utils/order-derive";
 
 import { notifyRole, notifyUser } from "../services/notifications.service";
-import { queueWhatsAppAfter } from "../services/whatsapp/outbox";
+import { queueWhatsAppAfter, queueWhatsAppRole } from "../services/whatsapp/outbox";
 
 import {
   sendOrderCreatedEmail,
@@ -27,6 +27,40 @@ import { sanitizeZodErrors } from "../utils/sanitize-errors";
 
 
 const MAX_ORDERS_PER_PAGE = 200;
+
+/** Line remarks that keep a written reason. */
+const REASON_REMARKS = new Set(["Other", "Revised", "ExtraAmount", "LessAmount"]);
+/** Line remarks that carry a rupee figure. */
+const AMOUNT_REMARKS = new Set(["ExtraAmount", "LessAmount"]);
+
+/** The remark columns a submitted line stores: reason and figure only where they apply. */
+const remarkColumns = (item: any) => ({
+  remarks: item.remarks ?? null,
+  remarks_other_text: item.remarks && REASON_REMARKS.has(item.remarks) ? String(item.remarks_other_text ?? "").trim() : null,
+  adjustment_amount: item.remarks && AMOUNT_REMARKS.has(item.remarks) ? Number(item.adjustment_amount) : null,
+});
+
+/** Why a submitted line's remark cannot be saved, or null. `isNew` = not yet saved. */
+const lineRemarkProblem = (item: any, lineAmount: number, isNew: boolean): string | null => {
+  if (item.remarks === "Revised" && isNew) {
+    return "Revised is for correcting a saved line. A new line needs no remark.";
+  }
+  if (item.remarks === "LessAmount" && Number(item.adjustment_amount) > lineAmount) {
+    return `The Less Amount (₹${Number(item.adjustment_amount).toFixed(2)}) cannot be more than the line's ₹${lineAmount.toFixed(2)}.`;
+  }
+  return null;
+};
+
+/** Tell every admin a CSM is asking for an amount change — in the app and on WhatsApp. */
+const notifyAdminsOfAdjustmentRequest = async (
+  order: { id: number; order_no: string; client_name: string },
+  requester: { id: number; name: string },
+  what: string,
+) => {
+  await notifyRole("ADMIN", `Amount change requested on ${order.order_no}`, `${requester.name} asked for ${what}. Review it on the order.`, "warning", order.id);
+  await queueWhatsAppRole(prisma, "ORDER_UPDATE", "ADMIN", [order.order_no, order.client_name, `${requester.name} asked for ${what}`], { type: "order", id: order.id }, requester.id)
+    .catch((err) => console.error("WhatsApp ORDER_UPDATE could not be queued:", err?.message ?? err));
+};
 
 export const getOrders = async (req: Request, res: Response) => {
   try {
@@ -104,10 +138,16 @@ export const getOrders = async (req: Request, res: Response) => {
         take,
         orderBy: { created_at: "desc" },
         include: {
+          // A fixed order: without one Postgres returns an updated row last, so items
+          // jumped around the Assign Work page after every assignment.
           items: fullItems
-            ? { include: { assignments: { include: { user: { select: { id: true, name: true } } } } } }
-            : { select: { id: true, amount: true, remarks: true, remarks_confirmed: true, assignments: { select: { id: true } } } },
+            ? {
+                include: { assignments: { include: { user: { select: { id: true, name: true } } } } },
+                orderBy: [{ order_store_id: "asc" }, { s_no: "asc" }, { id: "asc" }],
+              }
+            : { select: { id: true, amount: true, remarks: true, remarks_confirmed: true, adjustment_amount: true, original_amount: true, assignments: { select: { id: true } } } },
           stores: { select: { id: true, s_no: true, store_name: true, location: true, installed_at: true, invoice_id: true }, orderBy: { s_no: "asc" } },
+          adjustments: { where: { status: "Approved" }, select: { type: true, amount: true, status: true } },
           _count: { select: { stores: true } },
         },
       }),
@@ -151,14 +191,15 @@ export const getOrders = async (req: Request, res: Response) => {
 
     
     const ordersWithTotal = orders.map((o: any) => {
-      const { total_amount, loss_amount } = computeTotals(o.items);
-      const { _count, items, ...rest } = o;
+      const { total_amount, loss_amount, adjustment_amount } = computeTotals(o.items, o.adjustments);
+      const { _count, items, adjustments, ...rest } = o;
       return {
         ...rest,
         items: fullItems ? items : items.map((i: any) => ({ id: i.id, assignments: i.assignments })),
         store_count: _count.stores,
         total_amount,
         loss_amount,
+        adjustment_amount,
       };
     });
     return res.status(200).json(serializeDecimals({ data: ordersWithTotal, total, page: Number(page) }));
@@ -175,7 +216,10 @@ export const getOrder = async (req: Request, res: Response) => {
       where: { id },
       include: {
         // The flat item list stays: the export, dashboards and production queue all read it.
-        items: { include: { assignments: { include: { user: { select: { id: true, name: true } } } } } },
+        items: {
+          include: { assignments: { include: { user: { select: { id: true, name: true } } } } },
+          orderBy: [{ order_store_id: "asc" }, { s_no: "asc" }, { id: "asc" }],
+        },
         stores: {
           include: {
             items: { include: { assignments: { include: { user: { select: { id: true, name: true } } } } }, orderBy: { s_no: "asc" } },
@@ -184,6 +228,13 @@ export const getOrder = async (req: Request, res: Response) => {
           orderBy: { s_no: "asc" },
         },
         invoices: { orderBy: { id: "asc" } },
+        adjustments: {
+          include: {
+            requester: { select: { id: true, name: true } },
+            decider: { select: { id: true, name: true } },
+          },
+          orderBy: { created_at: "asc" },
+        },
       },
     });
 
@@ -233,11 +284,14 @@ export const getOrder = async (req: Request, res: Response) => {
     }
 
     
-    const { total_amount, loss_amount } = computeTotals(order.items);
-    // Each store carries the billable total of its own items — that is what an invoice
-    // covering this store is reconciled against.
-    const stores = order.stores.map((s: any) => ({ ...s, ...computeTotals(s.items) }));
-    return res.status(200).json(serializeDecimals({ ...order, stores, total_amount, loss_amount }));
+    const { total_amount, loss_amount, adjustment_amount } = computeTotals(order.items, order.adjustments);
+    // Each store carries the billable total of its own items and its own approved order
+    // adjustments — that is what an invoice covering this store is reconciled against.
+    const stores = order.stores.map((s: any) => ({
+      ...s,
+      ...computeTotals(s.items, order.adjustments.filter((a: any) => a.order_store_id === s.id)),
+    }));
+    return res.status(200).json(serializeDecimals({ ...order, stores, total_amount, loss_amount, adjustment_amount }));
   } catch (err) {
     return res.status(500).json({ message: "Internal server error" });
   }
@@ -1538,7 +1592,7 @@ export const forceCloseOrder = async (req: Request, res: Response) => {
   }
 };
 
-import { flagItemSchema, itemLossRemarkSchema, assignItemSchema, completeItemSchema, editBillingSchema, editPaymentSchema, followUpSchema } from "../utils/validators";
+import { flagItemSchema, itemLossRemarkSchema, assignItemSchema, bulkAssignSchema, completeItemSchema, editBillingSchema, editPaymentSchema, followUpSchema } from "../utils/validators";
 
 /** PATCH /api/orders/:orderId/invoices/:invoiceId/billing */
 export const editInvoiceBilling = async (req: Request, res: Response) => {
@@ -1876,6 +1930,171 @@ export const assignOrderItem = async (req: Request, res: Response) => {
       include: { assignments: { include: { user: { select: { id: true, name: true } } } } },
     });
     return res.status(200).json(serializeDecimals(fresh));
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+/**
+ * Assign teams to many line items of one order in a single save.
+ * Items whose production is already complete are skipped, so a bulk action never
+ * reopens finished work; the per-item picker is still there for that.
+ * Each team hears about it once, however many items it was given.
+ */
+export const bulkAssignOrderItems = async (req: Request, res: Response) => {
+  try {
+    const parseResult = bulkAssignSchema.safeParse(req.body);
+    if (!parseResult.success) return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parseResult.error) });
+    const { mode, assignments } = parseResult.data;
+    const orderId = parseInt(req.params.orderId as string, 10);
+    const user = req.user!;
+
+    const itemIds = assignments.map((a) => a.item_id);
+    if (new Set(itemIds).size !== itemIds.length) {
+      return res.status(400).json({ message: "The same line item appears more than once." });
+    }
+    if (mode === "add" && assignments.some((a) => a.user_ids.length === 0)) {
+      return res.status(400).json({ message: "Pick at least one team to add." });
+    }
+
+    const order = await prisma.order.findUnique({ where: { id: orderId } });
+    if (!order) return res.status(404).json({ message: "Order not found" });
+    if (order.status === "Completed" || order.status === "PaymentReceived") {
+      return res.status(400).json({ message: "Closed orders cannot be reassigned." });
+    }
+
+    const items = await prisma.orderItem.findMany({
+      where: { id: { in: itemIds }, order_id: orderId },
+      include: { assignments: true },
+    });
+    if (items.length !== itemIds.length) return res.status(404).json({ message: "Line item not found on this order" });
+
+    const userIds = Array.from(new Set(assignments.flatMap((a) => a.user_ids)));
+    if (userIds.length > 0) {
+      const staff = await prisma.user.findMany({ where: { id: { in: userIds }, role: "PRODUCTION", is_active: true } });
+      if (staff.length !== userIds.length) {
+        return res.status(400).json({ message: "Items can only be assigned to active production users." });
+      }
+    }
+
+    const byId = new Map(items.map((i) => [i.id, i]));
+    const plans = assignments.map((a) => {
+      const item = byId.get(a.item_id)!;
+      const wanted = Array.from(new Set(a.user_ids));
+      const existing = item.assignments.map((x) => x.user_id);
+      const toAdd = wanted.filter((id) => !existing.includes(id));
+      const toRemove = mode === "replace" ? existing.filter((id) => !wanted.includes(id)) : [];
+      return { item, toAdd, toRemove };
+    });
+    const skipped = plans.filter((p) => p.item.production_completed).length;
+    const changes = plans.filter((p) => !p.item.production_completed && (p.toAdd.length > 0 || p.toRemove.length > 0));
+
+    if (changes.length > 0) {
+      await prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT set_config('app.current_user_id', ${user.id.toString()}, true)`;
+        for (const { item, toAdd, toRemove } of changes) {
+          if (toRemove.length > 0) {
+            await tx.orderItemAssignment.deleteMany({ where: { order_item_id: item.id, user_id: { in: toRemove } } });
+          }
+          if (toAdd.length > 0) {
+            await tx.orderItemAssignment.createMany({
+              data: toAdd.map((id) => ({ order_item_id: item.id, user_id: id, assigned_by: user.id })),
+              skipDuplicates: true,
+            });
+          }
+          await syncItemCompletion(tx, item.id);
+        }
+      });
+
+      // One message per team, listing what it was given.
+      const given = new Map<number, typeof items>();
+      for (const { item, toAdd } of changes) {
+        for (const id of toAdd) given.set(id, [...(given.get(id) ?? []), item]);
+      }
+      for (const [id, list] of given) {
+        const shown = list.slice(0, 3).map(itemLabelOf).join("; ");
+        const more = list.length > 3 ? ` and ${list.length - 3} more` : "";
+        await notifyUser(
+          id,
+          list.length === 1 ? `New item assigned on ${order.order_no}` : `${list.length} items assigned on ${order.order_no}`,
+          `${user.name} assigned you ${list.length === 1 ? "item" : "items"} ${shown}${more}.`,
+          "info",
+          order.id
+        ).catch(() => {});
+      }
+    }
+
+    return res.status(200).json({ updated: changes.length, skipped });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+/** Normalised media name, so "Vinyl " and "vinyl" count as the same thing. */
+const mediaKey = (m: string) => m.trim().toLowerCase();
+
+/**
+ * For each open, unassigned item on an order: the teams its media was most often
+ * given before. Learned from past assignments, so there is nothing to set up.
+ * Only teams that are still active production users are suggested.
+ */
+export const getAssignSuggestions = async (req: Request, res: Response) => {
+  try {
+    const orderId = parseInt(req.params.orderId as string, 10);
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: { items: { include: { assignments: true } } },
+    });
+    if (!order) return res.status(404).json({ message: "Order not found" });
+
+    const open = order.items.filter((i) => !i.production_completed && i.assignments.length === 0);
+    const medias = Array.from(new Set(open.map((i) => mediaKey(i.media)).filter(Boolean)));
+    if (medias.length === 0) return res.status(200).json({ suggestions: [] });
+
+    // The most recent assigned items with these media; recent habits win ties.
+    const history = await prisma.orderItem.findMany({
+      where: {
+        OR: medias.map((m) => ({ media: { equals: m, mode: "insensitive" as const } })),
+        assignments: { some: {} },
+      },
+      orderBy: { id: "desc" },
+      take: 2000,
+      select: {
+        media: true,
+        assignments: { select: { user_id: true, user: { select: { role: true, is_active: true } } } },
+      },
+    });
+
+    // media -> team set ("3,7") -> how many items had exactly that set.
+    const tally = new Map<string, Map<string, number>>();
+    for (const h of history) {
+      const ids = h.assignments
+        .filter((a) => a.user.role === "PRODUCTION" && a.user.is_active)
+        .map((a) => a.user_id)
+        .sort((a, b) => a - b);
+      if (ids.length === 0) continue;
+      const key = mediaKey(h.media);
+      const set = ids.join(",");
+      const sets = tally.get(key) ?? new Map<string, number>();
+      sets.set(set, (sets.get(set) ?? 0) + 1);
+      tally.set(key, sets);
+    }
+
+    const best = new Map<string, { user_ids: number[]; based_on: number }>();
+    for (const [key, sets] of tally) {
+      // A Map keeps insertion order and history is newest first, so a tie keeps the newer set.
+      let top: [string, number] | null = null;
+      for (const entry of sets) if (!top || entry[1] > top[1]) top = entry;
+      if (top) best.set(key, { user_ids: top[0].split(",").map(Number), based_on: top[1] });
+    }
+
+    const suggestions = open.flatMap((i) => {
+      const b = best.get(mediaKey(i.media));
+      return b ? [{ item_id: i.id, ...b }] : [];
+    });
+    return res.status(200).json({ suggestions });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ message: "Internal server error" });

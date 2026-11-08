@@ -313,7 +313,7 @@ export function OrderDetail({ order, actions, related, userRole, currentUserId }
               {canEditHeader && (
                 <PoDialog
                   title="Job PO Number"
-                  description="Covers the whole order. Leave blank to clear it."
+                  description="For the whole order. Blank clears it."
                   current={order.po_number ?? ""}
                   onSave={handleJobPo}
                   isSubmitting={isSubmitting}
@@ -375,7 +375,7 @@ export function OrderDetail({ order, actions, related, userRole, currentUserId }
                         {canEditHeader && (
                           <PoDialog
                             title={`PO for ${store.store_name}`}
-                            description="Covers this store only. Leave blank to clear it."
+                            description="For this store only. Blank clears it."
                             current={store.po_number ?? ""}
                             onSave={(po) => handleStorePo(store.id, po)}
                             isSubmitting={isSubmitting}
@@ -496,7 +496,7 @@ function PoDialog({
           <p className="text-xs text-muted-foreground">{description}</p>
           <div className="space-y-2">
             <Label>PO Number</Label>
-            <Input aria-label="PO Number" value={value} onChange={(e) => setValue(e.target.value)} placeholder="e.g. PO-12345" autoFocus />
+            <Input aria-label="PO Number" value={value} onChange={(e) => setValue(e.target.value)} placeholder="e.g. 450001234512345" autoFocus />
           </div>
           <DialogFooter>
             <Button type="submit" disabled={isSubmitting}>Save</Button>

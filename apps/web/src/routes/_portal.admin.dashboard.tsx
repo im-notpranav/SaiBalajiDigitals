@@ -284,7 +284,7 @@ function AdminDashboard() {
               <EmptyState
                 icon={CalendarIcon}
                 title="No orders dated in this range"
-                description={`Showing ${format(range.from, "dd MMM yyyy")} to ${format(range.to, "dd MMM yyyy")}. Orders are counted by their order date.`}
+                description={`Showing ${format(range.from, "dd MMM yyyy")} to ${format(range.to, "dd MMM yyyy")}. Counted by order date.`}
                 action={
                   <Button variant="outline" size="sm" onClick={widen}>
                     Widen to the last 12 months
@@ -389,7 +389,7 @@ function AdminDashboard() {
               <SectionHeading
                 id="leaderboard-heading"
                 title="Top performers"
-                description="Most completed orders, all time. Click a name to see their orders."
+                description="Most completed orders. Click a name to see them."
               />
               {board.length === 0 ? (
                 <p className="flex items-center gap-2 text-sm text-muted-foreground">

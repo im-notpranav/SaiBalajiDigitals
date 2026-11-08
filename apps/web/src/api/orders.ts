@@ -277,6 +277,32 @@ export async function assignOrderItem(orderId: number, itemId: number, assigned_
   });
 }
 
+export type BulkAssignMode = "add" | "replace";
+
+/** Many items of one order in one save. Finished items are skipped, not reopened. */
+export async function bulkAssignOrderItems(
+  orderId: number,
+  mode: BulkAssignMode,
+  assignments: { item_id: number; user_ids: number[] }[],
+) {
+  return apiFetch<{ updated: number; skipped: number }>(`/orders/${orderId}/items/assign`, {
+    method: "PATCH",
+    data: { mode, assignments },
+  });
+}
+
+export interface AssignSuggestion {
+  item_id: number;
+  user_ids: number[];
+  /** How many past items of this media had exactly these teams. */
+  based_on: number;
+}
+
+/** Teams each unassigned item's media was most often given before. */
+export async function fetchAssignSuggestions(orderId: number) {
+  return apiFetch<{ suggestions: AssignSuggestion[] }>(`/orders/${orderId}/assign-suggestions`);
+}
+
 export async function markOrderInstalled(id: number) {
   const res = await apiFetch<Order>(`/orders/${id}/install`, { method: "PUT", data: {} });
   return { order: res };

@@ -116,7 +116,7 @@ export function EmailExportDialog({
               <Input
                 id="email-to"
                 type="email"
-                placeholder="recipient@example.com"
+                placeholder="name@company.in"
                 value={to}
                 onChange={(e) => {
                   setTo(e.target.value);

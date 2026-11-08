@@ -124,7 +124,7 @@ function FieldStaffPage() {
     <>
       <PageHeader
         title="Field Staff"
-        description="Pasters, Helpers and Drivers. Each gets their own login to see their jobs. Deactivate people who leave — their history stays."
+        description="Pasters, Helpers and Drivers. Deactivate people who leave."
         crumbs={[{ label: "Work Allocation" }, { label: "Field Staff" }]}
         actions={
           <Button className="rounded-xl" onClick={() => setCreateOpen(true)}>

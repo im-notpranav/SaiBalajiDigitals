@@ -14,7 +14,7 @@ export function NotFoundPage() {
   const home = user ? roleHome[user.role] : "/login";
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background px-4 py-12">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background px-4 py-12 dark:bg-transparent">
       {/* The two arcs of the logo, oversized and faint, framing the page. */}
       <div aria-hidden className="pointer-events-none absolute inset-0 flex items-center justify-center">
         <motion.div
@@ -35,7 +35,7 @@ export function NotFoundPage() {
         transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
         className="glass-card relative w-full max-w-md rounded-3xl p-8 text-center sm:p-10"
       >
-        <Logo size={56} className="mx-auto bg-white" />
+        <Logo size={56} className="mx-auto bg-white dark:bg-transparent" />
 
         <h1 className="brand-gradient-text mt-6 text-7xl font-extrabold tabular-nums tracking-tight sm:text-8xl">
           404
@@ -54,7 +54,7 @@ export function NotFoundPage() {
           <button
             type="button"
             onClick={() => router.history.back()}
-            className="inline-flex items-center justify-center gap-2 rounded-xl border bg-background px-5 py-2.5 text-sm font-medium transition hover:bg-accent"
+            className="inline-flex items-center justify-center gap-2 rounded-xl border bg-background px-5 py-2.5 text-sm font-medium transition hover:bg-accent dark:bg-white/5 dark:hover:bg-white/10"
           >
             <ArrowLeft className="h-4 w-4" />
             Go back

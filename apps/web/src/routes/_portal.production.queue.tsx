@@ -115,7 +115,7 @@ function ProductionQueue() {
     <>
       <PageHeader
         title="My Production Queue"
-        description="Line items assigned to you. Mark each one complete as you finish it."
+        description="Your items. Mark each complete when done."
         crumbs={[{ label: "Production", to: "/production/dashboard" }, { label: "Queue" }]}
       />
 

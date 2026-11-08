@@ -172,7 +172,7 @@ function OrderDetailEmployee() {
     <>
       <PageHeader
         title={`Order ${order.order_no}`}
-        description="Full order details and line items."
+        description="Order details and line items."
         crumbs={[{ label: "Employee" }, { label: "Orders", to: "/employee/orders" }, { label: "Details" }]}
       />
       <OrderDetail order={order} userRole={user?.role} currentUserId={user?.id} actions={<>{actions}{followUpSection}</>} />

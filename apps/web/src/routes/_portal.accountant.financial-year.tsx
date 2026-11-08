@@ -8,7 +8,7 @@ export const Route = createFileRoute("/_portal/accountant/financial-year")({
     <>
       <PageHeader
         title="Financial Year"
-        description="View the current active financial year settings."
+        description="The current financial year."
         crumbs={[{ label: "Accountant" }, { label: "Financial Year" }]}
       />
       <FinancialYearView />

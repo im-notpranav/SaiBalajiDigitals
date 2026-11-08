@@ -130,7 +130,7 @@ function LeavePage() {
     <>
       <PageHeader
         title="Leave"
-        description="Field staff request leave from their dashboard; approve or reject it here. Approved leave blocks allocation, even with “Allow 2nd job”."
+        description="Approve or reject field staff leave."
         crumbs={[{ label: "Work Allocation" }, { label: "Leave" }]}
         actions={
           <Button className="rounded-xl" onClick={() => setEditing({ leave: null })}>

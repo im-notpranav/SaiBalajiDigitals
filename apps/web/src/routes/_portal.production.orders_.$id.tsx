@@ -32,7 +32,7 @@ function OrderDetailProduction() {
     <>
       <PageHeader
         title={`Order ${data.order.order_no}`}
-        description="Production view for line items and specs."
+        description="Line items and specs."
         crumbs={[{ label: "Production" }, { label: "Queue", to: "/production/queue" }, { label: "Details" }]}
       />
       <OrderDetail order={data.order} userRole={user?.role} />

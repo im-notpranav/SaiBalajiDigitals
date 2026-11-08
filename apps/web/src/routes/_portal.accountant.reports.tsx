@@ -26,7 +26,7 @@ function Reports() {
     <>
       <PageHeader
         title="Financial Reports"
-        description="Aggregated over generated columns — no client-side money recomputation."
+        description="Billing and payment totals."
         crumbs={[{ label: "Accountant" }, { label: "Reports" }]}
         actions={
           <>

@@ -38,8 +38,8 @@ function NewOrder() {
   return (
     <>
       <PageHeader
-        title="Create New Order"
-        description="Line items compute totals live. The order number is assigned by the server on submit."
+        title="New Order"
+        description="The order number is given on submit."
         crumbs={[{ label: "Employee" }, { label: "New Order" }]}
         actions={
           <Button asChild variant="outline">

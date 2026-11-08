@@ -216,7 +216,7 @@ function EmployeeDashboard() {
               <EmptyState
                 icon={CalendarIcon}
                 title="No orders dated in this range"
-                description={`Showing ${format(range.from, "dd MMM yyyy")} to ${format(range.to, "dd MMM yyyy")}. Orders are counted by their order date, and you only see orders you created.`}
+                description={`Showing ${format(range.from, "dd MMM yyyy")} to ${format(range.to, "dd MMM yyyy")}. Counted by order date. Only your orders.`}
                 action={
                   <Button variant="outline" size="sm" onClick={widen}>
                     Widen to the last 12 months

@@ -141,7 +141,7 @@ function OrderDetailAdmin() {
     <>
       <PageHeader
         title={`Order ${data.order.order_no}`}
-        description="Full administrative view of order details."
+        description="Full order details."
         crumbs={[{ label: "Automated System" }, { label: "Orders", to: "/admin/orders" }, { label: "Details" }]}
       />
       <OrderDetail

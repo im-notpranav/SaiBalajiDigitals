@@ -122,7 +122,7 @@ function UsersPage() {
     <>
       <PageHeader
         title="User Management"
-        description="Deactivate rather than delete — historical audit attribution stays intact."
+        description="Deactivate instead of deleting, so history stays."
         crumbs={[{ label: "Automated System" }, { label: "Users" }]}
         actions={
           currentUser?.is_super_admin ? (

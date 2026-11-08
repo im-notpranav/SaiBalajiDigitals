@@ -20,6 +20,8 @@ const eq = (a: number, b: number) => Math.abs(a - b) < EPSILON;
 interface DerivableOrder {
   status: OrderStatus;
   items: any[];
+  /** Whole-order Extra / Less Amounts; only Approved rows move the total. */
+  adjustments?: any[];
   stores: { installed_at: Date | null; invoice_id: number | null }[];
   invoices: { bill_amount: any; amount_received: any }[];
 }
@@ -49,7 +51,7 @@ export function deriveStatus(order: DerivableOrder): OrderStatus {
     return "Installed";
   }
 
-  const billable = computeTotals(order.items).total_amount;
+  const billable = computeTotals(order.items, order.adjustments).total_amount;
   const billed = order.invoices.reduce((sum, i) => sum + Number(i.bill_amount ?? 0), 0);
   const fullyBilled = eq(billed, billable);
 
@@ -81,6 +83,7 @@ export async function recomputeOrderStatus(tx: any, orderId: number): Promise<Or
     where: { id: orderId },
     include: {
       items: true,
+      adjustments: { where: { status: "Approved" } },
       stores: { select: { installed_at: true, installed_by: true, invoice_id: true } },
       invoices: { orderBy: { id: "asc" } },
     },

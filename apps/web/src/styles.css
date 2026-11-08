@@ -47,15 +47,18 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
-  --shadow-soft: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px -12px rgba(22, 119, 255, 0.12);
-  --shadow-elevated: 0 10px 40px -12px rgba(15, 76, 186, 0.25);
-  --shadow-glow: 0 20px 60px -20px rgba(22, 119, 255, 0.45);
+  --shadow-soft: var(--elevation-soft);
+  --shadow-elevated: var(--elevation-raised);
+  --shadow-glow: var(--elevation-glow);
   --gradient-brand: linear-gradient(135deg, oklch(0.62 0.19 258) 0%, oklch(0.48 0.19 262) 100%);
   --gradient-brand-soft: linear-gradient(135deg, oklch(0.97 0.02 258) 0%, oklch(0.94 0.04 258) 100%);
   --gradient-accent: linear-gradient(135deg, oklch(0.78 0.15 65) 0%, oklch(0.62 0.19 258) 100%);
 }
 
 :root {
+  --elevation-soft: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px -12px rgba(22, 119, 255, 0.12);
+  --elevation-raised: 0 10px 40px -12px rgba(15, 76, 186, 0.25);
+  --elevation-glow: 0 20px 60px -20px rgba(22, 119, 255, 0.45);
   --radius: 1rem;
   --background: oklch(0.985 0.005 250);
   --foreground: oklch(0.18 0.03 260);
@@ -95,41 +98,52 @@
 }
 
 .dark {
-  --background: oklch(0.16 0.02 260);
+  color-scheme: dark;
+  scrollbar-color: oklch(1 0 0 / 22%) transparent;
+  --elevation-soft: 0 1px 2px oklch(0 0 0 / 30%), 0 14px 32px -18px oklch(0 0 0 / 70%);
+  --elevation-raised: 0 18px 50px -18px oklch(0 0 0 / 75%);
+  --elevation-glow: 0 20px 60px -20px oklch(0.62 0.19 258 / 55%);
+  --gradient-brand: linear-gradient(135deg, oklch(0.8 0.13 240) 0%, oklch(0.66 0.18 258) 100%);
+  /* Solid equivalent of a card, for anything content has to scroll behind. */
+  --surface-solid: oklch(0.2 0.026 262);
+  --glass-rim: inset 0 1px 0 0 oklch(1 0 0 / 10%);
+  --background: oklch(0.145 0.024 262);
   --foreground: oklch(0.97 0.01 250);
-  --card: oklch(0.22 0.03 260);
+  /* Surfaces are clear rather than grey, so the backdrop on body shows through them. */
+  --card: oklch(1 0 0 / 5.5%);
   --card-foreground: oklch(0.97 0.01 250);
-  --popover: oklch(0.22 0.03 260);
+  --popover: oklch(0.21 0.026 262 / 78%);
   --popover-foreground: oklch(0.97 0.01 250);
-  --primary: oklch(0.68 0.19 258);
-  --primary-foreground: oklch(0.16 0.02 260);
-  --primary-deep: oklch(0.55 0.19 262);
-  --secondary: oklch(0.28 0.04 260);
+  --primary: oklch(0.66 0.18 255);
+  --primary-foreground: oklch(1 0 0);
+  --primary-deep: oklch(0.52 0.2 262);
+  --secondary: oklch(1 0 0 / 8%);
   --secondary-foreground: oklch(0.97 0.01 250);
-  --muted: oklch(0.26 0.03 260);
-  --muted-foreground: oklch(0.72 0.02 260);
-  --accent: oklch(0.3 0.05 260);
+  --muted: oklch(1 0 0 / 6%);
+  --muted-foreground: oklch(0.76 0.018 260);
+  --accent: oklch(1 0 0 / 10%);
   --accent-foreground: oklch(0.97 0.01 250);
   --brand-orange: oklch(0.78 0.15 65);
-  --destructive: oklch(0.65 0.2 25);
+  --destructive: oklch(0.72 0.17 22);
   --destructive-foreground: oklch(1 0 0);
   --success: oklch(0.7 0.16 155);
   --success-foreground: oklch(0.16 0.02 260);
   --warning: oklch(0.78 0.15 75);
-  --warning-foreground: oklch(0.2 0.03 60);
+  /* Used as text on pale warning tints (Pending, Hold), never on a solid warning fill. */
+  --warning-foreground: oklch(0.86 0.13 82);
   --info: oklch(0.72 0.13 235);
-  --info-foreground: oklch(0.16 0.02 260);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 12%);
-  --ring: oklch(0.68 0.19 258);
-  --sidebar: oklch(0.2 0.03 260);
+  --info-foreground: oklch(0.86 0.09 235);
+  --border: oklch(1 0 0 / 11%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: oklch(0.66 0.18 255);
+  --sidebar: oklch(0.17 0.026 262 / 55%);
   --sidebar-foreground: oklch(0.94 0.01 250);
-  --sidebar-primary: oklch(0.68 0.19 258);
-  --sidebar-primary-foreground: oklch(0.16 0.02 260);
-  --sidebar-accent: oklch(0.28 0.04 260);
+  --sidebar-primary: oklch(0.66 0.18 255);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(1 0 0 / 8%);
   --sidebar-accent-foreground: oklch(0.97 0.01 250);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.68 0.19 258);
+  --sidebar-border: oklch(1 0 0 / 9%);
+  --sidebar-ring: oklch(0.66 0.18 255);
 }
 
 @layer base {
@@ -196,4 +210,215 @@
 }
 @utility animate-pop-in {
   animation: pop-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* ------------------------------------------------------------------------------------------
+   Liquid glass, dark mode only. Light mode is untouched.
+
+   These rules are deliberately outside any @layer so they beat Tailwind's utilities. That is
+   what lets every card, menu and dialog in the app pick up the material from this one place.
+
+   Cost: backdrop-filter is only on floating things (bars, menus, dialogs). Cards get their
+   look from translucency over a smooth backdrop, because a dashboard or order table can hold
+   a lot of them and blurring each one would make scrolling heavy on office PCs.
+   ------------------------------------------------------------------------------------------ */
+
+/* The backdrop the glass picks up colour from: the two brand colours plus a little violet. */
+.dark body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(70vw 60vh at 8% -8%, oklch(0.5 0.17 258 / 28%), transparent 70%),
+    radial-gradient(55vw 60vh at 102% 4%, oklch(0.45 0.14 295 / 22%), transparent 70%),
+    radial-gradient(60vw 60vh at 92% 108%, oklch(0.65 0.15 62 / 15%), transparent 70%),
+    radial-gradient(55vw 55vh at 14% 104%, oklch(0.5 0.12 220 / 18%), transparent 70%);
+}
+/* Fine grain, so those long, dim gradients don't show banding on ordinary monitors. */
+.dark body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Cards: clear glass, lit along the top edge. Tailwind's own shadow and ring are kept, so
+   selected and focused states still show. */
+.dark .bg-card {
+  box-shadow:
+    var(--glass-rim),
+    var(--tw-inset-shadow, 0 0 #0000),
+    var(--tw-inset-ring-shadow, 0 0 #0000),
+    var(--tw-ring-offset-shadow, 0 0 #0000),
+    var(--tw-ring-shadow, 0 0 #0000),
+    var(--tw-shadow, 0 0 #0000);
+}
+.dark .bg-card:not([class*="bg-gradient"]) {
+  background-image: linear-gradient(165deg, oklch(1 0 0 / 5%), transparent 40%);
+}
+
+/* Glass can't sit under scrolling content: table cells would show through each other. */
+.dark .sticky:is(.bg-card, .bg-muted, .bg-background) {
+  background-color: var(--surface-solid);
+  background-image: none;
+}
+
+/* Bars that content scrolls beneath. `bg-card/80` would be nearly invisible on clear glass. */
+.dark .liquid-bar {
+  background-color: oklch(0.17 0.026 262 / 62%);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border-color: oklch(1 0 0 / 9%);
+}
+
+.dark .bg-sidebar {
+  backdrop-filter: blur(28px) saturate(170%);
+  -webkit-backdrop-filter: blur(28px) saturate(170%);
+}
+
+/* Heavier glass for anything floating over the page: more blur, deeper shadow. */
+.dark .bg-popover,
+.dark :is([role="dialog"], [role="alertdialog"]).bg-background,
+.dark [data-sonner-toast][data-styled="true"] {
+  background-color: var(--popover);
+  backdrop-filter: blur(32px) saturate(170%);
+  -webkit-backdrop-filter: blur(32px) saturate(170%);
+  box-shadow: var(--glass-rim), 0 24px 70px -20px oklch(0 0 0 / 80%);
+}
+/* A calendar is opaque by default, which leaves a dark block in the middle of a glass menu. */
+.dark .bg-popover [class*="group/calendar"] {
+  background-color: transparent;
+}
+.dark .bg-black\/80 {
+  background-color: oklch(0.1 0.02 262 / 55%);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+/* Primary fills go deeper than the primary text colour, so white labels stay readable. */
+.dark .bg-primary {
+  background-image: linear-gradient(180deg, oklch(0.57 0.19 257), oklch(0.5 0.2 262));
+}
+.dark .bg-destructive {
+  background-image: linear-gradient(180deg, oklch(0.56 0.21 25), oklch(0.49 0.19 25));
+}
+.dark :is(button, a).bg-primary {
+  box-shadow:
+    inset 0 1px 0 0 oklch(1 0 0 / 28%),
+    0 8px 22px -10px oklch(0.62 0.19 258 / 70%);
+}
+.dark :is(button, a).bg-primary:hover {
+  filter: brightness(1.1);
+}
+.dark :is(button, a).bg-primary:active {
+  filter: brightness(0.95);
+}
+
+/* The selected piece of a segmented control lifts out of its track instead of being a hole. */
+.dark .bg-background.text-foreground.shadow-sm,
+.dark [role="tab"][data-state="active"] {
+  background-color: oklch(1 0 0 / 14%);
+  box-shadow: inset 0 1px 0 0 oklch(1 0 0 / 16%), 0 2px 8px -2px oklch(0 0 0 / 50%);
+}
+.dark [role="switch"] > span {
+  background-color: oklch(1 0 0);
+}
+
+/* Only fields with their own border: a bare input inside a styled wrapper must stay clear. */
+.dark :is(input, textarea, [role="combobox"]).bg-transparent.border-input {
+  background-color: oklch(1 0 0 / 4%);
+}
+
+/* The active nav marker becomes a glass capsule. It stays one shared element (layoutId), so
+   it slides between rows on its spring. z-index -1 keeps it under the row's icon and label;
+   the bar's backdrop-filter is what stops it dropping behind the bar itself. */
+.dark .nav-glide {
+  inset: 0;
+  width: auto;
+  height: auto;
+  z-index: -1;
+  border-radius: 0.875rem;
+  background-image: none;
+  background-color: oklch(0.66 0.18 255 / 22%);
+  box-shadow:
+    inset 0 1px 0 0 oklch(1 0 0 / 16%),
+    inset 0 0 0 1px oklch(0.75 0.14 250 / 18%),
+    0 6px 18px -10px oklch(0.62 0.19 258 / 70%);
+}
+.dark .tab-glide {
+  inset: 0.375rem 0.5rem;
+  height: auto;
+  z-index: -1;
+  border-radius: 1rem;
+  background-image: none;
+  background-color: oklch(0.66 0.18 255 / 22%);
+  box-shadow: inset 0 1px 0 0 oklch(1 0 0 / 16%);
+}
+
+/* The theme switch (lib/theme.ts). Scoped to a class so it only affects this one transition. */
+html.theme-liquid::view-transition-old(root),
+html.theme-liquid::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+/* Going back to light, the dark page is the liquid, so it sits on top and drains away. */
+html.theme-liquid-drain::view-transition-old(root) {
+  z-index: 1;
+}
+/* Without this, hover and colour transitions replay inside the blob as it reveals them. */
+html.theme-liquid *,
+html.theme-liquid *::before,
+html.theme-liquid *::after {
+  transition: none !important;
+}
+/* Exists only during the switch: a full-screen colour, cut down to a band along the blob's edge. */
+.theme-liquid-edge {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  view-transition-name: theme-liquid-edge;
+  background: linear-gradient(135deg, oklch(0.84 0.11 235), oklch(0.87 0.12 75));
+}
+html.theme-liquid::view-transition-group(theme-liquid-edge) {
+  animation: none;
+  z-index: 2;
+}
+html.theme-liquid::view-transition-new(theme-liquid-edge) {
+  animation: none;
+  mix-blend-mode: normal;
+  opacity: 0; /* uncut, this layer fills the screen: only ever visible while an animation cuts it */
+}
+html.theme-liquid::view-transition-old(theme-liquid-edge) {
+  display: none;
+}
+
+/* People who ask for less transparency or more contrast get solid surfaces. */
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .dark {
+    --card: var(--surface-solid);
+    --popover: var(--surface-solid);
+    --sidebar: var(--surface-solid);
+    --border: oklch(1 0 0 / 28%);
+  }
+  .dark body::before,
+  .dark body::after {
+    display: none;
+  }
+  .dark .liquid-bar {
+    background-color: var(--surface-solid);
+  }
+  .dark .liquid-bar,
+  .dark .bg-sidebar,
+  .dark .bg-popover,
+  .dark :is([role="dialog"], [role="alertdialog"]).bg-background,
+  .dark [data-sonner-toast][data-styled="true"],
+  .dark .bg-black\/80 {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
 }

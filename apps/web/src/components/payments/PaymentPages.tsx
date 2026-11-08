@@ -85,7 +85,7 @@ export function MyPaymentRequests({ crumbs }: { crumbs: Crumbs }) {
     <>
       <PageHeader
         title="Payment Requests"
-        description="Ask to be paid back for work expenses on your orders. The company pays to your UPI ID or UPI mobile number once it is approved."
+        description="Claim work expenses. Paid to your UPI once approved."
         crumbs={crumbs}
         actions={
           <Button className="rounded-xl" onClick={() => setCreating(true)}>

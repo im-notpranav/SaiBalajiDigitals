@@ -27,7 +27,7 @@ function AccountantOrders() {
     <>
       <PageHeader
         title="Company-Wide Orders"
-        description="Global view of all orders across the company for auditing and oversight."
+        description="Every order in the company."
         crumbs={[{ label: "Accountant" }, { label: "All Orders" }]}
         actions={
           <Button variant="secondary" className="rounded-xl shadow-soft" onClick={() => exportOrders({})}>

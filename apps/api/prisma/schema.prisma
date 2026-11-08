@@ -100,6 +100,8 @@ model User {
   notifications Notification[]
   remarkedItems OrderItem[]      @relation("ItemRemarkSetter")
   confirmedItems OrderItem[]     @relation("ItemRemarkConfirmer")
+  adjustmentsRequested OrderAdjustment[] @relation("AdjustmentRequester")
+  adjustmentsDecided   OrderAdjustment[] @relation("AdjustmentDecider")
   flaggedItems  OrderItem[]      @relation("ItemFlagger")
   assignments   OrderItemAssignment[] @relation("AssignmentAssignee")
   assignmentsMade OrderItemAssignment[] @relation("AssignmentAssigner")
@@ -162,6 +164,7 @@ model Order {
   followUps              PaymentFollowUp[]
   workJobs               WorkJob[]
   paymentRequests        PaymentRequest[]
+  adjustments            OrderAdjustment[]
   created_at             DateTime              @default(now())
   updated_at             DateTime              @updatedAt
 
@@ -190,7 +193,13 @@ model OrderItem {
   rate          Decimal     @db.Decimal(10, 2)
   amount        Decimal     @db.Decimal(10, 2)
   remarks       RemarkType?
+  /// The reason typed for Other, Revised, ExtraAmount and LessAmount.
   remarks_other_text String?
+  /// ExtraAmount / LessAmount only: the rupee figure added to or taken off `amount`. A CSM's
+  /// suggestion while the remark is unconfirmed; the admin's figure once confirmed.
+  adjustment_amount Decimal? @db.Decimal(10, 2)
+  /// Revised only: what the line came to before the admin first corrected it.
+  original_amount Decimal?   @db.Decimal(10, 2)
   remarks_set_at DateTime?
   remarks_set_by Int?
   remarksSetter  User?     @relation("ItemRemarkSetter", fields: [remarks_set_by], references: [id], onDelete: SetNull)
@@ -233,6 +242,7 @@ model OrderStore {
   invoice_id   Int?
   invoice      Invoice?    @relation(fields: [invoice_id], references: [id], onDelete: SetNull)
   items        OrderItem[]
+  adjustments  OrderAdjustment[]
   workJobs     WorkJobStore[]
   created_at   DateTime    @default(now())
   updated_at   DateTime    @updatedAt
@@ -244,6 +254,46 @@ model OrderStore {
   @@index([order_id])
   @@index([invoice_id])
   @@index([store_name])
+}
+
+enum AdjustmentStatus {
+  Requested
+  Approved
+  Rejected
+}
+
+/// A whole-order Extra Amount or Less Amount. It sits on one store, because invoices are
+/// raised per store and each is reconciled against its own stores' value. A CSM requests
+/// one (with a suggested figure); only an admin approves it, and only approved rows move
+/// the billable total.
+model OrderAdjustment {
+  id               Int              @id @default(autoincrement())
+  order_id         Int
+  order            Order            @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  order_store_id   Int
+  orderStore       OrderStore       @relation(fields: [order_id, order_store_id], references: [order_id, id], onDelete: Cascade)
+  /// ExtraAmount or LessAmount only.
+  type             RemarkType
+  /// Always positive: added for ExtraAmount, taken off for LessAmount. The suggested figure
+  /// while Requested; the admin's figure once Approved.
+  amount           Decimal          @db.Decimal(10, 2)
+  /// What the CSM first asked for, kept after the admin edits `amount`.
+  requested_amount Decimal?         @db.Decimal(10, 2)
+  reason           String
+  status           AdjustmentStatus @default(Requested)
+  requested_by     Int?
+  requester        User?            @relation("AdjustmentRequester", fields: [requested_by], references: [id], onDelete: SetNull)
+  decided_by       Int?
+  decider          User?            @relation("AdjustmentDecider", fields: [decided_by], references: [id], onDelete: SetNull)
+  decided_at       DateTime?
+  /// The admin's note, required when rejecting.
+  decision_note    String?
+  created_at       DateTime         @default(now())
+  updated_at       DateTime         @updatedAt
+
+  @@index([order_id])
+  @@index([order_store_id])
+  @@index([status])
 }
 
 /// One invoice raised against a specific set of stores in an order. Its expected value is

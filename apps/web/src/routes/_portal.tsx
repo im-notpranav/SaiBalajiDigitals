@@ -51,7 +51,7 @@ function PortalLayout() {
   const field = isFieldRole(user.role);
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex min-h-screen bg-background dark:bg-transparent">
       <Sidebar role={user.role} />
       <PreloadNavPages role={user.role} />
       <div className="flex min-w-0 flex-1 flex-col">

@@ -141,13 +141,13 @@ function ProductionDashboard() {
             <SectionHeading
               id="my-orders-heading"
               title="My orders"
-              description="Orders with work still to do come first. Click one to see its details."
+              description="Orders with work left come first."
             />
             {sorted.length === 0 ? (
               <EmptyState
                 icon={CheckCircle2}
                 title="Nothing is assigned to you right now"
-                description="When the Production Manager assigns you an item, its order appears here."
+                description="Orders show here once items are assigned to you."
               />
             ) : (
               <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">

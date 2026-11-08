@@ -78,7 +78,7 @@ export function PipelineStages({
       <SectionHeading
         id="pipeline-heading"
         title="Where orders are"
-        description="Every order sits in one stage, left to right. Click a stage to see its orders."
+        description="Each order sits in one stage. Click a stage to see its orders."
       />
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
         {STAGES.map((stage) => {

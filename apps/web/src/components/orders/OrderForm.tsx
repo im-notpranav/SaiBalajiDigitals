@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
-import { Trash2, Plus, Save, Send, CheckCircle2, Upload, FileSpreadsheet } from "lucide-react";
+import { Trash2, Plus, Send, Upload, FileSpreadsheet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -148,6 +148,32 @@ function storeBlocksOf(order?: Order): StoreBlock[] {
     po_number: "",
     lines: order.items?.length ? order.items.map(toLine) : [blankLine()],
   }];
+}
+
+/** Small caps titles for the form's sections. */
+const sectionTitle = "text-xs font-semibold uppercase tracking-wider text-muted-foreground";
+/** Field labels: small, so the boxes carry the weight. */
+const fieldLabel = "text-xs font-medium text-muted-foreground";
+
+/** A small input with its field name inside it ("W", "Qty"), so one row needs no labels above. */
+function PrefixedInput({ prefix, className, ...props }: React.ComponentProps<typeof Input> & { prefix: string }) {
+  return (
+    <div className="relative">
+      <span
+        className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] font-medium uppercase text-muted-foreground"
+        aria-hidden
+      >
+        {prefix}
+      </span>
+      <Input
+        type="text"
+        autoComplete="off"
+        {...props}
+        // No number spinners: they ate the room the value needs.
+        className={`h-9 tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${prefix.length > 1 ? "pl-10" : "pl-6"} ${className ?? ""}`}
+      />
+    </div>
+  );
 }
 
 export interface OrderFormProps {
@@ -357,26 +383,57 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
           toast.error(err instanceof Error ? err.message : "Could not save this order.")
         );
       }}
-      className="grid gap-6 lg:grid-cols-3"
+      className="grid gap-4 lg:grid-cols-3"
     >
-      <div className="space-y-6 lg:col-span-2">
+      <div className="space-y-4 lg:col-span-2">
         <motion.section
           initial={false}
           animate={{ opacity: 1, y: 0 }}
-          className="surface-panel p-6"
+          className="surface-panel p-4 sm:p-5"
         >
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            Customer & Order
-          </h2>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <Label htmlFor="clientName">Client Name *</Label>
-              <ClientCombobox id="clientName" value={clientName} onChange={setClientName} className="mt-1.5" />
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h2 className={sectionTitle}>Order</h2>
+            {/* Order-level import: one sheet fills every store block at once. */}
+            {!defaultValues && (
+              <div className="flex items-center gap-1">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={handleTemplateDownload}
+                  className="h-8 text-xs"
+                  title="Download the order sheet template"
+                >
+                  <FileSpreadsheet className="mr-1 h-3.5 w-3.5" /> Template
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="h-8 text-xs"
+                  title="Fill every store from an order sheet"
+                >
+                  <Upload className="mr-1 h-3.5 w-3.5" /> Import sheet
+                </Button>
+              </div>
+            )}
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="sm:col-span-2">
+              <Label htmlFor="clientName" className={fieldLabel}>Client *</Label>
+              <ClientCombobox id="clientName" value={clientName} onChange={setClientName} className="mt-1 h-9" />
             </div>
             <div>
-              <Label htmlFor="poNumber">Job PO Number (Optional)</Label>
-              <Input id="poNumber" value={poNumber} onChange={(e) => setPoNumber(e.target.value)} placeholder="e.g. PO-12345" className="mt-1.5" />
-              <p className="mt-1 text-[10px] text-muted-foreground">Covers the whole order. Each store can carry its own PO below.</p>
+              <Label htmlFor="poNumber" className={fieldLabel}>Job PO</Label>
+              <Input
+                id="poNumber"
+                value={poNumber}
+                onChange={(e) => setPoNumber(e.target.value)}
+                placeholder="Optional"
+                title="Covers the whole order"
+                className="mt-1 h-9"
+              />
             </div>
           </div>
         </motion.section>
@@ -389,178 +446,158 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
           className="hidden"
         />
 
-        {/* Order-level import: one sheet fills every store block at once. */}
-        {!defaultValues && (
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              onClick={handleTemplateDownload}
-              className="rounded-lg text-xs"
-              title="Download the order line item template"
-            >
-              <FileSpreadsheet className="mr-1 h-3.5 w-3.5" /> Template
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              title="Loads every store in the file, with its own location, PO and line items"
-              onClick={() => fileInputRef.current?.click()}
-              className="rounded-lg"
-            >
-              <Upload className="mr-1 h-3.5 w-3.5" /> Import all stores
-            </Button>
-          </div>
-        )}
-
         {stores.map((store, storeIdx) => (
         <motion.section
           key={store.id}
           initial={false}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.05 }}
-          className="surface-panel p-6"
+          className="surface-panel p-4 sm:p-5"
         >
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h2 className={sectionTitle}>
               {stores.length > 1 ? `Store ${storeIdx + 1} of ${stores.length}` : "Store"}
             </h2>
             {stores.length > 1 && !store.originalId && (
-              <Button type="button" size="sm" variant="ghost" onClick={() => removeStoreBlock(store.id)} className="rounded-lg text-xs">
-                <Trash2 className="mr-1 h-3.5 w-3.5 text-destructive" /> Remove store
+              <Button type="button" size="sm" variant="ghost" onClick={() => removeStoreBlock(store.id)} className="h-8 text-xs">
+                <Trash2 className="mr-1 h-3.5 w-3.5 text-destructive" /> Remove
               </Button>
             )}
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div>
-              <Label htmlFor={`storeName-${store.id}`}>Store Name *</Label>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_9rem]">
+            <div className="col-span-2 sm:col-span-1">
+              <Label htmlFor={`storeName-${store.id}`} className={fieldLabel}>Store name *</Label>
               <Input
                 id={`storeName-${store.id}`}
                 value={store.store_name}
                 onChange={(e) => patchStore(store.id, { store_name: e.target.value })}
-                placeholder="e.g. Downtown Branch"
-                className="mt-1.5"
+                placeholder="e.g. Fabindia Inorbit Mall"
+                className="mt-1 h-9"
               />
             </div>
             <div>
-              <Label htmlFor={`location-${store.id}`}>Location *</Label>
+              <Label htmlFor={`location-${store.id}`} className={fieldLabel}>Location *</Label>
               <Input
                 id={`location-${store.id}`}
                 value={store.location}
                 onChange={(e) => patchStore(store.id, { location: e.target.value })}
-                placeholder="e.g. New York, NY"
-                className="mt-1.5"
+                placeholder="e.g. Madhapur"
+                className="mt-1 h-9"
               />
             </div>
             <div>
-              <Label htmlFor={`storePo-${store.id}`}>Store PO Number (Optional)</Label>
+              <Label htmlFor={`storePo-${store.id}`} className={fieldLabel}>Store PO</Label>
               <Input
                 id={`storePo-${store.id}`}
                 value={store.po_number}
                 onChange={(e) => patchStore(store.id, { po_number: e.target.value })}
-                placeholder="e.g. PO-12345"
-                className="mt-1.5"
+                placeholder="Optional"
+                title="Covers this store only"
+                className="mt-1 h-9"
               />
             </div>
           </div>
 
-          <div className="mb-4 mt-6 flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Line Items</h3>
-            <Button type="button" size="sm" variant="outline" onClick={() => addLine(store.id)} className="rounded-lg" disabled={lineItemsLocked}>
-              <Plus className="mr-1 h-3.5 w-3.5" /> Add item
-            </Button>
-          </div>
+          <h3 className={`mb-2 mt-4 ${sectionTitle}`}>
+            Line items <span className="font-normal normal-case tracking-normal">({store.lines.length})</span>
+          </h3>
 
           {lineItemsLocked && (
-            <p className="mb-3 rounded-lg border border-warning/30 bg-warning/5 p-3 text-xs text-muted-foreground">
-              Billing has started on this order, so line items are frozen. Store name, location and
-              PO numbers can still be corrected above.
+            <p className="mb-2 rounded-lg border border-warning/30 bg-warning/5 px-3 py-2 text-xs text-muted-foreground">
+              Billing has started, so line items are locked.
             </p>
           )}
 
-          <div className="space-y-3">
+          <div className="space-y-2">
             {store.lines.map((line, idx) => {
               const isReadOnlyItem = lineItemsLocked || (userRole === "CSM" && !!line.originalId);
+              const showLoss = !line.originalId || isAdmin;
+              const lossLabel = isAdmin ? "Loss remark (optional)" : "Propose loss remark (needs admin approval)";
 
               return (
-              <div key={line.id} className="relative rounded-xl border bg-background/60 p-3 pr-10">
-                <div className="grid gap-2 sm:grid-cols-12 items-end">
-                  <div className={`sm:col-span-4 ${isReadOnlyItem ? "pointer-events-none opacity-50" : ""}`}>
-                    <Label className="text-[10px] uppercase text-muted-foreground">Media</Label>
+              <div key={line.id} className="rounded-xl border bg-background/60 p-2.5">
+                {/* Line 1: what is being made. */}
+                <div className="grid grid-cols-4 gap-2 sm:grid-cols-[1.5rem_minmax(0,1fr)_repeat(4,5.5rem)] sm:items-center">
+                  <span className="hidden text-center text-xs tabular-nums text-muted-foreground sm:block" aria-hidden>
+                    {idx + 1}
+                  </span>
+                  <div className={`col-span-4 sm:col-span-1 ${isReadOnlyItem ? "pointer-events-none opacity-50" : ""}`}>
+                    <Label htmlFor={`media-${line.id}`} className="sr-only">Media, item {idx + 1}</Label>
                     <MediaCombobox
+                      id={`media-${line.id}`}
                       value={line.media}
                       onChange={(val) => update(store.id, line.id, { media: val })}
-                      className="mt-1 h-9"
+                      className="h-9"
                     />
                   </div>
-                  <div className="sm:col-span-2">
-                    <Label className="text-[10px] uppercase text-muted-foreground">W (in)</Label>
-                    <Input
-                      aria-label="Width in inches"
-                      type="text"
-                      inputMode="decimal"
-                      autoComplete="off"
-                      placeholder="0.00"
-                      value={line.width_inches}
-                      onChange={(e) => update(store.id, line.id, { width_inches: sanitizeDecimal(e.target.value) })}
-                      onBlur={() => update(store.id, line.id, { width_inches: normalizeDecimal(line.width_inches) })}
-                      className="mt-1"
-                      disabled={isReadOnlyItem}
-                    />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <Label className="text-[10px] uppercase text-muted-foreground">H (in)</Label>
-                    <Input
-                      aria-label="Height in inches"
-                      type="text"
-                      inputMode="decimal"
-                      autoComplete="off"
-                      placeholder="0.00"
-                      value={line.height_inches}
-                      onChange={(e) => update(store.id, line.id, { height_inches: sanitizeDecimal(e.target.value) })}
-                      onBlur={() => update(store.id, line.id, { height_inches: normalizeDecimal(line.height_inches) })}
-                      className="mt-1"
-                      disabled={isReadOnlyItem}
-                    />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <Label className="text-[10px] uppercase text-muted-foreground">Qty</Label>
-                    <Input
-                      aria-label="Quantity"
-                      type="number"
-                      min={1}
-                      step={1}
-                      value={line.qty || ""}
-                      onChange={(e) => update(store.id, line.id, { qty: Number(e.target.value) })}
-                      className="mt-1"
-                      disabled={isReadOnlyItem}
-                    />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <Label className="text-[10px] uppercase text-muted-foreground">Rate (₹)</Label>
-                    <Input
-                      aria-label="Rate in rupees"
-                      type="text"
-                      inputMode="decimal"
-                      autoComplete="off"
-                      placeholder="0.00"
-                      value={line.rate}
-                      onChange={(e) => update(store.id, line.id, { rate: sanitizeDecimal(e.target.value) })}
-                      onBlur={() => update(store.id, line.id, { rate: normalizeDecimal(line.rate) })}
-                      className="mt-1"
-                      disabled={isReadOnlyItem}
-                    />
-                  </div>
+                  <PrefixedInput
+                    prefix="W"
+                    aria-label="Width in inches"
+                    title="Width in inches"
+                    inputMode="decimal"
+                    placeholder="in"
+                    value={line.width_inches}
+                    onChange={(e) => update(store.id, line.id, { width_inches: sanitizeDecimal(e.target.value) })}
+                    onBlur={() => update(store.id, line.id, { width_inches: normalizeDecimal(line.width_inches) })}
+                    disabled={isReadOnlyItem}
+                  />
+                  <PrefixedInput
+                    prefix="H"
+                    aria-label="Height in inches"
+                    title="Height in inches"
+                    inputMode="decimal"
+                    placeholder="in"
+                    value={line.height_inches}
+                    onChange={(e) => update(store.id, line.id, { height_inches: sanitizeDecimal(e.target.value) })}
+                    onBlur={() => update(store.id, line.id, { height_inches: normalizeDecimal(line.height_inches) })}
+                    disabled={isReadOnlyItem}
+                  />
+                  <PrefixedInput
+                    prefix="Qty"
+                    aria-label="Quantity"
+                    title="Quantity"
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={line.qty || ""}
+                    onChange={(e) => update(store.id, line.id, { qty: Number(e.target.value) })}
+                    disabled={isReadOnlyItem}
+                  />
+                  <PrefixedInput
+                    prefix="₹"
+                    aria-label="Rate in rupees"
+                    title="Rate in rupees per sft"
+                    inputMode="decimal"
+                    placeholder="rate"
+                    value={line.rate}
+                    onChange={(e) => update(store.id, line.id, { rate: sanitizeDecimal(e.target.value) })}
+                    onBlur={() => update(store.id, line.id, { rate: normalizeDecimal(line.rate) })}
+                    disabled={isReadOnlyItem}
+                  />
                 </div>
-                <div className="grid gap-2 sm:grid-cols-12 items-end mt-3">
-                  <div className="absolute right-2 top-2">
+
+                {/* Line 2: loss remark, then what the line comes to. */}
+                <div className="mt-2 flex items-center gap-2 sm:pl-8">
+                  {showLoss && (
+                    <Select value={line.remarks ?? "none"} onValueChange={(v) => update(store.id, line.id, { remarks: v === "none" ? null : v })}>
+                      <SelectTrigger aria-label={lossLabel} title={lossLabel} className="h-8 min-w-0 flex-1 text-xs sm:w-52 sm:flex-none">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">No loss</SelectItem>
+                        {LOSS_REMARK_TYPES.map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  <div className="ml-auto flex shrink-0 items-center gap-2 text-xs sm:gap-3">
+                    <span className="tabular-nums text-muted-foreground">{(getSft(line) * line.qty).toFixed(2)} sft</span>
+                    <span className="min-w-[4.5rem] text-right font-semibold tabular-nums">{inr(getLineTotal(line))}</span>
                     <Button
                       type="button"
                       variant="ghost"
                       size="icon"
+                      className="h-8 w-8"
                       onClick={() => removeLine(store.id, line.id)}
                       disabled={store.lines.length === 1 || isReadOnlyItem}
                       aria-label={`Remove item ${idx + 1}`}
@@ -569,54 +606,45 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
                     </Button>
                   </div>
                 </div>
-                {(!line.originalId || isAdmin) && (
-                  <div className="space-y-1 mt-2">
-                    <Label className="text-xs">
-                      {isAdmin ? "Loss remark (optional)" : "Propose loss remark (needs admin approval)"}
-                    </Label>
-                    <Select value={line.remarks ?? "none"} onValueChange={(v) => update(store.id, line.id, { remarks: v === "none" ? null : v })}>
-                      <SelectTrigger aria-label="Loss remark" className="h-9 text-xs w-full sm:h-8 sm:w-64"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">None</SelectItem>
-                        {LOSS_REMARK_TYPES.map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                    {line.remarks === "Other" && (
-                      <Textarea
-                        className="text-xs mt-1"
-                        placeholder="Describe the reason"
-                        value={line.remarks_other_text ?? ""}
-                        onChange={(e) => update(store.id, line.id, { remarks_other_text: e.target.value })}
-                      />
-                    )}
-                    {line.remarks && !isAdmin && (
-                      <p className="text-[10px] text-muted-foreground">
-                        This line is still billed until an admin confirms the loss.
-                      </p>
-                    )}
-                    {line.remarks && isAdmin && line.originalId && (
-                      <p className="text-[10px] text-muted-foreground">
-                        Saved as a confirmed loss — excluded from the billable total.
-                      </p>
-                    )}
-                  </div>
+
+                {showLoss && line.remarks === "Other" && (
+                  <Textarea
+                    className="mt-2 min-h-[60px] text-xs sm:ml-8 sm:w-[calc(100%-2rem)]"
+                    placeholder="Describe the reason"
+                    aria-label="Loss reason"
+                    value={line.remarks_other_text ?? ""}
+                    onChange={(e) => update(store.id, line.id, { remarks_other_text: e.target.value })}
+                  />
                 )}
-                <div className="mt-2 flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">
-                    SFT: {(getSft(line) * line.qty).toFixed(2)}
-                  </span>
-                  <span className="font-semibold">{inr(getLineTotal(line))}</span>
-                </div>
+                {showLoss && line.remarks && !isAdmin && (
+                  <p className="mt-1 text-[10px] text-muted-foreground sm:pl-8">
+                    Still billed until an admin confirms.
+                  </p>
+                )}
+                {showLoss && line.remarks && isAdmin && line.originalId && (
+                  <p className="mt-1 text-[10px] text-muted-foreground sm:pl-8">
+                    Confirmed loss: not billed.
+                  </p>
+                )}
               </div>
             );})}
           </div>
 
-          {stores.length > 1 && (
-            <div className="mt-3 flex items-center justify-end gap-2 border-t pt-3 text-xs">
-              <span className="text-muted-foreground">Store total</span>
-              <span className="font-semibold">{inr(storeTotal(store))}</span>
-            </div>
-          )}
+          <div className="mt-2 flex min-h-8 items-center justify-between gap-2">
+            {!lineItemsLocked ? (
+              <Button type="button" size="sm" variant="ghost" onClick={() => addLine(store.id)} className="h-8 text-xs text-primary">
+                <Plus className="mr-1 h-3.5 w-3.5" /> Add item
+              </Button>
+            ) : (
+              <span />
+            )}
+            {stores.length > 1 && (
+              <span className="text-xs">
+                <span className="text-muted-foreground">Store total </span>
+                <span className="font-semibold tabular-nums">{inr(storeTotal(store))}</span>
+              </span>
+            )}
+          </div>
         </motion.section>
         ))}
 
@@ -625,9 +653,9 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
             type="button"
             variant="outline"
             onClick={addStoreBlock}
-            className="w-full rounded-xl border-dashed py-6"
+            className="h-10 w-full rounded-xl border-dashed text-sm"
           >
-            <Plus className="mr-2 h-4 w-4" /> Add another store
+            <Plus className="mr-2 h-4 w-4" /> Add store
           </Button>
         )}
       </div>
@@ -636,28 +664,22 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
         initial={false}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
-        className="lg:sticky lg:top-24 lg:h-fit"
+        className="lg:sticky lg:top-20 lg:h-fit"
       >
         <div className="surface-panel overflow-hidden">
-          <div className="border-b bg-gradient-to-br from-primary/10 to-transparent p-5">
-            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              {lossCount > 0 ? "Billable Value" : "Live Summary"}
-            </div>
-            <div className="mt-2 text-3xl font-bold">{inr(billable)}</div>
+          <div className="border-b bg-gradient-to-br from-primary/10 to-transparent p-4">
+            <div className={sectionTitle}>{lossCount > 0 ? "Billable" : "Total"}</div>
+            <div className="mt-1 text-2xl font-bold tabular-nums">{inr(billable)}</div>
             <div className="text-xs text-muted-foreground">
-              {allLines.length} item{allLines.length === 1 ? "" : "s"} · {stores.length} store{stores.length === 1 ? "" : "s"} · {totalSft.toFixed(2)} sft (computed)
+              {allLines.length} item{allLines.length === 1 ? "" : "s"} · {stores.length} store{stores.length === 1 ? "" : "s"} · {totalSft.toFixed(2)} sft
             </div>
             {lossCount > 0 && (
-              <div className="mt-2 text-xs text-amber-600 dark:text-amber-500">
-                {isAdmin ? "Loss (excluded)" : "Proposed loss (pending)"}: {inr(lossTotal)} · {lossCount} item{lossCount === 1 ? "" : "s"}
+              <div className="mt-1 text-xs text-amber-600 dark:text-amber-500">
+                {isAdmin ? "Loss" : "Proposed loss"}: {inr(lossTotal)} · {lossCount} item{lossCount === 1 ? "" : "s"}
               </div>
             )}
           </div>
-          <div className="space-y-3 p-5">
-            <div className="rounded-lg border border-info/30 bg-info/5 p-3 text-xs text-info">
-              <CheckCircle2 className="mb-1 inline h-3.5 w-3.5" /> Totals and Sft are computed server-side before save. This preview
-              is read-only.
-            </div>
+          <div className="p-4">
             <Button type="submit" size="lg" className="w-full rounded-xl" disabled={isSubmitting}>
               <Send className="mr-2 h-4 w-4" /> {isSubmitting ? "Submitting…" : defaultValues ? "Save Changes" : "Submit Order"}
             </Button>

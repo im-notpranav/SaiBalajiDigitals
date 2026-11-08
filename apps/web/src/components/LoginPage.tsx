@@ -11,6 +11,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-store";
+import { LogoImage } from "@/components/brand/Logo";
 
 type FieldState = "idle" | "error" | "success";
 
@@ -64,7 +65,7 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="relative min-h-screen w-full overflow-hidden bg-white text-slate-900 antialiased">
+    <main className="relative min-h-screen w-full overflow-hidden bg-white text-slate-900 antialiased dark:bg-transparent dark:text-slate-100">
       {/* Background */}
       <div className="pointer-events-none absolute inset-0 -z-10">
         <div
@@ -74,8 +75,16 @@ export default function LoginPage() {
               "radial-gradient(1000px 700px at 15% 20%, rgba(10,123,232,0.08), transparent 60%), radial-gradient(900px 600px at 85% 10%, rgba(245,163,0,0.07), transparent 60%), radial-gradient(1200px 800px at 50% 120%, rgba(0,87,194,0.08), transparent 60%)",
           }}
         />
+        {/* Dark mode only: soft colour for the glass sign-in card to pick up. */}
+        <div
+          className="absolute inset-0 hidden dark:block"
+          style={{
+            background:
+              "radial-gradient(420px 340px at 66% 36%, rgba(10,123,232,0.42), transparent 70%), radial-gradient(360px 300px at 84% 70%, rgba(245,163,0,0.24), transparent 70%)",
+          }}
+        />
         <motion.svg
-          className="absolute -left-40 -bottom-40 h-[700px] w-[700px]"
+          className="absolute -left-40 -bottom-40 h-[700px] w-[700px] dark:hidden"
           viewBox="0 0 600 600"
           animate={{ y: [0, -12, 0], x: [0, 6, 0] }}
           transition={{ duration: 25, repeat: Infinity, ease: "easeInOut" }}
@@ -92,7 +101,7 @@ export default function LoginPage() {
           />
         </motion.svg>
         <motion.svg
-          className="absolute -top-40 -right-40 h-[600px] w-[600px]"
+          className="absolute -top-40 -right-40 h-[600px] w-[600px] dark:hidden"
           viewBox="0 0 600 600"
           animate={{ y: [0, 10, 0], rotate: [0, 1.5, 0] }}
           transition={{ duration: 25, repeat: Infinity, ease: "easeInOut" }}
@@ -119,17 +128,13 @@ export default function LoginPage() {
           className="flex shrink-0 items-center px-4 py-4 sm:px-8 lg:px-12"
         >
           <div className="flex min-w-0 items-center gap-3">
-            <img
-              src={"/logo.png"}
-              alt="Sai Balaji Digitals"
-              className="h-10 w-10 shrink-0 rounded-full object-cover sm:h-12 sm:w-12"
-            />
+            <LogoImage mark className="h-10 w-10 shrink-0 rounded-full sm:h-12 sm:w-12" />
             <div className="min-w-0">
-              <h2 className="truncate text-sm font-extrabold tracking-tight text-[#0057C2] sm:text-base lg:text-lg">
+              <h2 className="truncate text-sm font-extrabold tracking-tight text-[#0057C2] sm:text-base lg:text-lg dark:text-white">
                 SAI BALAJI DIGITALS
               </h2>
-              <p className="hidden text-xs text-slate-500 sm:block">
-                Where <span className="font-semibold text-[#0A7BE8]">Excellence</span>{" "}
+              <p className="hidden text-xs text-slate-500 sm:block dark:text-slate-400">
+                Where <span className="font-semibold text-[#0A7BE8] dark:text-sky-400">Excellence</span>{" "}
                 meets <span className="font-semibold text-[#F5A300]">precision</span>
               </p>
             </div>
@@ -144,18 +149,20 @@ export default function LoginPage() {
             transition={{ duration: 0.7, delay: 0.3, ease: easeOutExpo }}
             className="flex flex-col items-center justify-center text-center"
           >
-            <motion.img
-              src={"/logo.png"}
-              alt="Sai Balaji Digitals logo"
-              className="h-32 w-32 rounded-full object-cover drop-shadow-[0_20px_50px_rgba(10,123,232,0.2)] sm:h-40 sm:w-40 lg:h-52 lg:w-52"
+            <motion.div
               animate={{ y: [-6, 6, -6] }}
               transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
-            />
+            >
+              <LogoImage
+                alt="Sai Balaji Digitals logo"
+                className="h-32 w-32 rounded-full drop-shadow-[0_20px_50px_rgba(10,123,232,0.2)] sm:h-40 sm:w-40 lg:h-52 lg:w-52 dark:drop-shadow-[0_24px_60px_rgba(10,123,232,0.4)]"
+              />
+            </motion.div>
             <motion.h1
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.7, delay: 0.7, ease: easeOutExpo }}
-              className="mt-6 text-3xl font-bold tracking-tight text-[#0F172A] sm:text-4xl"
+              className="mt-6 text-3xl font-bold tracking-tight text-[#0F172A] sm:text-4xl dark:text-white"
             >
               Welcome Back
             </motion.h1>
@@ -163,7 +170,7 @@ export default function LoginPage() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.85, ease: easeOutExpo }}
-              className="mt-2 max-w-sm text-sm text-slate-500 sm:text-base"
+              className="mt-2 max-w-sm text-sm text-slate-500 sm:text-base dark:text-slate-400"
             >
               Sign in to your Order Management workspace
             </motion.p>
@@ -187,14 +194,13 @@ export default function LoginPage() {
             className="flex w-full items-center justify-center"
           >
             <div
-              className="mx-auto w-full max-w-[460px] rounded-2xl bg-white/80 p-7 backdrop-blur-xl sm:p-9"
-              style={{ boxShadow: "0 25px 60px rgba(15,23,42,0.08)" }}
+              className="mx-auto w-full max-w-[460px] rounded-2xl bg-white/80 p-7 shadow-[0_25px_60px_rgba(15,23,42,0.08)] backdrop-blur-xl sm:p-9 dark:rounded-3xl dark:border dark:border-white/10 dark:bg-white/[0.06] dark:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.14),0_30px_80px_-20px_rgba(0,0,0,0.75)] dark:backdrop-blur-2xl dark:backdrop-saturate-150"
             >
               <div className="text-center">
-                <h2 className="text-xl font-bold tracking-tight text-[#0F172A] sm:text-2xl">
+                <h2 className="text-xl font-bold tracking-tight text-[#0F172A] sm:text-2xl dark:text-white">
                   Sign in to your account
                 </h2>
-                <p className="mt-1 text-sm text-slate-500">
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                   Enter your credentials to continue
                 </p>
               </div>
@@ -233,7 +239,7 @@ export default function LoginPage() {
                     <div className="mt-1.5 flex justify-end">
                       <button
                         type="button"
-                        className="text-xs font-medium text-[#0A7BE8] transition-colors hover:text-[#0057C2] hover:underline"
+                        className="text-xs font-medium text-[#0A7BE8] transition-colors hover:text-[#0057C2] hover:underline dark:text-sky-400 dark:hover:text-sky-300"
                       >
                         Forgot Password?
                       </button>
@@ -258,7 +264,7 @@ export default function LoginPage() {
                         type="button"
                         onClick={() => setShowPassword((v) => !v)}
                         aria-label={showPassword ? "Hide password" : "Show password"}
-                        className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                        className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-white/10 dark:hover:text-slate-100"
                       >
                         {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </button>
@@ -272,7 +278,7 @@ export default function LoginPage() {
                       initial={{ opacity: 0, y: -4 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -4 }}
-                      className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-600"
+                      className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-600 dark:border-red-400/30 dark:bg-red-500/10 dark:text-red-300"
                     >
                       <AlertCircle className="h-4 w-4" /> {formError}
                     </motion.div>
@@ -337,7 +343,7 @@ function FormField({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay, ease: easeOutExpo }}
     >
-      <label className="mb-1.5 block text-xs font-semibold text-[#0F172A]">{label}</label>
+      <label className="mb-1.5 block text-xs font-semibold text-[#0F172A] dark:text-slate-200">{label}</label>
       <motion.div
         key={shakeKey}
         animate={
@@ -355,7 +361,7 @@ function FormField({
             initial={{ opacity: 0, y: -4 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -4 }}
-            className="mt-1 text-[11px] font-medium text-red-500"
+            className="mt-1 text-[11px] font-medium text-red-500 dark:text-red-300"
           >
             {error}
           </motion.p>
@@ -378,21 +384,21 @@ function InputWithIcon({
 }) {
   const borderClass =
     state === "error"
-      ? "border-red-400 focus-within:border-red-500 focus-within:ring-red-100"
+      ? "border-red-400 focus-within:border-red-500 focus-within:ring-red-100 dark:focus-within:ring-red-500/20"
       : state === "success"
-        ? "border-emerald-400 focus-within:border-emerald-500 focus-within:ring-emerald-100"
-        : "border-slate-200 hover:border-slate-300 focus-within:border-[#0A7BE8] focus-within:ring-[#0A7BE8]/15";
+        ? "border-emerald-400 focus-within:border-emerald-500 focus-within:ring-emerald-100 dark:focus-within:ring-emerald-500/20"
+        : "border-slate-200 hover:border-slate-300 focus-within:border-[#0A7BE8] focus-within:ring-[#0A7BE8]/15 dark:border-white/15 dark:hover:border-white/25 dark:focus-within:border-sky-400 dark:focus-within:ring-sky-400/20";
 
   return (
     <div
-      className={`group flex h-11 items-center gap-2.5 rounded-xl border bg-white px-3 transition-all duration-200 focus-within:ring-4 ${borderClass}`}
+      className={`group flex h-11 items-center gap-2.5 rounded-xl border bg-white px-3 transition-all duration-200 focus-within:ring-4 dark:bg-white/[0.05] ${borderClass}`}
     >
-      <span className="text-slate-400 transition-colors group-focus-within:text-[#0A7BE8]">
+      <span className="text-slate-400 transition-colors group-focus-within:text-[#0A7BE8] dark:group-focus-within:text-sky-400">
         {icon}
       </span>
       <input
         {...props}
-        className="flex-1 bg-transparent text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none"
+        className="flex-1 bg-transparent text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none dark:text-white dark:placeholder:text-slate-500"
       />
       {state === "success" && (
         <motion.span

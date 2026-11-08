@@ -86,7 +86,7 @@ function JobsPage() {
     <>
       <PageHeader
         title="Field Jobs"
-        description="Assign installation work to Pasters, Helpers and Drivers. Someone already booked can be picked, with a warning."
+        description="Assign installation work to field teams."
         crumbs={[{ label: "Work Allocation" }, { label: "Field Jobs" }]}
         actions={
           <Button className="rounded-xl" onClick={() => setDialog({ job: null })}>

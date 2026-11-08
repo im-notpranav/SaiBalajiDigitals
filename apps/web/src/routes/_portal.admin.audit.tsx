@@ -71,7 +71,7 @@ function AuditPage() {
     <>
       <PageHeader
         title="Audit Log Viewer"
-        description="Read-only investigation tool. System-triggered noise is suppressed via app.skip_audit."
+        description="Who changed what, and when."
         crumbs={[{ label: "Automated System" }, { label: "Audit Logs" }]}
       />
 

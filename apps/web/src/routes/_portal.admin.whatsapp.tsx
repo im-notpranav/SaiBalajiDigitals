@@ -50,7 +50,7 @@ function WhatsAppPage() {
     return (
       <PageHeader
         title="WhatsApp"
-        description="WhatsApp messages are managed by the Admin."
+        description="Managed by the Admin."
         crumbs={[{ label: "Automated System" }, { label: "WhatsApp" }]}
       />
     );
@@ -60,7 +60,7 @@ function WhatsAppPage() {
     <>
       <PageHeader
         title="WhatsApp"
-        description="Job, payment and order updates sent to staff through AskEva. Every message is recorded here."
+        description="Messages sent to staff through AskEva."
         crumbs={[{ label: "Automated System" }, { label: "WhatsApp" }]}
       />
       {setup.data && <ModeBanner setup={setup.data} />}

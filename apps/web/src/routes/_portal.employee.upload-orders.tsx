@@ -12,7 +12,7 @@ function UploadOrders() {
     <>
       <PageHeader
         title="Upload Orders"
-        description="Create your orders from the order sheet, one order per client."
+        description="One order per client, from the order sheet."
         crumbs={[{ label: "Employee" }, { label: "Upload Orders" }]}
       />
       <BulkOrderUpload pickCsm={false} ordersLink="/employee/orders" />

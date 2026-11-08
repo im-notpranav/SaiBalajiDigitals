@@ -34,7 +34,7 @@ function MyOrders() {
     <>
       <PageHeader
         title="My Orders"
-        description="All orders you originated, filtered server-side by your user ID."
+        description="Orders you created."
         crumbs={[{ label: "Employee" }, { label: "My Orders" }]}
         actions={
           <div className="flex flex-wrap gap-2">

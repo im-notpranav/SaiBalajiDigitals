@@ -16,7 +16,7 @@ function AdminPayments() {
     return (
       <PageHeader
         title="Payment Requests"
-        description="Payment requests are handled by the Admin and the Cost Control Manager."
+        description="Handled by the Admin and Cost Control."
         crumbs={[{ label: "Payment Request" }, { label: "Requests" }]}
       />
     );
@@ -24,7 +24,7 @@ function AdminPayments() {
   return (
     <PaymentReviewQueue
       title="Payment Requests"
-      description="Requests with no details to submit, and anything above your limit, wait here for your approval before Cost Control pays them."
+      description="Requests waiting for your approval."
       crumbs={[{ label: "Payment Request" }, { label: "Requests" }]}
     />
   );

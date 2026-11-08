@@ -93,7 +93,7 @@ function WeeklyGridPage() {
     <>
       <PageHeader
         title="Weekly Grid"
-        description="Pick a date to see its work and assign Pasters, Helpers and Drivers to it."
+        description="Pick a date to assign its work."
         crumbs={[{ label: "Work Allocation" }, { label: "Weekly Grid" }]}
       />
 

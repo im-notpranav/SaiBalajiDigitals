@@ -255,7 +255,7 @@ function OrderDetailAccountant() {
     <>
       <PageHeader
         title={`Order ${order.order_no}`}
-        description="Verify order details prior to billing."
+        description="Check the order before billing."
         crumbs={[
           { label: "Accountant" },
           { label: "Billing Queue", to: "/accountant/billing" },
@@ -350,7 +350,7 @@ function OrderDetailAccountant() {
                 <form onSubmit={handleInvoice} className="flex flex-col gap-4 sm:flex-row sm:items-end">
                   <div className="w-full flex-1 space-y-2">
                     <label className="text-sm font-medium">Invoice Number</label>
-                    <Input aria-label="Invoice Number" placeholder="e.g. INV-2024-001" value={invoiceNo} onChange={(e) => setInvoiceNo(e.target.value)} required />
+                    <Input aria-label="Invoice Number" placeholder="e.g. SBD/26-27/0142" value={invoiceNo} onChange={(e) => setInvoiceNo(e.target.value)} required />
                   </div>
                   <div className="w-full flex-1 space-y-2">
                     <label className="text-sm font-medium">Bill Amount (₹)</label>

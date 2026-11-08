@@ -81,7 +81,7 @@ function AdminOrders() {
     <>
       <PageHeader
         title="Order Oversight"
-        description="Full unfiltered view — every order, every creator, every status. Override edits generate audit entries."
+        description="Every order, every status."
         crumbs={[{ label: "Automated System" }, { label: "Orders" }]}
         actions={
           <div className="flex flex-wrap gap-2">

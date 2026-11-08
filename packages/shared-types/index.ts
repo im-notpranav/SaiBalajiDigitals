@@ -52,7 +52,12 @@ export interface OrderItem {
   rate?: number;
   amount?: number;
   remarks?: RemarkType | null;
+  /** The reason for Other, Revised, Extra Amount and Less Amount. */
   remarks_other_text?: string | null;
+  /** Extra / Less Amount figure: the CSM's suggestion until confirmed, then the admin's. */
+  adjustment_amount?: number | null;
+  /** Revised only: the line amount before the admin first corrected it. */
+  original_amount?: number | null;
   remarks_set_at?: string | null;
   remarks_set_by?: number | null;
   remarks_confirmed?: boolean;
@@ -87,6 +92,30 @@ export interface OrderStore {
   /** Billable total of this store's own items — what its invoice is reconciled against. */
   total_amount?: number;
   loss_amount?: number;
+  /** Net signed effect of confirmed Revised / Extra / Less on this store. */
+  adjustment_amount?: number;
+}
+
+export type AdjustmentStatus = "Requested" | "Approved" | "Rejected";
+
+/** A whole-order Extra / Less Amount, carried by one store's invoice. */
+export interface OrderAdjustment {
+  id: number;
+  order_id: number;
+  order_store_id: number;
+  type: "ExtraAmount" | "LessAmount";
+  /** Suggested figure while Requested; the admin's figure once Approved. */
+  amount: number;
+  requested_amount?: number | null;
+  reason: string;
+  status: AdjustmentStatus;
+  requested_by?: number | null;
+  requester?: { id: number; name: string } | null;
+  decided_by?: number | null;
+  decider?: { id: number; name: string } | null;
+  decided_at?: string | null;
+  decision_note?: string | null;
+  created_at?: string;
 }
 
 /** One invoice raised against a specific set of stores in an order. */
@@ -128,8 +157,12 @@ export interface Order {
   store_count?: number;
   /** Present on detail reads. */
   invoices?: Invoice[];
+  /** Present on detail reads: whole-order Extra / Less Amounts, every status. */
+  adjustments?: OrderAdjustment[];
   total_amount?: number;
   loss_amount?: number;
+  /** Net signed effect of confirmed Revised / Extra / Less and approved order adjustments. */
+  adjustment_amount?: number;
   created_at?: string;
 }
 
@@ -191,6 +224,8 @@ export interface CreateOrderItemInput {
   rate: number;
   remarks?: RemarkType | null;
   remarks_other_text?: string | null;
+  /** Extra / Less Amount figure. */
+  adjustment_amount?: number | null;
 }
 
 export interface CreateOrderStoreInput {

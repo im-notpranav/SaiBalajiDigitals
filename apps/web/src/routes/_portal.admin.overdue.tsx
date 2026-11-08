@@ -43,7 +43,7 @@ function OverduePage() {
     <>
       <PageHeader
         title="Overdue Orders"
-        description="Open orders stuck at their current stage longer than the threshold."
+        description="Open orders stuck too long at one stage."
         crumbs={[{ label: "Automated System" }, { label: "Reports" }, { label: "Overdue" }]}
       />
 

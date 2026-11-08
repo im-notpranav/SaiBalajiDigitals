@@ -16,7 +16,7 @@ export function ClientCombobox({ value, onChange, className, id }: { value: stri
       options={options}
       onSearch={setSearch}
       isLoading={isLoading}
-      placeholder="e.g. Acme Corp"
+      placeholder="e.g. Fabindia Limited"
       emptyText="No clients found."
       className={className}
     />
@@ -36,7 +36,7 @@ export function MediaCombobox({ value, onChange, className, id }: { value: strin
       options={options}
       onSearch={setSearch}
       isLoading={isLoading}
-      placeholder="e.g. Vinyl"
+      placeholder="e.g. Cut Vinyl"
       emptyText="No media found."
       className={className}
     />

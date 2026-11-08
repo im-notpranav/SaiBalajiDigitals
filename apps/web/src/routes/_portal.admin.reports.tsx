@@ -18,7 +18,7 @@ function AdminReports() {
   
   return (
     <>
-      <PageHeader title="System Reports" description="Cross-portal reporting for administrators." crumbs={[{ label: "Automated System" }, { label: "Reports" }]} />
+      <PageHeader title="System Reports" description="Reports across all portals." crumbs={[{ label: "Automated System" }, { label: "Reports" }]} />
       {isLoading ? (
         <LoadingState label="Loading reports…" />
       ) : error && !dash ? (

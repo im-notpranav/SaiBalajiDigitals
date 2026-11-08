@@ -60,7 +60,7 @@ function EditOrderAdmin() {
     <>
       <PageHeader
         title={`Edit Order ${order.order_no} (Admin)`}
-        description="Update the line items or order details."
+        description="Edit details or line items."
         crumbs={[{ label: "Automated System" }, { label: "Orders", to: "/admin/orders" }, { label: "Edit" }]}
       />
 

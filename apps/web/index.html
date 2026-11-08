@@ -17,7 +17,17 @@
     <link rel="icon" href="/favicon-32x32.png" type="image/png" sizes="32x32" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/site.webmanifest" />
+    <link rel="icon" href="/favicon-dark-32x32.png" type="image/png" sizes="32x32" media="(prefers-color-scheme: dark)" />
     <meta name="theme-color" content="#0b8ce0" />
+    <!-- Runs before the first paint so a dark-mode user never sees a white flash. See lib/theme.ts. -->
+    <script>
+      try {
+        if (localStorage.getItem("sb-theme") === "dark") {
+          document.documentElement.classList.add("dark");
+          document.querySelector('meta[name="theme-color"]').content = "#0f1320";
+        }
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

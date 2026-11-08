@@ -64,7 +64,7 @@ function CsmJobsPage() {
     <>
       <PageHeader
         title="Field Jobs"
-        description="Jobs the Operation Manager has assigned for you. Add the work details, or link the order once you have it."
+        description="Jobs assigned to you. Add details or link the order."
         crumbs={[{ label: "Field Jobs" }]}
       />
       {isLoading ? (

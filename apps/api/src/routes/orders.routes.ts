@@ -22,6 +22,8 @@ import {
   flagOrderItem,
   setItemLossRemark,
   assignOrderItem,
+  bulkAssignOrderItems,
+  getAssignSuggestions,
   completeOrderItem,
   markStoreInstalled,
   getFollowUps,
@@ -88,6 +90,8 @@ router.put("/:id/force-close", authorize("ADMIN"), forceCloseOrder);
 router.patch("/:orderId/items/:itemId/flag", authorize("CSM", "ADMIN"), flagOrderItem);
 router.put("/:orderId/items/:itemId/remark", authorize("ADMIN"), setItemLossRemark);
 router.patch("/:orderId/items/:itemId/assign", authorize("PRODUCTION_MANAGER", "ADMIN"), assignOrderItem);
+router.patch("/:orderId/items/assign", authorize("PRODUCTION_MANAGER", "ADMIN"), bulkAssignOrderItems);
+router.get("/:orderId/assign-suggestions", authorize("PRODUCTION_MANAGER", "ADMIN"), getAssignSuggestions);
 router.patch("/:orderId/items/:itemId/complete", authorize("PRODUCTION", "PRODUCTION_MANAGER", "ADMIN"), completeOrderItem);
 
 export default router;

@@ -11,7 +11,12 @@ export const remarkEnum = z.enum([
   "Other",
 ]);
 
-const itemLossEnum = z.enum(["Reprint", "Sample", "UnderWarranty", "FreeOfCost", "Other"]);
+/** Line-item remarks: the five losses plus Revised, Extra Amount and Less Amount. */
+const itemRemarkEnum = remarkEnum;
+/** The two remarks that carry a rupee figure. */
+export const amountAdjustmentEnum = z.enum(["ExtraAmount", "LessAmount"]);
+
+const REMARKS_REQUIRING_TEXT = new Set(["Other", "Revised", "ExtraAmount", "LessAmount"]);
 
 const baseOrderItemSchema = z.object({
   media: z.string().min(1).max(200),
@@ -19,23 +24,37 @@ const baseOrderItemSchema = z.object({
   height_inches: z.coerce.number().positive(),
   qty: z.coerce.number().positive(),
   rate: z.coerce.number().positive(),
-  remarks: itemLossEnum.optional().nullable(),
+  remarks: itemRemarkEnum.optional().nullable(),
   remarks_other_text: z.string().max(500).optional().nullable(),
+  /** ExtraAmount / LessAmount only: the figure added or taken off. */
+  adjustment_amount: z.coerce.number().positive().optional().nullable(),
 });
 
-const itemRemarkRefine = (data: { remarks?: string | null; remarks_other_text?: string | null }) =>
-  data.remarks !== "Other" || (data.remarks_other_text && data.remarks_other_text.trim().length > 0);
-const itemRemarkRefineConfig = { message: "Text is required when Other is selected.", path: ["remarks_other_text"] };
+type ItemRemarkInput = { remarks?: string | null; remarks_other_text?: string | null; adjustment_amount?: number | null };
+const hasText = (t?: string | null) => !!(t && t.trim().length > 0);
 
-export const orderItemSchema = baseOrderItemSchema.refine(itemRemarkRefine, itemRemarkRefineConfig);
+/** Every line-remark rule in one place, so create, update and the admin dialog agree. */
+const refineItemRemark = (data: ItemRemarkInput, ctx: z.RefinementCtx) => {
+  if (data.remarks && REMARKS_REQUIRING_TEXT.has(data.remarks) && !hasText(data.remarks_other_text)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["remarks_other_text"],
+      message: data.remarks === "Other" ? "Text is required when Other is selected." : "A reason is required for this remark.",
+    });
+  }
+  if ((data.remarks === "ExtraAmount" || data.remarks === "LessAmount") && !(Number(data.adjustment_amount) > 0)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["adjustment_amount"], message: "Enter the amount." });
+  }
+};
+
+export const orderItemSchema = baseOrderItemSchema.superRefine(refineItemRemark);
 
 export const updateOrderItemSchema = baseOrderItemSchema.extend({
   id: z.number().int().positive().optional(),
   /** Which store to append this item to. Defaults to the order's first store. */
   store_id: z.number().int().positive().optional(),
-}).refine(itemRemarkRefine, itemRemarkRefineConfig);
+}).superRefine(refineItemRemark);
 
-const REMARKS_REQUIRING_TEXT = new Set(["Other", "Revised", "ExtraAmount", "LessAmount"]);
 const remarksTextRefine = (data: { remarks?: string | null; remarks_other_text?: string | null }) =>
   !data.remarks || !REMARKS_REQUIRING_TEXT.has(data.remarks) ||
   !!(data.remarks_other_text && data.remarks_other_text.trim().length > 0);
@@ -164,13 +183,41 @@ export const forceCloseOrderSchema = z.object({
   remarks_other_text: z.string().max(500).optional().nullable(),
 }).refine(remarksTextRefine, { message: "Text is required for this remark type.", path: ["remarks_other_text"] });
 
+/**
+ * Admin sets, confirms or clears a line remark. Clearing a CSM's proposal rejects it, and
+ * `decision_note` (optional) is passed on to the CSM.
+ */
 export const itemLossRemarkSchema = z.object({
-  remarks: z.enum(["Reprint", "Sample", "UnderWarranty", "FreeOfCost", "Other"]).nullable(),
+  remarks: itemRemarkEnum.nullable(),
   remarks_other_text: z.string().max(500).optional().nullable(),
-}).refine(
-  (data) => data.remarks !== "Other" || (data.remarks_other_text && data.remarks_other_text.trim().length > 0),
-  { message: "Text is required when Other is selected.", path: ["remarks_other_text"] }
-);
+  adjustment_amount: z.coerce.number().positive().optional().nullable(),
+  decision_note: z.string().max(500).optional().nullable(),
+}).superRefine(refineItemRemark);
+
+/** A CSM asks for an Extra / Less Amount on a line that is already saved. */
+export const itemAdjustmentRequestSchema = z.object({
+  type: amountAdjustmentEnum,
+  amount: z.coerce.number().positive(),
+  reason: z.string().trim().min(1, "A reason is required.").max(500),
+});
+
+/** A whole-order Extra / Less Amount, placed on one store so its invoice carries it. */
+export const orderAdjustmentSchema = z.object({
+  order_store_id: z.number().int().positive(),
+  type: amountAdjustmentEnum,
+  amount: z.coerce.number().positive(),
+  reason: z.string().trim().min(1, "A reason is required.").max(500),
+});
+
+/** Admin approves (optionally with an edited figure) or rejects (with a note) a request. */
+export const decideAdjustmentSchema = z.object({
+  action: z.enum(["approve", "reject"]),
+  amount: z.coerce.number().positive().optional(),
+  note: z.string().max(500).optional().nullable(),
+}).refine((d) => d.action !== "reject" || hasText(d.note), {
+  message: "A reason is required when rejecting.",
+  path: ["note"],
+});
 
 export const flagItemSchema = z.object({
   is_flagged: z.boolean(),
@@ -183,6 +230,23 @@ export const flagItemSchema = z.object({
 export const assignItemSchema = z.object({
   // Full replacement of the item's assignee set; [] clears all assignments.
   assigned_to: z.array(z.number().int().positive()).max(20),
+});
+
+/**
+ * Several items of one order in one save. "add" keeps who is already on each item;
+ * "replace" leaves each item with exactly the teams listed for it.
+ */
+export const bulkAssignSchema = z.object({
+  mode: z.enum(["add", "replace"]),
+  assignments: z
+    .array(
+      z.object({
+        item_id: z.number().int().positive(),
+        user_ids: z.array(z.number().int().positive()).max(20),
+      })
+    )
+    .min(1)
+    .max(500),
 });
 
 export const completeItemSchema = z.object({

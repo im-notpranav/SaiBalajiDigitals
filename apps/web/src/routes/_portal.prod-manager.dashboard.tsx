@@ -158,7 +158,7 @@ function ProdManagerDashboard() {
               <SectionHeading
                 id="team-heading"
                 title="Team workload"
-                description="Most pending work first. Click a person to list what they still have to finish."
+                description="Most pending first. Click a person to see their work."
               />
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {dash.team_stats.map((member: ProdTeamStat) => (
@@ -273,7 +273,7 @@ function ProdManagerDashboard() {
               className="mt-8"
               icon={CheckCircle2}
               title="Nothing is assigned to production right now"
-              description="Assign order items to your team from the Assign Work page, and their progress shows here."
+              description="Assign items in Assign Work to see progress here."
               action={
                 <Button asChild variant="outline" size="sm">
                   <Link to="/prod-manager/assign">Open Assign Work</Link>

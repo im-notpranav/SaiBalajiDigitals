@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Bell, LogOut, Search, User, Sun, Moon, ChevronDown, CalendarRange } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,6 +19,7 @@ import { notificationsPath, orderLinkLabel, useGoToOrder } from "@/lib/use-order
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
 import { roleLabel } from "@/lib/constants";
+import { isDarkTheme, setDarkTheme } from "@/lib/theme";
 import type { Notification } from "@sb-oms/shared-types";
 import { MobileNav } from "@/components/layout/Sidebar";
 import { BrandLockup, Logo } from "@/components/brand/Logo";
@@ -27,7 +28,7 @@ export function TopHeader() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [dark, setDark] = useState(false);
+  const [dark, setDark] = useState(isDarkTheme);
   const goToOrder = useGoToOrder();
   const { data: notifications = [] } = useQuery({
     queryKey: ["notifications"],
@@ -47,9 +48,11 @@ export function TopHeader() {
     if (n.order_id) goToOrder(n.order_id);
   };
 
-  useEffect(() => {
-    document.documentElement.classList.toggle("dark", dark);
-  }, [dark]);
+  const toggleTheme = (e: React.MouseEvent<HTMLElement>) => {
+    const box = e.currentTarget.getBoundingClientRect();
+    setDarkTheme(!dark, { x: box.left + box.width / 2, y: box.top + box.height / 2 });
+    setDark(!dark);
+  };
 
   const handleLogout = async () => {
     await logout();
@@ -70,7 +73,7 @@ export function TopHeader() {
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center gap-2 border-b bg-card/80 px-3 backdrop-blur-xl sm:gap-3 sm:px-6">
+    <header className="liquid-bar sticky top-0 z-30 flex h-16 items-center gap-2 border-b bg-card/80 px-3 backdrop-blur-xl sm:gap-3 sm:px-6">
       {/* Below `lg` the sidebar rail is hidden, so this is the only way to navigate. */}
       {user && <MobileNav role={user.role} />}
       {/* The mark alone on a phone — the wordmark costs ~140px the action buttons need. */}
@@ -87,7 +90,7 @@ export function TopHeader() {
             type="search"
             aria-label="Search orders, clients and stores"
             placeholder="Search orders, clients, stores…    ↵"
-            className="h-10 w-full rounded-xl border bg-background pl-9 pr-3 text-sm outline-none ring-primary/40 transition focus:ring-2"
+            className="h-10 w-full rounded-xl border bg-background pl-9 pr-3 text-sm outline-none ring-primary/40 transition focus:ring-2 dark:bg-white/[0.06]"
             onKeyDown={handleSearch}
           />
         </div>
@@ -101,7 +104,7 @@ export function TopHeader() {
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => setDark((d) => !d)}
+          onClick={toggleTheme}
           className="rounded-full"
           aria-label={dark ? "Switch to light theme" : "Switch to dark theme"}
         >
@@ -177,7 +180,7 @@ export function TopHeader() {
             <button
               type="button"
               aria-label={`Account menu for ${user?.name ?? "you"}`}
-              className="flex shrink-0 items-center gap-2 rounded-full border bg-background py-1 pl-1 pr-2 transition hover:bg-accent sm:ml-1 sm:pr-3"
+              className="flex shrink-0 items-center gap-2 rounded-full border bg-background py-1 pl-1 pr-2 transition hover:bg-accent sm:ml-1 sm:pr-3 dark:bg-white/[0.06] dark:hover:bg-white/10"
             >
               <Avatar className="h-8 w-8">
                 <AvatarFallback className="bg-gradient-to-br from-primary to-primary-deep text-xs font-bold text-primary-foreground">

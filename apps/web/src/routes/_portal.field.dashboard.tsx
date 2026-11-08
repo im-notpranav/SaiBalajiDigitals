@@ -110,7 +110,7 @@ function FieldDashboard() {
         <EmptyState
           icon={ClipboardList}
           title="No jobs assigned to you yet"
-          description="When the Operations Manager assigns you work, it shows up here with the CSM, location, team and vehicle."
+          description="Your work, with CSM, location, team and vehicle."
         />
       ) : (
         <div className="grid gap-6">

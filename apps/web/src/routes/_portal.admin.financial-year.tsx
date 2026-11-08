@@ -8,7 +8,7 @@ export const Route = createFileRoute("/_portal/admin/financial-year")({
     <>
       <PageHeader
         title="Financial Year Configuration"
-        description="View the current financial year suffix and sequence number."
+        description="Year suffix and order sequence."
         crumbs={[{ label: "Automated System" }, { label: "Financial Year" }]}
       />
       <FinancialYearView />
