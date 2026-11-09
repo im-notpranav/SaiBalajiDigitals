@@ -397,6 +397,14 @@ html.theme-fade *::before,
 html.theme-fade *::after {
   transition: none !important;
 }
+/* The new theme's snapshot is live: anything still moving underneath (a spinner, a shimmer)
+   repaints it every frame, which is what a phone feels during the sweep. Hold them for the
+   half-second; they carry on from the same point afterwards. */
+html.theme-reveal *,
+html.theme-reveal *::before,
+html.theme-reveal *::after {
+  animation-play-state: paused !important;
+}
 
 /* People who ask for less transparency or more contrast get solid surfaces. */
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {

@@ -7,6 +7,8 @@ const THEME_COLOR = { light: "#0b8ce0", dark: "#0f1320" };
 // front-loads the motion (ease-out) floods most of the screen in the first few frames and then
 // crawls: it reads as a flash. Easing in and out keeps the visible edge moving steadily.
 const REVEAL_MS = 560;
+// A phone screen is a shorter sweep, so the same pace takes less time.
+const REVEAL_MS_TOUCH = 480;
 const REVEAL_BEZIER = [0.65, 0, 0.35, 1] as const;
 const REVEAL_EASE = `cubic-bezier(${REVEAL_BEZIER.join(", ")})`;
 // Keep in step with `html.theme-fade` in styles.css.
@@ -22,12 +24,10 @@ let wanted: boolean | null = null;
 let current = 0;
 let titleBarTimer: number | undefined;
 
-/**
- * Phones and tablets get a short cross-fade. A growing clip-path repaints a full screen of
- * blurred glass every frame, and that is what made the old switch stutter on mobile.
- */
-function prefersLightweight() {
-  return window.matchMedia("(pointer: coarse), (max-width: 768px)").matches;
+function revealDuration() {
+  return window.matchMedia("(pointer: coarse), (max-width: 768px)").matches
+    ? REVEAL_MS_TOUCH
+    : REVEAL_MS;
 }
 
 function prefersReducedMotion() {
@@ -84,9 +84,10 @@ function fadeTheme(id: number, dark: boolean, apply: () => void) {
 }
 
 /**
- * Desktop: the new theme grows out of the toggle as a circle, and going back shrinks it into the
- * toggle again. `clip-path: circle()` is a plain shape the browser animates cheaply, with no
- * per-frame path building.
+ * Desktop and phone alike: the new theme grows out of the toggle as a circle, and going back
+ * shrinks it into the toggle again. The circle clips a still snapshot of the page, not the live
+ * page, so the blurred glass is painted once at the start rather than every frame, and
+ * `clip-path: circle()` is a plain shape with no per-frame path building.
  */
 function revealTheme(id: number, toDark: boolean, origin: Point, apply: () => void) {
   const root = document.documentElement;
@@ -97,17 +98,19 @@ function revealTheme(id: number, toDark: boolean, origin: Point, apply: () => vo
     apply();
   });
 
+  const duration = revealDuration();
   const { innerWidth: w, innerHeight: h } = window;
   const reach = Math.hypot(Math.max(origin.x, w - origin.x), Math.max(origin.y, h - origin.y)) + 2;
   const grown = `circle(${reach}px at ${origin.x}px ${origin.y}px)`;
   const dot = `circle(0px at ${origin.x}px ${origin.y}px)`;
 
+  let sweep: Animation | undefined;
   transition.ready
     .then(() => {
-      root.animate(
+      sweep = root.animate(
         { clipPath: toDark ? [dot, grown] : [grown, dot] },
         {
-          duration: REVEAL_MS,
+          duration,
           easing: REVEAL_EASE,
           fill: "both",
           pseudoElement: toDark ? "::view-transition-new(root)" : "::view-transition-old(root)",
@@ -120,7 +123,7 @@ function revealTheme(id: number, toDark: boolean, origin: Point, apply: () => vo
       window.clearTimeout(titleBarTimer);
       titleBarTimer = window.setTimeout(
         () => setTitleBar(toDark),
-        timeAt(toDark ? edge : 1 - edge) * REVEAL_MS,
+        timeAt(toDark ? edge : 1 - edge) * duration,
       );
     })
     .catch(() => {
@@ -130,6 +133,8 @@ function revealTheme(id: number, toDark: boolean, origin: Point, apply: () => vo
     });
 
   void transition.finished.finally(() => {
+    // `fill: both` would otherwise keep the finished sweep alive, one more per press.
+    sweep?.cancel();
     if (id === current) clearSwitchClasses(root);
   });
 }
@@ -160,7 +165,7 @@ export function setDarkTheme(dark: boolean, origin: Point, onApply?: () => void)
   if (!document.startViewTransition) {
     apply();
     setTitleBar(dark);
-  } else if (prefersLightweight() || prefersReducedMotion()) {
+  } else if (prefersReducedMotion()) {
     // Nothing travels across the screen, but a whole page jumping from light to dark is still
     // hard on the eyes, so it gets a short cross-fade.
     fadeTheme(id, dark, apply);
