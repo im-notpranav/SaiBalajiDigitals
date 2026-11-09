@@ -13,10 +13,7 @@ export default {
 
       // Clone headers and add the real client IP
       const headers = new Headers(request.headers);
-      headers.set(
-        "x-real-client-ip",
-        request.headers.get("cf-connecting-ip") || ""
-      );
+      headers.set("x-real-client-ip", request.headers.get("cf-connecting-ip") || "");
       // Prove to the API that this request really came through the Worker, so it will trust the
       // forwarded client IP above. Strip any client-supplied copy first, then set our own.
       headers.delete("x-proxy-auth");
@@ -29,10 +26,7 @@ export default {
       const apiResponse = await fetch(apiUrl, {
         method: request.method,
         headers,
-        body:
-          request.method !== "GET" && request.method !== "HEAD"
-            ? request.body
-            : undefined,
+        body: request.method !== "GET" && request.method !== "HEAD" ? request.body : undefined,
         redirect: "manual",
       });
 
