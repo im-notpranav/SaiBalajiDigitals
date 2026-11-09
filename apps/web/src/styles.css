@@ -385,8 +385,8 @@ html.theme-reveal-back::view-transition-old(root) {
 }
 html.theme-fade::view-transition-old(root),
 html.theme-fade::view-transition-new(root) {
-  animation-duration: 180ms;
-  animation-timing-function: ease-out;
+  animation-duration: 240ms;
+  animation-timing-function: ease-in-out;
 }
 /* Without this, hover and colour transitions replay underneath the switch. */
 html.theme-reveal *,

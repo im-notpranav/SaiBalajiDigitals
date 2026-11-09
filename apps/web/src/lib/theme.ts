@@ -3,12 +3,24 @@
 const STORAGE_KEY = "sb-theme";
 const THEME_COLOR = { light: "#0b8ce0", dark: "#0f1320" };
 
-// Quick on purpose: the switch is a small moment, and a long one feels slow, most of all on a phone.
-const REVEAL_MS = 420;
-const REVEAL_EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
-const FADE_MS = 180;
+// An even ease-in-out. The circle's area grows with the square of its radius, so a curve that
+// front-loads the motion (ease-out) floods most of the screen in the first few frames and then
+// crawls: it reads as a flash. Easing in and out keeps the visible edge moving steadily.
+const REVEAL_MS = 560;
+const REVEAL_BEZIER = [0.65, 0, 0.35, 1] as const;
+const REVEAL_EASE = `cubic-bezier(${REVEAL_BEZIER.join(", ")})`;
+// Keep in step with `html.theme-fade` in styles.css.
+const FADE_MS = 240;
 
 type Point = { x: number; y: number };
+
+// The theme the user last asked for. Kept here rather than read back from the page because the
+// page only changes a frame later, and a quick second press must toggle from the new value.
+let wanted: boolean | null = null;
+// Each switch gets a number. A press during a running switch cuts the old one short, and the old
+// one's clean-up must not strip the classes the new one is using.
+let current = 0;
+let titleBarTimer: number | undefined;
 
 /**
  * Phones and tablets get a short cross-fade. A growing clip-path repaints a full screen of
@@ -18,11 +30,57 @@ function prefersLightweight() {
   return window.matchMedia("(pointer: coarse), (max-width: 768px)").matches;
 }
 
-function fadeTheme(apply: () => void) {
+function prefersReducedMotion() {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+/** The browser's address bar on a phone and the title bar of the installed app. */
+function setTitleBar(dark: boolean) {
+  document
+    .querySelector('meta[name="theme-color"]')
+    ?.setAttribute("content", dark ? THEME_COLOR.dark : THEME_COLOR.light);
+}
+
+function cubic(a: number, b: number, s: number) {
+  return 3 * a * s * (1 - s) ** 2 + 3 * b * s * s * (1 - s) + s ** 3;
+}
+
+/** The time fraction (0..1) at which the reveal's ease reaches `progress`. */
+function timeAt(progress: number) {
+  const [x1, y1, x2, y2] = REVEAL_BEZIER;
+  // Both curves rise steadily, so a bisection on the curve's own parameter is enough.
+  let lo = 0;
+  let hi = 1;
+  for (let i = 0; i < 24; i++) {
+    const mid = (lo + hi) / 2;
+    if (cubic(y1, y2, mid) < progress) lo = mid;
+    else hi = mid;
+  }
+  return cubic(x1, x2, (lo + hi) / 2);
+}
+
+function clearSwitchClasses(root: HTMLElement) {
+  root.classList.remove("theme-reveal", "theme-reveal-back", "theme-fade");
+}
+
+function fadeTheme(id: number, dark: boolean, apply: () => void) {
   const root = document.documentElement;
-  root.classList.add("theme-fade");
-  const transition = document.startViewTransition(apply);
-  void transition.finished.finally(() => root.classList.remove("theme-fade"));
+  // The classes go on inside the update, together with the theme: one style pass before the
+  // switch can start instead of two, and `transition: none` still lands in the same pass as the
+  // new colours, so nothing animates twice.
+  const transition = document.startViewTransition(() => {
+    clearSwitchClasses(root);
+    root.classList.add("theme-fade");
+    apply();
+  });
+  transition.ready.catch(() => {
+    /* skipped by a newer press: the theme has still been applied */
+  });
+  window.clearTimeout(titleBarTimer);
+  titleBarTimer = window.setTimeout(() => setTitleBar(dark), FADE_MS / 2);
+  void transition.finished.finally(() => {
+    if (id === current) clearSwitchClasses(root);
+  });
 }
 
 /**
@@ -30,12 +88,15 @@ function fadeTheme(apply: () => void) {
  * toggle again. `clip-path: circle()` is a plain shape the browser animates cheaply, with no
  * per-frame path building.
  */
-function revealTheme(toDark: boolean, origin: Point, apply: () => void) {
+function revealTheme(id: number, toDark: boolean, origin: Point, apply: () => void) {
   const root = document.documentElement;
-  root.classList.add("theme-reveal");
-  root.classList.toggle("theme-reveal-back", !toDark);
+  const transition = document.startViewTransition(() => {
+    clearSwitchClasses(root);
+    root.classList.add("theme-reveal");
+    root.classList.toggle("theme-reveal-back", !toDark);
+    apply();
+  });
 
-  const transition = document.startViewTransition(apply);
   const { innerWidth: w, innerHeight: h } = window;
   const reach = Math.hypot(Math.max(origin.x, w - origin.x), Math.max(origin.y, h - origin.y)) + 2;
   const grown = `circle(${reach}px at ${origin.x}px ${origin.y}px)`;
@@ -52,20 +113,39 @@ function revealTheme(toDark: boolean, origin: Point, apply: () => void) {
           pseudoElement: toDark ? "::view-transition-new(root)" : "::view-transition-old(root)",
         },
       );
+      // The installed app's title bar can't be animated. It changes when the circle's edge
+      // crosses the middle of it, instead of jumping on the press while the page still shows
+      // the old theme.
+      const edge = Math.min(1, Math.hypot(origin.x - w / 2, origin.y) / reach);
+      window.clearTimeout(titleBarTimer);
+      titleBarTimer = window.setTimeout(
+        () => setTitleBar(toDark),
+        timeAt(toDark ? edge : 1 - edge) * REVEAL_MS,
+      );
     })
     .catch(() => {
-      /* skipped by a newer press: the theme has still been applied */
+      // Skipped: by a newer press (which sets the title bar itself), or because the window was
+      // hidden. The theme itself has been applied either way.
+      if (id === current) setTitleBar(toDark);
     });
 
-  void transition.finished.finally(() => root.classList.remove("theme-reveal", "theme-reveal-back"));
+  void transition.finished.finally(() => {
+    if (id === current) clearSwitchClasses(root);
+  });
 }
 
 export function isDarkTheme() {
-  return document.documentElement.classList.contains("dark");
+  return wanted ?? document.documentElement.classList.contains("dark");
 }
 
-/** `origin` is where the reveal starts, in viewport pixels: the centre of the toggle. */
-export function setDarkTheme(dark: boolean, origin: Point) {
+/**
+ * `origin` is where the reveal starts, in viewport pixels: the centre of the toggle.
+ * `onApply` runs in the same frame the page changes theme, so state that draws part of the page
+ * (the toggle's own icon) changes inside the animation rather than a frame ahead of it.
+ */
+export function setDarkTheme(dark: boolean, origin: Point, onApply?: () => void) {
+  wanted = dark;
+  const id = ++current;
   try {
     localStorage.setItem(STORAGE_KEY, dark ? "dark" : "light");
   } catch {
@@ -74,18 +154,17 @@ export function setDarkTheme(dark: boolean, origin: Point) {
 
   const apply = () => {
     document.documentElement.classList.toggle("dark", dark);
-    document
-      .querySelector('meta[name="theme-color"]')
-      ?.setAttribute("content", dark ? THEME_COLOR.dark : THEME_COLOR.light);
+    onApply?.();
   };
 
   if (!document.startViewTransition) {
     apply();
-  } else if (prefersLightweight() || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    setTitleBar(dark);
+  } else if (prefersLightweight() || prefersReducedMotion()) {
     // Nothing travels across the screen, but a whole page jumping from light to dark is still
     // hard on the eyes, so it gets a short cross-fade.
-    fadeTheme(apply);
+    fadeTheme(id, dark, apply);
   } else {
-    revealTheme(dark, origin, apply);
+    revealTheme(id, dark, origin, apply);
   }
 }

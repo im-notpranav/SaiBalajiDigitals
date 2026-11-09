@@ -1,6 +1,7 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
+import { flushSync } from "react-dom";
 import { Bell, LogOut, Search, User, Sun, Moon, ChevronDown, CalendarRange } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -50,8 +51,14 @@ export function TopHeader() {
 
   const toggleTheme = (e: React.MouseEvent<HTMLElement>) => {
     const box = e.currentTarget.getBoundingClientRect();
-    setDarkTheme(!dark, { x: box.left + box.width / 2, y: box.top + box.height / 2 });
-    setDark(!dark);
+    // From the theme last asked for, not this render's state: a quick second press lands
+    // before React has re-rendered.
+    const next = !isDarkTheme();
+    // The icon swaps in the same frame as the page, so it is part of the reveal instead of
+    // flipping a frame before it.
+    setDarkTheme(next, { x: box.left + box.width / 2, y: box.top + box.height / 2 }, () =>
+      flushSync(() => setDark(next)),
+    );
   };
 
   const handleLogout = async () => {
