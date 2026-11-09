@@ -1,0 +1,1235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Sai Balaji Digitals OMS: Staff User Guide</title>
+<style>
+  @page { size: A4; margin: 16mm 15mm 18mm 15mm; }
+  :root {
+    --blue: #1478d4;
+    --blue-deep: #1747a6;
+    --blue-soft: #eaf3fd;
+    --orange: #f29a0e;
+    --orange-soft: #fff4e2;
+    --ink: #1a2233;
+    --muted: #5b6577;
+    --line: #dfe5ee;
+    --green: #17845a;
+    --green-soft: #e6f6ee;
+    --red: #c23b32;
+    --red-soft: #fdecea;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { font-family: "Segoe UI", "Inter", Arial, sans-serif; color: var(--ink); font-size: 10.2pt; line-height: 1.5; margin: 0; }
+  h1, h2, h3, h4 { line-height: 1.25; margin: 0; }
+  h2 { font-size: 15pt; color: var(--blue-deep); margin: 18px 0 8px; padding-bottom: 4px; border-bottom: 2px solid var(--blue-soft); break-after: avoid; }
+  h3 { font-size: 11.5pt; color: var(--ink); margin: 14px 0 6px; break-after: avoid; }
+  h4 { font-size: 10.4pt; margin: 10px 0 4px; color: var(--blue-deep); break-after: avoid; }
+  p { margin: 0 0 7px; }
+  ul, ol { margin: 0 0 8px; padding-left: 20px; }
+  li { margin-bottom: 3px; }
+  b, strong { font-weight: 600; }
+  .muted { color: var(--muted); }
+  .chapter { break-before: page; }
+  .avoid { break-inside: avoid; }
+
+  /* ---------- cover ---------- */
+  .cover { height: 263mm; display: flex; flex-direction: column; position: relative; overflow: hidden; }
+  .cover .bars { display: flex; height: 7px; border-radius: 4px; overflow: hidden; }
+  .cover .bars i { display: block; }
+  .cover .panel { position: absolute; right: 0; top: 18mm; width: 58mm; height: 150mm; border-radius: 14px; background: linear-gradient(170deg, var(--blue-soft), #fff 75%); }
+  .cover .inner { position: relative; padding: 22mm 6mm 0; flex: 1; display: flex; flex-direction: column; }
+  .cover img { width: 46mm; height: 46mm; }
+  .cover .kicker { margin-top: 16mm; font-size: 10pt; letter-spacing: .22em; text-transform: uppercase; color: var(--orange); font-weight: 700; }
+  .cover h1 { font-size: 32pt; color: var(--blue-deep); margin-top: 4mm; font-weight: 700; letter-spacing: -.01em; }
+  .cover .sub { font-size: 13pt; color: var(--muted); margin-top: 4mm; max-width: 135mm; }
+  .cover .roles { margin-top: 12mm; display: flex; flex-wrap: wrap; gap: 6px; max-width: 150mm; }
+  .cover .roles span { border: 1px solid var(--line); background: #fff; border-radius: 20px; padding: 3px 11px; font-size: 9pt; color: var(--blue-deep); font-weight: 600; }
+  .cover .foot { margin-top: auto; display: flex; justify-content: space-between; align-items: flex-end; border-top: 1px solid var(--line); padding-top: 6mm; position: relative; background: rgba(255,255,255,.85); }
+  .cover .foot .meta { font-size: 9pt; color: var(--muted); }
+  .contact-card { background: var(--blue-deep); color: #fff; border-radius: 10px; padding: 10px 14px; font-size: 9.5pt; }
+  .contact-card b { display: block; font-size: 8pt; letter-spacing: .12em; text-transform: uppercase; color: #ffd38a; margin-bottom: 2px; }
+
+  /* ---------- contents ---------- */
+  .toc { columns: 2; column-gap: 10mm; margin-top: 6px; }
+  .toc .grp { break-inside: avoid; margin-bottom: 9px; }
+  .toc .grp h4 { margin: 0 0 3px; font-size: 9.4pt; color: var(--orange); text-transform: uppercase; letter-spacing: .08em; }
+  .toc a { display: block; color: var(--ink); text-decoration: none; padding: 2px 0; border-bottom: 1px dotted var(--line); font-size: 9.8pt; }
+
+  /* ---------- role band ---------- */
+  .band { border-radius: 12px; padding: 14px 18px; background: linear-gradient(120deg, var(--blue-deep), var(--blue)); color: #fff; display: flex; gap: 16px; align-items: center; margin-bottom: 12px; break-inside: avoid; break-after: avoid; }
+  .band .num { font-size: 26pt; font-weight: 700; color: #ffd38a; line-height: 1; min-width: 40px; }
+  .band h1 { font-size: 19pt; font-weight: 700; }
+  .band p { margin: 3px 0 0; color: #dbe9fb; font-size: 10pt; }
+  .band .tag { margin-left: auto; background: rgba(255,255,255,.16); border-radius: 8px; padding: 6px 10px; font-size: 8.6pt; text-align: right; white-space: nowrap; }
+  .band.orange { background: linear-gradient(120deg, #c46f00, var(--orange)); }
+  .band.orange p { color: #fff1d9; }
+
+  /* ---------- tables ---------- */
+  table { width: 100%; border-collapse: collapse; margin: 4px 0 10px; font-size: 9.4pt; }
+  th { text-align: left; background: var(--blue-soft); color: var(--blue-deep); font-weight: 600; padding: 6px 8px; border-bottom: 1px solid #c9dcf3; }
+  td { padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr { break-inside: avoid; }
+  td:first-child { font-weight: 600; }
+  table.plain td:first-child { font-weight: 400; }
+  table.trouble td:first-child { font-family: Consolas, "Courier New", monospace; font-size: 8.6pt; font-weight: 400; color: var(--red); width: 36%; }
+  table.tight td { padding: 4px 8px; }
+  .yes { color: var(--green); font-weight: 700; }
+  .no { color: #a3acba; }
+  .part { color: var(--orange); font-weight: 700; }
+  table.matrix th, table.matrix td { text-align: center; padding: 3px 4px; font-size: 8.6pt; }
+  table.matrix td:first-child, table.matrix th:first-child { text-align: left; }
+
+  /* ---------- steps ---------- */
+  ol.steps { list-style: none; padding: 0; counter-reset: s; margin: 4px 0 10px; }
+  ol.steps > li { counter-increment: s; position: relative; padding: 2px 0 6px 32px; break-inside: avoid; }
+  ol.steps > li::before { content: counter(s); position: absolute; left: 0; top: 1px; width: 21px; height: 21px; border-radius: 50%; background: var(--blue); color: #fff; font-weight: 700; font-size: 9pt; display: flex; align-items: center; justify-content: center; }
+  .task { border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px 4px; margin: 0 0 10px; break-inside: avoid; }
+  .task.long { break-inside: auto; }
+  .task h3 { margin-top: 0; display: flex; align-items: center; gap: 8px; }
+  .task h3 .where { margin-left: auto; font-size: 8.4pt; font-weight: 600; color: var(--blue-deep); background: var(--blue-soft); padding: 2px 8px; border-radius: 6px; white-space: nowrap; }
+
+  /* ---------- callouts ---------- */
+  .call { border-radius: 8px; padding: 8px 12px; margin: 6px 0 10px; font-size: 9.5pt; break-inside: avoid; border-left: 4px solid; }
+  .call b.t { display: block; font-size: 8.4pt; letter-spacing: .08em; text-transform: uppercase; margin-bottom: 2px; }
+  .tip { background: var(--green-soft); border-color: var(--green); }
+  .tip b.t { color: var(--green); }
+  .warn { background: var(--orange-soft); border-color: var(--orange); }
+  .warn b.t { color: #a86300; }
+  .limit { background: var(--red-soft); border-color: var(--red); }
+  .limit b.t { color: var(--red); }
+  .info { background: var(--blue-soft); border-color: var(--blue); }
+  .info b.t { color: var(--blue-deep); }
+
+  /* ---------- flows ---------- */
+  .flow { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 6px 0 4px; }
+  .flow .n { border: 1.5px solid var(--blue); background: #fff; color: var(--blue-deep); border-radius: 8px; padding: 5px 9px; font-size: 8.8pt; font-weight: 600; text-align: center; line-height: 1.25; }
+  .flow .n small { display: block; font-weight: 400; color: var(--muted); font-size: 7.6pt; }
+  .flow .n.end { background: var(--green-soft); border-color: var(--green); color: var(--green); }
+  .flow .n.bad { background: var(--red-soft); border-color: var(--red); color: var(--red); }
+  .flow .n.hold { background: var(--orange-soft); border-color: var(--orange); color: #9a5a00; }
+  .flow .a { color: var(--orange); font-weight: 700; font-size: 12pt; }
+  .flowbox { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin: 6px 0 12px; background: #fbfcfe; break-inside: avoid; }
+  .flowbox .side { font-size: 8.8pt; color: var(--muted); margin-top: 6px; }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .card { border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; break-inside: avoid; }
+  .card h4 { margin-top: 0; }
+  .pill { display: inline-block; border-radius: 12px; padding: 0 8px; font-size: 8.4pt; font-weight: 600; border: 1px solid; white-space: nowrap; }
+  .p-blue { color: var(--blue-deep); border-color: #b9d4f3; background: var(--blue-soft); }
+  .p-green { color: var(--green); border-color: #b5e2cb; background: var(--green-soft); }
+  .p-orange { color: #9a5a00; border-color: #f6d5a0; background: var(--orange-soft); }
+  .p-red { color: var(--red); border-color: #f2c2bd; background: var(--red-soft); }
+  .p-grey { color: var(--muted); border-color: var(--line); background: #f4f6f9; }
+  .new { display: inline-block; background: var(--orange); color: #fff; border-radius: 4px; padding: 0 5px; font-size: 7.6pt; font-weight: 700; letter-spacing: .05em; vertical-align: 1px; }
+  code { font-family: Consolas, "Courier New", monospace; font-size: 8.8pt; background: #f2f4f8; padding: 0 4px; border-radius: 3px; }
+
+  .backcover { height: 263mm; display: flex; flex-direction: column; }
+  .backcover .bars, .cover .bars { display: flex; height: 7px; border-radius: 4px; overflow: hidden; }
+  .backcover .bars i { display: block; }
+  .bc-inner { flex: 1; display: flex; flex-direction: column; align-items: center; text-align: center; padding: 26mm 8mm 0; }
+  .bc-logo { width: 40mm; height: 40mm; margin-bottom: 8mm; }
+  .bc-inner h2 { border: 0; font-size: 20pt; margin: 0 0 6px; }
+  .bc-lead { max-width: 135mm; color: var(--muted); font-size: 11pt; margin-bottom: 10mm; }
+  .bc-inner .support { justify-content: center; text-align: left; min-width: 120mm; }
+  .bc-foot { text-align: center; font-size: 8.6pt; }
+  .support { border-radius: 14px; background: linear-gradient(120deg, var(--blue-deep), var(--blue)); color: #fff; padding: 18px 22px; display: flex; gap: 18px; align-items: center; break-inside: avoid; }
+  .support img { width: 26mm; height: 26mm; border-radius: 10px; background: #fff; }
+  .support h3 { color: #fff; font-size: 14pt; margin: 0 0 4px; }
+  .support .line { font-size: 11pt; margin: 2px 0; }
+  .support .line b { color: #ffd38a; display: inline-block; width: 64px; }
+</style>
+</head>
+<body>
+
+<!-- ======================================================= COVER -->
+<section class="cover">
+  <div class="bars"><i style="flex:3;background:var(--blue-deep)"></i><i style="flex:2;background:var(--blue)"></i><i style="flex:2;background:var(--orange)"></i></div>
+  <div class="panel"></div>
+  <div class="inner">
+    <img src="logo.png" alt="Sai Balaji Digitals" />
+    <div class="kicker">Order Management System</div>
+    <h1>Staff User Guide</h1>
+    <div class="sub">What each role can do, how every workflow runs from order to payment, what can happen at each step, the limits of the system, and how to fix common problems.</div>
+    <div class="roles">
+      <span>Administrator</span><span>Operation Manager</span><span>Client Service Manager</span>
+      <span>Production Manager</span><span>Production Team</span><span>Accountant</span>
+      <span>Cost Control Manager</span><span>Paster</span><span>Helper</span><span>Driver</span>
+    </div>
+    <div class="foot">
+      <div class="meta">Version 1.0 · November 2026<br />For internal use by Sai Balaji Digitals staff only</div>
+      <div class="contact-card"><b>Questions or problems</b>pranav.motesha@gmail.com<br />+91 78939 53183</div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================================================= CONTENTS -->
+<section class="chapter">
+  <h2 style="margin-top:0">Contents</h2>
+  <div class="toc">
+    <div class="grp"><h4>Part A · Start here</h4>
+      <a href="#a1">A1. How to use this guide</a>
+      <a href="#a2">A2. Signing in, profile and notifications</a>
+      <a href="#a3">A3. Words used in the system</a>
+      <a href="#a4">A4. How the whole business flows</a>
+      <a href="#a5">A5. Who can do what</a>
+    </div>
+    <div class="grp"><h4>Part B · Role guides</h4>
+      <a href="#r1">1. Administrator</a>
+      <a href="#r2">2. Operation Manager</a>
+      <a href="#r3">3. Client Service Manager (CSM)</a>
+      <a href="#r4">4. Production Manager</a>
+      <a href="#r5">5. Production Team</a>
+      <a href="#r6">6. Accountant</a>
+      <a href="#r7">7. Cost Control Manager</a>
+      <a href="#r8">8. Field Staff: Paster, Helper, Driver</a>
+    </div>
+    <div class="grp"><h4>Part C · Reference</h4>
+      <a href="#c1">C1. Every status and what it means</a>
+      <a href="#c2">C2. Payment request routes in detail</a>
+      <a href="#c3">C3. Line remarks and amount changes</a>
+      <a href="#c4">C4. Limits and numbers to remember</a>
+      <a href="#c5">C5. Common problems for everyone</a>
+      <a href="#c6">C6. Support and contacts</a>
+    </div>
+  </div>
+
+  <h2 id="a1">A1. How to use this guide</h2>
+  <p>Read Part A first. It explains signing in, the common words and how work moves between teams. Then read the chapter for <b>your own role</b> in Part B. Each role chapter has the same sections:</p>
+  <table class="plain">
+    <tr><th style="width:28%">Section</th><th>What it tells you</th></tr>
+    <tr><td><b>Your menu</b></td><td>Every page you see in the left menu and what it is for.</td></tr>
+    <tr><td><b>Step by step</b></td><td>How to do each task, in order, with the button names you will see.</td></tr>
+    <tr><td><b>What can happen</b></td><td>Every result of your action, and who is told next.</td></tr>
+    <tr><td><b>Limits</b></td><td>What the system does not let you do, and why.</td></tr>
+    <tr><td><b>If something goes wrong</b></td><td>The message you may see, why it appears, and what to do.</td></tr>
+  </table>
+  <div class="call info"><b class="t">Tip</b>Every dashboard number is a link. Click it to open the list behind it. Most pages also have a small guide (<b>How this page works</b>) that explains each figure.</div>
+  <div class="call warn"><b class="t">Note</b>Items marked <span class="new">NEW</span> are part of the latest update. If you do not see them yet, your system has not received that update. Ask the support contact on the last page.</div>
+</section>
+
+<!-- ======================================================= A2 -->
+<section class="chapter">
+  <h2 id="a2" style="margin-top:0">A2. Signing in, profile and notifications</h2>
+
+  <div class="task">
+    <h3>Sign in <span class="where">Login page</span></h3>
+    <ol class="steps">
+      <li>Open the company OMS link given to you by the Administrator. It works on a computer and on a phone.</li>
+      <li>Enter your <b>username</b> and <b>password</b>. Both are given to you by the Administrator.</li>
+      <li>Press <b>Sign in</b>. The system opens your own home page. Each role has a different home page.</li>
+    </ol>
+    <p class="muted">You stay signed in for 7 days on that device. Use <b>Sign out</b> at the bottom of the menu on shared computers.</p>
+  </div>
+
+  <div class="task">
+    <h3>Your profile <span class="where">Menu › Profile</span></h3>
+    <ul>
+      <li><b>Change your password.</b> Enter the current password, then the new one.</li>
+      <li><b>Profile photo.</b> Upload a photo of yourself (up to 512 KB). You can also remove it.</li>
+      <li><b>WhatsApp messages.</b> You can stop or allow WhatsApp messages. You still get every in-app notification.</li>
+      <li><b>Name, username, email and mobile</b> are set by the Administrator. You cannot change them yourself. Ask the Administrator if one is wrong.</li>
+    </ul>
+  </div>
+
+  <div class="task">
+    <h3>Notifications <span class="where">Menu › Notifications</span></h3>
+    <p>The system tells you when something needs you or when your work moves on. Notifications come three ways:</p>
+    <table class="plain">
+      <tr><th style="width:22%">Channel</th><th>How it works</th></tr>
+      <tr><td><b>In-app</b></td><td>Always on. The Notifications page shows every message. Open one to mark it read.</td></tr>
+      <tr><td><b>WhatsApp</b></td><td>Sent to the mobile number on your account. Each message has an <b>Open in app</b> button that takes you straight to the item. If you are signed out, you sign in first and then land on the item.</td></tr>
+      <tr><td><b>Email</b></td><td>Order events (created, edited, flagged, billed) and Excel exports go to the email on your account.</td></tr>
+    </table>
+    <div class="call info"><b class="t">Good to know</b>WhatsApp never holds up your work. If a WhatsApp message fails or your number is missing, the action still saves and the in-app notification still arrives.</div>
+  </div>
+
+  <div class="task">
+    <h3>Using the system on a phone</h3>
+    <ul>
+      <li>Office roles: tap the <b>menu button</b> (three lines) at the top left to open the menu.</li>
+      <li>Field staff: a <b>tab bar</b> at the bottom shows Work, Leave, Payments, Alerts and Profile.</li>
+      <li>Light and dark themes are both available. Your choice is remembered.</li>
+      <li>If a page looks out of date, reload it. Another person may have changed it.</li>
+    </ul>
+  </div>
+
+  <h3>If you cannot sign in</h3>
+  <table class="trouble">
+    <tr><th>Message you see</th><th>Why</th><th>What to do</th></tr>
+    <tr><td>Invalid username or password</td><td>The username or password is wrong. Passwords are case-sensitive.</td><td>Check Caps Lock and try again. If you forgot the password, ask the Administrator to reset it.</td></tr>
+    <tr><td>Account is inactive. Please contact the administrator.</td><td>Your account was switched off.</td><td>Contact the Administrator or support.</td></tr>
+    <tr><td>Too many attempts / request failed</td><td>After 10 sign-in tries in 15 minutes from one network, sign-in pauses for 15 minutes.</td><td>Wait 15 minutes, then try once with the correct details.</td></tr>
+    <tr><td>Page keeps loading on first open in the morning</td><td>The server wakes up after a quiet period. This can take up to a minute.</td><td>Wait one minute and reload. If it still fails, call support.</td></tr>
+  </table>
+</section>
+
+<!-- ======================================================= A3 -->
+<section>
+  <h2 id="a3">A3. Words used in the system</h2>
+  <table class="plain tight">
+    <tr><th style="width:24%">Word</th><th>Meaning</th></tr>
+    <tr><td><b>Order</b></td><td>One customer job. It has an order number like <code>ORD260145</code>: <code>ORD</code>, the year the financial year started (26 = April 2026 to March 2027), and a running number. Numbers restart each financial year.</td></tr>
+    <tr><td><b>Store</b></td><td>One location inside an order (store name plus location). An order has 1 to 50 stores. Each store can have its own PO number.</td></tr>
+    <tr><td><b>Line item</b></td><td>One printed piece on a store: media, width and height in inches, quantity and rate.</td></tr>
+    <tr><td><b>SFT</b></td><td>Square feet. The system works it out: <b>Width × Height × Qty ÷ 144</b>. <b>Amount = SFT × Rate</b>.</td></tr>
+    <tr><td><b>Job PO / Store PO</b></td><td>The customer's purchase order number for the whole order, or for one store.</td></tr>
+    <tr><td><b>Flag</b></td><td>A mark on a line item that says "this line is wrong". A flagged line cannot be finished by production until an Admin resolves the flag.</td></tr>
+    <tr><td><b>Remark</b></td><td>The billing reason on a line: Normal, Reprint, Sample, Under Warranty, Free of Cost, Revised, Extra Amount, Less Amount or Other. See C3.</td></tr>
+    <tr><td><b>Invoice</b></td><td>A bill raised by Accounts on one or more stores of an order.</td></tr>
+    <tr><td><b>Field job</b></td><td>Work given to a field team (Pasters, Helpers, Driver) for set dates, usually to install an order.</td></tr>
+    <tr><td><b>CSM code</b></td><td>The CSM's employee code (for example <code>300</code>). It shows on the Weekly Grid so everyone knows whose job it is.</td></tr>
+    <tr><td><b>Payment request</b></td><td>Money the company pays <i>to you</i> by UPI for work expenses (travel, material, labour, food, advance, other). It is not customer money.</td></tr>
+    <tr><td><b>UTR</b></td><td>The bank reference number of a UPI payment.</td></tr>
+    <tr><td><b>Working days</b></td><td>Monday to Saturday. Sundays are not counted in any timer or overdue count.</td></tr>
+    <tr><td><b>Financial year (FY)</b></td><td>1 April to 31 March.</td></tr>
+    <tr><td><b>Overdue</b></td><td>Waiting longer than the allowed number of working days. Shown in red.</td></tr>
+  </table>
+</section>
+
+<!-- ======================================================= A4 -->
+<section class="chapter">
+  <h2 id="a4" style="margin-top:0">A4. How the whole business flows</h2>
+  <p>Three workflows run side by side. Each one involves several roles. Knowing the full picture helps you see who is waiting on you.</p>
+
+  <h3>Workflow 1 · Order to cash</h3>
+  <div class="flowbox">
+    <div class="flow">
+      <div class="n">CSM creates order<small>stores + line items</small></div><span class="a">›</span>
+      <div class="n">Production Manager assigns<small>items to production staff</small></div><span class="a">›</span>
+      <div class="n">Production completes<small>each item</small></div><span class="a">›</span>
+      <div class="n">CSM marks installed<small>store by store</small></div><span class="a">›</span>
+      <div class="n">Accounts raises invoice</div><span class="a">›</span>
+      <div class="n">Accounts records payment</div><span class="a">›</span>
+      <div class="n end">Payment Received</div>
+    </div>
+    <div class="side">Side paths: billed or paid short <span class="pill p-orange">Pending</span>, then Accounts follows up and the Admin closes it <span class="pill p-green">Completed</span>. The Admin can force-close any order with a reason.</div>
+  </div>
+
+  <h4>Order stages on the dashboards</h4>
+  <p>While an order is <span class="pill p-blue">Active</span>, dashboards show where it is waiting:</p>
+  <table class="plain">
+    <tr><th style="width:20%">Stage</th><th>Meaning</th><th style="width:26%">Who acts next</th></tr>
+    <tr><td><b>Not assigned</b></td><td>No production work has been given out yet.</td><td>Production Manager</td></tr>
+    <tr><td><b>Production</b></td><td>Items are assigned and some are still open.</td><td>Production Team</td></tr>
+    <tr><td><b>Installation</b></td><td>Production is done. Waiting for installation.</td><td>Field team, then the CSM</td></tr>
+    <tr><td><b>Billing</b></td><td>Installed. Waiting for an invoice.</td><td>Accountant</td></tr>
+    <tr><td><b>Payment</b></td><td>Billed. Waiting for customer payment.</td><td>Accountant</td></tr>
+  </table>
+  <p class="muted">Turn-around time is counted in working days. Each stage shows an age badge, and the Admin's <b>Overdue Orders</b> page lists orders stuck too long.</p>
+
+  <h3>Workflow 2 · Field work</h3>
+  <div class="flowbox">
+    <div class="flow">
+      <div class="n">Admin / Operation Manager assigns a job<small>dates, CSM, team, place</small></div><span class="a">›</span>
+      <div class="n">Team is notified<small>in-app + WhatsApp</small></div><span class="a">›</span>
+      <div class="n">Field staff: Start job<small>from the start date</small></div><span class="a">›</span>
+      <div class="n end">Field staff: Mark completed</div>
+    </div>
+    <div class="side">Managers can put a job <span class="pill p-orange">On hold</span>, <span class="pill p-red">Cancel</span> it (this frees the team's dates) or reopen a completed job. The CSM is told when a team is assigned and when the job is done.</div>
+  </div>
+
+  <h3>Workflow 3 · Payment requests (expenses paid to staff)</h3>
+  <div class="flowbox">
+    <div class="flow">
+      <div class="n">CSM or field staff raises request<small>on an eligible order</small></div><span class="a">›</span>
+      <div class="n">Admin review<small>when the route needs it</small></div><span class="a">›</span>
+      <div class="n">Cost Control review</div><span class="a">›</span>
+      <div class="n hold">Payment pending</div><span class="a">›</span>
+      <div class="n">Paid by UPI</div><span class="a">›</span>
+      <div class="n end">Closed</div>
+    </div>
+    <div class="side">Any reviewer can <span class="pill p-red">Reject</span> (with a reason) or <span class="pill p-orange">Return for info</span>. A returned request is fixed and resubmitted by the requester. Full routes are in C2.</div>
+  </div>
+
+  <h3>Supporting registers</h3>
+  <div class="grid2">
+    <div class="card"><h4>Leave</h4>Field staff ask for leave. The Operation Manager or Admin approves or rejects it. Approved leave blocks that person from being booked on jobs.</div>
+    <div class="card"><h4>Overtime</h4>The Operation Manager or Admin logs overtime. Only the Admin approves or rejects it. Each person sees their own overtime.</div>
+  </div>
+</section>
+
+<!-- ======================================================= A5 -->
+<section>
+  <h2 id="a5">A5. Who can do what</h2>
+  <p><span class="yes">●</span> can do &nbsp; <span class="part">◐</span> only own records or with limits &nbsp; <span class="no">–</span> cannot. Admin = Administrator, OM = Operation Manager, PM = Production Manager, Prod = Production Team, Acc = Accountant, CCM = Cost Control Manager, Field = Paster, Helper, Driver.</p>
+  <table class="matrix">
+    <tr><th style="width:34%">Action</th><th>Admin</th><th>OM</th><th>CSM</th><th>PM</th><th>Prod</th><th>Acc</th><th>CCM</th><th>Field</th></tr>
+    <tr><td>View orders</td><td class="yes">●</td><td class="yes">●</td><td class="part">◐</td><td class="yes">●</td><td class="part">◐</td><td class="yes">●</td><td class="no">–</td><td class="no">–</td></tr>
+    <tr><td>Create orders, add stores and lines</td><td class="yes">●</td><td class="no">–</td><td class="yes">●</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="no">–</td></tr>
+    <tr><td>Upload orders from Excel</td><td class="yes">●</td><td class="no">–</td><td class="yes">●</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="no">–</td></tr>
+    <tr><td>Flag a line item</td><td class="yes">●</td><td class="no">–</td><td class="yes">●</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="no">–</td></tr>
+    <tr><td>Set line remarks / approve amount changes</td><td class="yes">●</td><td class="no">–</td><td class="part">◐ ask</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="no">–</td></tr>
+    <tr><td>Assign items to production</td><td class="yes">●</td><td class="no">–</td><td class="no">–</td><td class="yes">●</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="no">–</td></tr>
+    <tr><td>Complete production items</td><td class="yes">●</td><td class="no">–</td><td class="no">–</td><td class="yes">●</td><td class="part">◐</td><td class="no">–</td><td class="no">–</td><td class="no">–</td></tr>
+    <tr><td>Mark a store installed</td><td class="yes">●</td><td class="no">–</td><td class="part">◐</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="no">–</td></tr>
+    <tr><td>Raise invoices, record payments</td><td class="yes">●</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="yes">●</td><td class="no">–</td><td class="no">–</td></tr>
+    <tr><td>Add billing follow-ups</td><td class="yes">●</td><td class="no">–</td><td class="yes">●</td><td class="no">–</td><td class="no">–</td><td class="yes">●</td><td class="no">–</td><td class="no">–</td></tr>
+    <tr><td>Close / force-close orders</td><td class="yes">●</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="no">–</td></tr>
+    <tr><td>Export / email orders to Excel</td><td class="yes">●</td><td class="yes">●</td><td class="yes">●</td><td class="no">–</td><td class="no">–</td><td class="yes">●</td><td class="no">–</td><td class="no">–</td></tr>
+    <tr><td>Assign field jobs, Daily Board, Weekly Grid</td><td class="yes">●</td><td class="yes">●</td><td class="part">◐ own jobs</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="part">◐ own</td></tr>
+    <tr><td>Start / complete a field job</td><td class="yes">●</td><td class="yes">●</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="part">◐ own</td></tr>
+    <tr><td>Record and decide leave</td><td class="yes">●</td><td class="yes">●</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="part">◐ ask</td></tr>
+    <tr><td>Log overtime</td><td class="yes">●</td><td class="yes">●</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="part">◐ view</td></tr>
+    <tr><td>Approve overtime</td><td class="yes">●</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="no">–</td></tr>
+    <tr><td>Field staff accounts and masters</td><td class="yes">●</td><td class="yes">●</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="no">–</td></tr>
+    <tr><td>Raise payment requests</td><td class="no">–</td><td class="no">–</td><td class="part">◐</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="part">◐</td></tr>
+    <tr><td>Review payment requests</td><td class="part">◐ Admin stage</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="part">◐ CCM stage</td><td class="no">–</td></tr>
+    <tr><td>Mark paid, close payment requests</td><td class="part">◐*</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="yes">●</td><td class="no">–</td></tr>
+    <tr><td>Users, Settings, WhatsApp log</td><td class="yes">●</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="no">–</td></tr>
+    <tr><td>Reports, Overdue, Loss, Audit</td><td class="yes">●</td><td class="yes">●</td><td class="no">–</td><td class="no">–</td><td class="no">–</td><td class="part">◐ finance</td><td class="no">–</td><td class="no">–</td></tr>
+  </table>
+  <p class="muted">* The Admin acts for Cost Control only while no Cost Control Manager account is active, so payouts never stop. Creating and editing office users, deleting orders and Bulk Import need a <b>super admin</b> Administrator account.</p>
+</section>
+
+<!-- ======================================================= R1 ADMIN -->
+<section class="chapter" id="r1">
+  <div class="band"><div class="num">1</div><div><h1>Administrator</h1><p>Runs the business. Sees everything, approves money and exceptions, and keeps the system set up.</p></div><div class="tag">Home: Admin Dashboard<br />Portal: /admin</div></div>
+
+  <h3>Your menu</h3>
+  <table class="plain">
+    <tr><th style="width:25%">Page</th><th>What it is for</th></tr>
+    <tr><td><b>Dashboard</b></td><td>Whole-business picture: orders by stage, overdue work, payments waiting, field teams. Every figure opens its list.</td></tr>
+    <tr><td colspan="2" style="background:#fafbfd;font-weight:700;color:var(--orange)">Automated System (orders)</td></tr>
+    <tr><td><b>Orders</b></td><td>All orders. Open one to edit, resolve flags, set remarks, close or force-close it. <b>Start order</b> creates an order for a CSM.</td></tr>
+    <tr><td><b>Overdue Orders</b></td><td>Orders that have waited too long in a stage, in working days.</td></tr>
+    <tr><td><b>Loss Report</b></td><td>Lines not billed (Reprint, Sample, Under Warranty, Free of Cost, Other) and amount changes (Revised, Extra, Less).</td></tr>
+    <tr><td><b>Reports</b></td><td>Business reports with Excel export.</td></tr>
+    <tr><td><b>Financial Year</b></td><td>Totals per financial year.</td></tr>
+    <tr><td><b>Audit Logs</b></td><td>Who changed what and when, with before and after values.</td></tr>
+    <tr><td><b>Bulk Import</b></td><td>Super admin only. Loads many orders at once from the Excel template.</td></tr>
+    <tr><td><b>Users</b></td><td>Create, edit, switch off and reset passwords for staff accounts.</td></tr>
+    <tr><td><b>WhatsApp</b></td><td>Log of every WhatsApp message, with resend for failed or skipped ones.</td></tr>
+    <tr><td><b>Settings</b></td><td>Order number sequence, payment overdue limit, Admin review limit, reference data.</td></tr>
+    <tr><td colspan="2" style="background:#fafbfd;font-weight:700;color:var(--orange)">Work Allocation</td></tr>
+    <tr><td><b>Weekly Grid · Daily Board · Field Jobs · Leave · Overtime · Field Staff · Allocation Masters</b></td><td>Same as the Operation Manager. See chapter 2. Only you approve overtime.</td></tr>
+    <tr><td colspan="2" style="background:#fafbfd;font-weight:700;color:var(--orange)">Payment Request</td></tr>
+    <tr><td><b>Payment Requests</b></td><td>Your Admin review queue, with timers and an overview of where requests wait.</td></tr>
+  </table>
+
+  <h3>Step by step</h3>
+
+  <div class="task">
+    <h3>Start an order for a CSM <span class="where">Orders › Start order</span></h3>
+    <ol class="steps">
+      <li>Press <b>Start order</b>.</li>
+      <li>Enter the <b>client</b> and pick the <b>CSM</b> (only active CSMs are listed).</li>
+      <li>Keep the next order number, or type a custom number for this order.</li>
+      <li>Save. The CSM is told and adds the stores and line items.</li>
+    </ol>
+    <p class="muted">If the number is taken you see <i>That order number is already used. Pick another.</i></p>
+  </div>
+
+  <div class="task">
+    <h3>Edit an order and resolve flags <span class="where">Orders › open order</span></h3>
+    <ol class="steps">
+      <li>Open the order. You can edit the header, stores and lines at any status. A CSM cannot edit settled orders, but you can.</li>
+      <li>A flagged line shows the CSM's reason. Press <b>Remove Flag</b> once the line is dealt with, or <b>Reject flag</b> with a note to the CSM.</li>
+      <li>To correct a saved line, change its size, quantity or rate and choose remark <b>Revised</b> with a reason <span class="new">NEW</span>.</li>
+      <li>To take a line off the bill, set its remark to Reprint, Sample, Under Warranty, Free of Cost or Other.</li>
+    </ol>
+  </div>
+
+  <div class="task">
+    <h3>Decide an amount change request <span class="new">NEW</span> <span class="where">Order › Amount changes</span></h3>
+    <ol class="steps">
+      <li>A CSM asks for an <b>Extra Amount</b> or <b>Less Amount</b> on a line or on the whole order. You get a notification.</li>
+      <li>Open the order. Check the reason and the figure the CSM suggests. You can change the figure.</li>
+      <li>For Less Amount, choose whether you enter the <b>new amount</b> or the <b>discount</b>.</li>
+      <li><b>Approve</b>, or <b>Reject</b> with a reason. The CSM is told either way.</li>
+    </ol>
+    <p class="muted">If the order is already invoiced and the change breaks the billed total, the order moves to <span class="pill p-orange">Pending</span> and Accounts is told.</p>
+  </div>
+
+  <div class="task">
+    <h3>Close or force-close an order <span class="where">Order › Actions</span></h3>
+    <ol class="steps">
+      <li><b>Close</b> works only on a <span class="pill p-orange">Pending</span> order (billed or paid short). Choose a remark and add text if you pick Other.</li>
+      <li><b>Force close</b> works at any status. Use it when an order must stop, for example a sample or warranty job. Choose the reason.</li>
+      <li>The order becomes <span class="pill p-green">Completed</span>. This is final.</li>
+    </ol>
+    <div class="call warn"><b class="t">Before you close</b>Check for open field jobs and payment requests on the order. Closing does not cancel them.</div>
+  </div>
+
+  <div class="task">
+    <h3>Review a payment request (Admin stage) <span class="where">Payment Requests</span></h3>
+    <ol class="steps">
+      <li>Open a request in <b>Admin review</b>. Check the order, amount, purpose, payee UPI and any files.</li>
+      <li>Choose one: <b>Approve</b> (goes to Cost Control), <b>Return for info</b> (reason required; goes back to the requester), or <b>Reject</b> (reason required; final).</li>
+      <li>While a request is under review you may also <b>Cancel</b> it with a reason.</li>
+    </ol>
+    <p class="muted">Requests above the Admin review limit (default ₹5,000) always come to you first, whatever bill option was chosen.</p>
+  </div>
+
+  <div class="task">
+    <h3>Manage users <span class="where">Users · super admin</span></h3>
+    <ol class="steps">
+      <li>Add a user. Enter name, username, mobile, email, password and role. Mobile and email are required.</li>
+      <li>To fix someone's details, edit the user. Staff cannot change their own username, email or mobile.</li>
+      <li>To stop access, switch the user <b>inactive</b>. They lose access on their next action. Prefer this to deleting: users with history are kept for the audit trail.</li>
+      <li>To reset a password, use <b>Reset password</b> and give the new password to the person privately.</li>
+    </ol>
+  </div>
+
+  <div class="task">
+    <h3>Settings <span class="where">Settings</span></h3>
+    <table class="plain">
+      <tr><th style="width:34%">Setting</th><th>What it does</th></tr>
+      <tr><td><b>Order Number Sequence</b></td><td>Shows the current prefix and next number. <b>Adjust Next Order Number</b> sets it. <b>Lock sequence adjustments</b> prevents manual overrides.</td></tr>
+      <tr><td><b>Payment request overdue limit</b></td><td>Working days before a waiting request turns red. Whole number 1 to 90. Default 10.</td></tr>
+      <tr><td><b>Admin review limit for payment requests</b></td><td>Requests above this amount always start with the Admin. Default ₹5,000. Exactly ₹5,000 follows the normal route.</td></tr>
+    </table>
+  </div>
+
+  <div class="task">
+    <h3>Bulk Import <span class="where">Bulk Import · super admin</span></h3>
+    <ol class="steps">
+      <li>Download the order sheet template. Fill one order per client.</li>
+      <li>Upload. The system shows a <b>preview</b> with any errors per row.</li>
+      <li>Fix errors and upload again. Import is <b>all or nothing</b>: if one row fails, nothing is saved.</li>
+    </ol>
+    <p class="muted">Serial No, Order No, Total SFT and Amount in the sheet are ignored. The system works them out.</p>
+  </div>
+
+  <div class="task">
+    <h3>WhatsApp log <span class="where">WhatsApp</span></h3>
+    <p>Every message has a status: Queued, Sent, Delivered, Read, Failed, Skipped or Logged. <b>Skipped</b> means the person opted out or has no valid mobile. <b>Logged</b> means WhatsApp is in test mode and nothing was sent. Use <b>Resend</b> on Failed or Skipped messages after fixing the cause.</p>
+  </div>
+
+  <h3>Limits</h3>
+  <div class="call limit"><b class="t">The system will not let you</b>
+    <ul style="margin:4px 0 0">
+      <li>Close an order that is not Pending. Use Force close instead.</li>
+      <li>Delete an order that has payment requests, field jobs or a correction history. Close it instead.</li>
+      <li>Mark a payment request paid or closed while an active Cost Control Manager exists. That is their job.</li>
+      <li>Correct a payout after it is marked paid. Bounced or wrong payments are fixed outside the system with Accounts.</li>
+      <li>Undo a Completed order or a Cancelled field job.</li>
+    </ul>
+  </div>
+
+  <h3>If something goes wrong</h3>
+  <table class="trouble">
+    <tr><th>Message you see</th><th>Why</th><th>What to do</th></tr>
+    <tr><td>Only pending orders can be closed.</td><td>The order is not in Pending.</td><td>Use Force close with a reason.</td></tr>
+    <tr><td>This order has a history of corrections. Close it instead of deleting it.</td><td>Deleting would lose the audit history.</td><td>Force close the order.</td></tr>
+    <tr><td>That order number is already used. Pick another.</td><td>Order numbers are unique.</td><td>Use the suggested next number or another free one.</td></tr>
+    <tr><td>Exports can only be emailed to approved company domains.</td><td>Exports go only to company email addresses.</td><td>Use a company address, or download the Excel file instead.</td></tr>
+    <tr><td>Someone else changed this request just now. Reload and try again.</td><td>Two people acted on one request at once.</td><td>Reload the page and check the new status before acting.</td></tr>
+  </table>
+</section>
+
+<!-- ======================================================= R2 OM -->
+<section class="chapter" id="r2">
+  <div class="band"><div class="num">2</div><div><h1>Operation Manager</h1><p>Runs the field teams: assigns jobs, records leave and overtime, keeps field staff and masters up to date. Watches orders read-only.</p></div><div class="tag">Home: Admin Dashboard<br />Portal: /admin (orders read-only)</div></div>
+
+  <h3>Your menu</h3>
+  <table class="plain">
+    <tr><th style="width:25%">Page</th><th>What it is for</th></tr>
+    <tr><td><b>Dashboard</b></td><td><b>Assign Work</b> shortcut, filters by date range and area, free Pasters and Helpers, and tiles for Hyderabad, Non-local and Not set jobs. Click a tile to see jobs grouped by area.</td></tr>
+    <tr><td><b>Orders, Overdue, Loss Report, Reports, Financial Year, Audit Logs</b></td><td>View only. You can export to Excel. You cannot change orders or billing.</td></tr>
+    <tr><td><b>Weekly Grid</b></td><td>Who works where, day by day. Filter All / Pasters / Helpers / Drivers. Each box shows order number, CSM, Paster and Driver. Click a box for full details; team and work details can be edited there.</td></tr>
+    <tr><td><b>Daily Board</b></td><td>One day at a glance: who is busy, free or on leave.</td></tr>
+    <tr><td><b>Field Jobs</b></td><td>All jobs as a list. Create, edit and change status.</td></tr>
+    <tr><td><b>Leave</b></td><td>Record leave and decide field staff leave requests.</td></tr>
+    <tr><td><b>Overtime</b></td><td>Log overtime for up to 5 people at once. The Admin approves.</td></tr>
+    <tr><td><b>Field Staff</b></td><td>Create, edit, switch off and reset passwords for Pasters, Helpers and Drivers.</td></tr>
+    <tr><td><b>Allocation Masters</b></td><td>Areas (with locality), vehicles and CSM codes.</td></tr>
+  </table>
+
+  <h3>Step by step</h3>
+  <div class="task long">
+    <h3>Assign a field job <span class="where">Dashboard › Assign Work</span></h3>
+    <ol class="steps">
+      <li><b>Dates.</b> Pick the start date and end date. Required. One job runs whole days, at most 62 days.</li>
+      <li><b>CSM.</b> Pick the CSM. Required. Choosing an order fills it in for you.</li>
+      <li><b>Order.</b> Optional. Pick the order and, if you like, which of its stores. The order can be linked later by you, the Admin or the job's CSM.</li>
+      <li><b>Location.</b> Optional: Hyderabad or Non-local, plus an area name. Type freely; suggestions come from the Area master and new names are added to it.</li>
+      <li><b>Team.</b> Pick 1 or 2 <b>Pasters</b>, exactly 1 <b>Driver</b>, and set Helpers to <b>Required</b> (1 or 2) or <b>Not required</b>.</li>
+      <li><b>Vehicle</b> and extra details (route, second CSM, grid tag, instructions) are optional.</li>
+      <li>Save. The team gets an in-app and WhatsApp message. The CSM is told a team was assigned.</li>
+    </ol>
+    <div class="call warn"><b class="t">Busy people</b>A person already booked on those dates shows a warning. You can still pick them: saving books them on both jobs (<b>Book anyway as a 2nd job</b>). People on <b>approved leave</b> cannot be picked at all.</div>
+  </div>
+
+  <div class="task">
+    <h3>Change a job's status <span class="where">Field Jobs › open job</span></h3>
+    <table class="plain">
+      <tr><th style="width:24%">From</th><th>You can move it to</th></tr>
+      <tr><td><span class="pill p-blue">Assigned</span></td><td>Started, On hold, Cancelled</td></tr>
+      <tr><td><span class="pill p-blue">Started</span></td><td>Completed, On hold, Cancelled</td></tr>
+      <tr><td><span class="pill p-orange">On hold</span></td><td>Assigned, Started, Cancelled</td></tr>
+      <tr><td><span class="pill p-green">Completed</span></td><td>Started (reopen)</td></tr>
+      <tr><td><span class="pill p-red">Cancelled</span></td><td>Nothing. Final. Cancelling frees the team's dates. A reason is required.</td></tr>
+    </table>
+    <p class="muted">Details and team can be edited only while the job is Assigned, Started or On hold.</p>
+  </div>
+
+  <div class="task">
+    <h3>Record or decide leave <span class="where">Leave</span></h3>
+    <ol class="steps">
+      <li><b>Record leave</b> for a Paster, Helper or Driver. Leave you record is approved at once. One record covers at most 120 days.</li>
+      <li>If the person is on jobs on those days, the system warns you. Tick the box to save anyway, then rearrange the jobs.</li>
+      <li><b>Requests</b> from field staff arrive as <span class="pill p-orange">Pending</span>. Approve (acknowledge any job clash) or Reject with a reason.</li>
+      <li>To take back approved leave, <b>Cancel</b> it with a reason. Rejected or cancelled leave cannot be edited; record new leave instead.</li>
+    </ol>
+  </div>
+
+  <div class="task">
+    <h3>Log overtime <span class="where">Overtime</span></h3>
+    <ol class="steps">
+      <li>Pick up to 5 people, the work date, start time and close time. Optionally link a job.</li>
+      <li>Hours are worked out from the times. A close time at or before the start time means work ran past midnight.</li>
+      <li>Save. Entries are <span class="pill p-orange">Pending</span> until the Admin approves or rejects them. You can edit or delete only pending entries.</li>
+    </ol>
+  </div>
+
+  <div class="task">
+    <h3>Field staff and masters <span class="where">Field Staff · Masters</span></h3>
+    <ul>
+      <li>Add a field staff member with name, username, role, mobile, email and password. Mobile and email are required for new accounts.</li>
+      <li>Switch staff off when they leave. Reset passwords when they forget.</li>
+      <li>Keep <b>areas</b>, <b>vehicles</b> and <b>CSM codes</b> correct. Each code, area name and vehicle number must be unique.</li>
+    </ul>
+  </div>
+
+  <h3>Limits</h3>
+  <div class="call limit"><b class="t">The system will not let you</b>
+    <ul style="margin:4px 0 0">
+      <li>Change orders, billing, users or settings. Those pages are view only for you.</li>
+      <li>Approve or reject overtime. Only the Admin can.</li>
+      <li>Book someone on approved leave, or log overtime on their leave day.</li>
+      <li>Put more than 2 Pasters, 2 Helpers or 1 Driver on a job.</li>
+      <li>Move a job to another order if that order already has payment requests from the job.</li>
+    </ul>
+  </div>
+
+  <h3>If something goes wrong</h3>
+  <table class="trouble">
+    <tr><th>Message you see</th><th>Why</th><th>What to do</th></tr>
+    <tr><td>Pick a Paster. / Pick a Driver.</td><td>Every job needs at least one Paster and one Driver.</td><td>Add them to the team.</td></tr>
+    <tr><td>Someone on this team was just booked on another job for these dates. Reload and try again.</td><td>Another manager booked the same person a moment ago.</td><td>Reload, then pick someone free or use Book anyway as a 2nd job.</td></tr>
+    <tr><td>This person already has leave on some of these days.</td><td>Leave records for one person cannot overlap.</td><td>Edit the existing leave instead.</td></tr>
+    <tr><td>This person already has overtime logged for part of that time.</td><td>Overtime for one person cannot overlap.</td><td>Check the existing entry and adjust the times.</td></tr>
+    <tr><td>The second CSM code must differ from the first CSM's.</td><td>Both CSM codes are the same.</td><td>Pick a different second CSM or leave it empty.</td></tr>
+    <tr><td>Request failed with status code 403</td><td>You tried to change something that is view only for you.</td><td>Ask the Admin to make the change.</td></tr>
+  </table>
+</section>
+
+<!-- ======================================================= R3 CSM -->
+<section class="chapter" id="r3">
+  <div class="band orange"><div class="num">3</div><div><h1>Client Service Manager (CSM)</h1><p>Owns the customer order: creates it, keeps it correct, confirms installation, follows up billing, and claims work expenses.</p></div><div class="tag">Home: CSM Dashboard<br />Portal: /employee</div></div>
+
+  <h3>Your menu</h3>
+  <table class="plain">
+    <tr><th style="width:25%">Page</th><th>What it is for</th></tr>
+    <tr><td><b>Dashboard</b></td><td>Your orders by stage and what is waiting on you.</td></tr>
+    <tr><td><b>New Order</b></td><td>Create an order with stores and line items.</td></tr>
+    <tr><td><b>Upload Orders</b></td><td>Create orders from the Excel order sheet. One order per client.</td></tr>
+    <tr><td><b>My Orders</b></td><td>Your orders. Open one to edit, flag lines, mark stores installed, follow up and export.</td></tr>
+    <tr><td><b>Field Jobs</b></td><td>Field jobs where you are the CSM. Add work details or link the order.</td></tr>
+    <tr><td><b>Payment Requests</b></td><td>Claim expenses on your orders and track them.</td></tr>
+  </table>
+
+  <h3>Step by step</h3>
+  <div class="task long">
+    <h3>Create a new order <span class="where">New Order</span></h3>
+    <ol class="steps">
+      <li>Enter the <b>client</b> and the <b>Job PO</b> if the customer gave one.</li>
+      <li>Add a <b>store</b>: store name (for example <i>Fabindia Inorbit Mall</i>), location (for example <i>Madhapur</i>) and Store PO if any.</li>
+      <li>Add <b>line items</b> to the store: media, width and height in inches, quantity and rate per SFT. SFT and amount are worked out for you.</li>
+      <li>Add more stores the same way. You can also fill every store at once from an order sheet.</li>
+      <li>Submit. The order number is given on submit. Accounts and the Admin are told, and you get an email.</li>
+    </ol>
+    <div class="call tip"><b class="t">Tip</b>If the Admin started the order for you, open it from My Orders and add the stores and lines there.</div>
+  </div>
+
+  <div class="task">
+    <h3>Upload orders from Excel <span class="where">Upload Orders</span></h3>
+    <ol class="steps">
+      <li>Download the template. Fill one order per client. The first date becomes the order date.</li>
+      <li>Upload the file and check the <b>preview</b>. Rows with problems are marked.</li>
+      <li>Fix the sheet if needed and upload again. Then confirm to create the orders.</li>
+    </ol>
+    <p class="muted">Serial No, Order No, Total SFT and Amount are ignored and worked out. Store Name and Location are saved exactly as typed in their columns.</p>
+  </div>
+
+  <div class="task">
+    <h3>Correct an order <span class="where">My Orders › open order</span></h3>
+    <ul>
+      <li><b>Header fields</b> (client, PO and so on) can be edited until the order is settled.</li>
+      <li><b>Stores</b> can be added, renamed or removed until billing starts. Remove a store's lines before removing the store.</li>
+      <li><b>New lines</b> can be added while the order is Active or Installed.</li>
+      <li><b>Saved lines cannot be edited or removed.</b> If one is wrong: <b>flag</b> it with a reason (for example <i>Dimensions incorrect</i>) and add a corrected line. The Admin resolves the flag.</li>
+    </ul>
+  </div>
+
+  <div class="task">
+    <h3>Mark a store installed <span class="where">Order › store</span></h3>
+    <ol class="steps">
+      <li>Wait until every production item of the store is complete.</li>
+      <li>Mark that store <b>installed</b>. Only the CSM who owns the order (or the Admin) can do this.</li>
+      <li>When every store is installed the order becomes <span class="pill p-blue">Installed</span> and goes to Accounts for billing.</li>
+    </ol>
+    <p class="muted">A store with no production work goes straight to billing; it does not need to be marked installed.</p>
+  </div>
+
+  <div class="task">
+    <h3>Ask for an amount change <span class="new">NEW</span> <span class="where">Order › Amount changes</span></h3>
+    <ol class="steps">
+      <li>Press <b>Ask for an amount change</b>. Choose <b>Extra Amount</b> or <b>Less Amount</b>, for one line or for the whole order.</li>
+      <li>Enter the reason (required) and, if you like, the figure you suggest.</li>
+      <li>Press <b>Send to admin</b>. The Admin approves (and may change the figure) or rejects with a reason. You are told either way.</li>
+    </ol>
+  </div>
+
+  <div class="task">
+    <h3>Follow up billing, export <span class="where">Order</span></h3>
+    <ul>
+      <li>After billing you can add <b>follow-up notes</b> (calls, promises to pay). Accounts sees them.</li>
+      <li>Export your orders to Excel, or email the export to a company email address.</li>
+    </ul>
+  </div>
+
+  <div class="task">
+    <h3>Field jobs on your orders <span class="where">Field Jobs</span></h3>
+    <p>Jobs where you are the CSM appear here. You can add <b>work details</b> (for example <i>Flex fixing and glow sign installation at 3 stores</i>) and <b>link one of your orders</b> if the job was booked without one. You are told when a team is assigned and when the job is completed.</p>
+  </div>
+
+  <div class="task long">
+    <h3>Claim an expense <span class="where">Payment Requests</span></h3>
+    <ol class="steps">
+      <li>Press <b>New payment request</b>. Search your orders. Only orders open to requests can be picked (see the rule below).</li>
+      <li>Fill <b>Field job</b> (optional), <b>amount</b>, <b>category</b> (Travel, Material, Labour, Food, Advance, Other) and <b>purpose</b>.</li>
+      <li><b>Pay to.</b> Your UPI ID (<i>name@bank</i>) or UPI mobile number.</li>
+      <li><b>Bill details.</b> <i>Need to submit details</i> goes to Cost Control; the bill must be attached before it can close. <i>No need to submit details</i> goes to the Admin first, then Cost Control.</li>
+      <li>Attach bills or photos now or later, then submit.</li>
+    </ol>
+    <div class="call info"><b class="t">When an order takes requests</b>An order opens for requests when all its production items are complete, or it is Installed, or it has no production items. It closes to <i>new</i> requests once the first invoice is raised. Requests already raised carry on.</div>
+  </div>
+
+  <h3>What can happen to your request</h3>
+  <table class="plain">
+    <tr><th style="width:24%">Result</th><th>What to do</th></tr>
+    <tr><td><span class="pill p-orange">Returned for info</span></td><td>Read the reviewer's reason. Fix the request and <b>Resubmit</b>. If you raise the amount or change the UPI, review starts again from the beginning.</td></tr>
+    <tr><td><span class="pill p-red">Rejected</span></td><td>Final. Read the reason. Raise a new request if it is right to.</td></tr>
+    <tr><td><span class="pill p-orange">Payment pending</span></td><td>Approved. Cost Control is sending the money.</td></tr>
+    <tr><td><span class="pill p-green">Paid</span> / <span class="pill p-green">Closed</span></td><td>Check your UPI. If the amount is wrong or did not arrive, contact Accounts or support. Payout errors are fixed outside the system.</td></tr>
+  </table>
+  <p class="muted">You can <b>Cancel</b> your own request until someone approves it.</p>
+
+  <h3>Limits</h3>
+  <div class="call limit"><b class="t">The system will not let you</b>
+    <ul style="margin:4px 0 0">
+      <li>Edit or delete a saved line item. Flag it and add a corrected line.</li>
+      <li>Add lines or stores after billing starts, or change a settled order. Ask the Admin.</li>
+      <li>Mark a store installed while its production items are open, or on another CSM's order.</li>
+      <li>Set loss remarks or change billed amounts yourself. You ask; the Admin decides.</li>
+      <li>Have more than 50 stores in one order, or two stores with the same name and location.</li>
+    </ul>
+  </div>
+
+  <h3>If something goes wrong</h3>
+  <table class="trouble">
+    <tr><th>Message you see</th><th>Why</th><th>What to do</th></tr>
+    <tr><td>Existing line items cannot be edited — flag it and add a corrected line instead.</td><td>Saved lines are locked.</td><td>Flag the line with a reason and add a corrected line.</td></tr>
+    <tr><td>Line items can only be added before billing starts.</td><td>Accounts has billed the order.</td><td>Ask the Admin to add or change the line.</td></tr>
+    <tr><td>This order is settled. Ask an administrator to change it.</td><td>The order is paid or closed.</td><td>Ask the Admin.</td></tr>
+    <tr><td>Only the order's creator can confirm installation.</td><td>The order belongs to another CSM.</td><td>Ask that CSM or the Admin.</td></tr>
+    <tr><td>Remove this store's line items before removing the store.</td><td>The store still has lines.</td><td>Flag wrong lines; ask the Admin if the store must go.</td></tr>
+    <tr><td>Production is still running (x of y items done).</td><td>The order is not open to payment requests yet.</td><td>Wait until production finishes.</td></tr>
+    <tr><td>Billing has started on this order, so it no longer takes new payment requests.</td><td>An invoice exists.</td><td>Talk to the Admin if the expense is genuine.</td></tr>
+    <tr><td>Follow-ups can only be added after billing is completed.</td><td>No invoice yet.</td><td>Add follow-ups after Accounts bills the order.</td></tr>
+  </table>
+</section>
+
+<!-- ======================================================= R4 PM -->
+<section class="chapter" id="r4">
+  <div class="band"><div class="num">4</div><div><h1>Production Manager</h1><p>Gives out production work: assigns each line item to one or more production staff and watches the team's load.</p></div><div class="tag">Home: Production Manager Dashboard<br />Portal: /prod-manager</div></div>
+
+  <h3>Your menu</h3>
+  <table class="plain">
+    <tr><th style="width:25%">Page</th><th>What it is for</th></tr>
+    <tr><td><b>Dashboard</b></td><td>Orders waiting for assignment, work in production, and each person's workload.</td></tr>
+    <tr><td><b>Assign Work</b></td><td>Tick items, pick teams, assign in one go.</td></tr>
+  </table>
+
+  <h3>Step by step</h3>
+  <div class="task">
+    <h3>Assign production work <span class="where">Assign Work</span></h3>
+    <ol class="steps">
+      <li>Search by order number or client. Use <b>Show orders with</b> to see unassigned or partly assigned orders.</li>
+      <li>Open an order. The system suggests teams for it.</li>
+      <li>Tick the line items, pick one or more production staff, and save. You can also assign item by item.</li>
+      <li>Each person sees the items in their queue and is notified.</li>
+    </ol>
+    <p class="muted">An item with several people is complete only when every one of them marks their part done. You can also mark items complete or reopen them yourself.</p>
+  </div>
+
+  <h3>What can happen</h3>
+  <table class="plain">
+    <tr><th style="width:30%">Situation</th><th>Result</th></tr>
+    <tr><td>All items of a store complete</td><td>The order moves to the Installation stage. The CSM can mark the store installed.</td></tr>
+    <tr><td>A line is flagged by the CSM</td><td>It cannot be completed until the Admin resolves the flag. Hold that work.</td></tr>
+    <tr><td>A person is switched off</td><td>They no longer appear in the picker. Reassign their open items.</td></tr>
+  </table>
+
+  <h3>Limits</h3>
+  <div class="call limit"><b class="t">The system will not let you</b>
+    <ul style="margin:4px 0 0">
+      <li>Assign items to inactive users or to non-production users.</li>
+      <li>Reassign items on closed orders.</li>
+      <li>Create or edit orders, or change billing.</li>
+    </ul>
+  </div>
+
+  <h3>If something goes wrong</h3>
+  <table class="trouble">
+    <tr><th>Message you see</th><th>Why</th><th>What to do</th></tr>
+    <tr><td>Items can only be assigned to active production users.</td><td>The person is inactive or not in Production.</td><td>Pick someone else, or ask the Admin to fix the account.</td></tr>
+    <tr><td>Closed orders cannot be reassigned.</td><td>The order is settled.</td><td>No action needed. Ask the Admin if work must continue.</td></tr>
+    <tr><td>This item is flagged as mistaken — an admin must resolve the flag before it can be completed.</td><td>The CSM flagged the line.</td><td>Ask the Admin to resolve the flag. Work on the corrected line instead.</td></tr>
+  </table>
+
+  <!-- ======================================================= R5 PROD -->
+  <div class="band" id="r5" style="margin-top:22px"><div class="num">5</div><div><h1>Production Team</h1><p>Produces the printed items given to you and marks each one complete.</p></div><div class="tag">Home: Production Dashboard<br />Portal: /production</div></div>
+
+  <h3>Your menu</h3>
+  <table class="plain">
+    <tr><th style="width:25%">Page</th><th>What it is for</th></tr>
+    <tr><td><b>Dashboard</b></td><td>Your open and finished items.</td></tr>
+    <tr><td><b>Queue</b></td><td>My Production Queue: every item given to you, with media, size and total SFT.</td></tr>
+  </table>
+
+  <div class="task">
+    <h3>Finish your work <span class="where">Queue</span></h3>
+    <ol class="steps">
+      <li>Open <b>Queue</b>. Use <b>Show items</b> to switch between open and finished items.</li>
+      <li>Open an item to see its order and full details.</li>
+      <li>When it is produced, mark it <b>complete</b>. If you marked one by mistake, press <b>Reopen</b>.</li>
+    </ol>
+  </div>
+
+  <div class="call limit"><b class="t">Limits</b>You see only items given to you, on active orders. You cannot complete a flagged item or change anyone else's items.</div>
+  <table class="trouble">
+    <tr><th>Message you see</th><th>Why</th><th>What to do</th></tr>
+    <tr><td>You can only update items assigned to you.</td><td>The item belongs to another person.</td><td>Ask the Production Manager.</td></tr>
+    <tr><td>This item is flagged as mistaken…</td><td>The line is wrong and waits for the Admin.</td><td>Stop work on it. Tell the Production Manager.</td></tr>
+  </table>
+</section>
+
+<!-- ======================================================= R6 ACC -->
+<section class="chapter" id="r6">
+  <div class="band orange"><div class="num">6</div><div><h1>Accountant</h1><p>Bills customers, records what they pay, and follows up short payments.</p></div><div class="tag">Home: Accounts Dashboard<br />Portal: /accountant</div></div>
+
+  <h3>Your menu</h3>
+  <table class="plain">
+    <tr><th style="width:25%">Page</th><th>What it is for</th></tr>
+    <tr><td><b>Dashboard</b></td><td>Orders to bill, payments due, money received.</td></tr>
+    <tr><td><b>Billing Queue</b></td><td>Orders ready to bill. Open one to raise an invoice or record a payment.</td></tr>
+    <tr><td><b>All Orders</b></td><td>Every order, view only, with Excel export.</td></tr>
+    <tr><td><b>Financial Reports</b></td><td>Billing and collection reports.</td></tr>
+    <tr><td><b>Financial Year</b></td><td>Totals per financial year.</td></tr>
+  </table>
+
+  <h3>Step by step</h3>
+  <div class="task">
+    <h3>Raise an invoice <span class="where">Billing Queue › open order</span></h3>
+    <ol class="steps">
+      <li>Check the order first: stores, lines, remarks and amount changes. <b>Order billable</b> shows the amount that can be billed.</li>
+      <li>Pick the <b>stores</b> this invoice covers. A store is ready when its production is complete and it is installed, or it has no production work.</li>
+      <li>Enter <b>Invoice Number</b> (for example <i>SBD/26-27/0142</i>), <b>Billing Date</b> and <b>Bill Amount</b>.</li>
+      <li>Save. The order becomes <span class="pill p-blue">Awaiting Payment</span>, or <span class="pill p-orange">Pending</span> if billed less than the billable amount.</li>
+    </ol>
+  </div>
+
+  <div class="task">
+    <h3>Record a payment <span class="where">Order › invoice</span></h3>
+    <ol class="steps">
+      <li>On the invoice, enter <b>Amount Received</b> and <b>Payment Date</b>.</li>
+      <li>Save. Full payment on every invoice makes the order <span class="pill p-green">Payment Received</span>. A shortfall makes it <span class="pill p-orange">Pending</span>.</li>
+      <li>For a Pending order, add <b>follow-up</b> notes as you chase the customer. The Admin closes it when settled.</li>
+    </ol>
+    <p class="muted">Mistakes: use <b>Edit billing</b> or <b>Edit payment</b>. Each invoice holds one payment record; correct it rather than adding a second.</p>
+  </div>
+
+  <h3>What can happen</h3>
+  <table class="plain">
+    <tr><th style="width:34%">Situation</th><th>Result</th></tr>
+    <tr><td>Bill = billable, paid in full</td><td>Payment Received. Done.</td></tr>
+    <tr><td>Billed short or paid short</td><td>Pending. Follow up; the Admin closes with a remark.</td></tr>
+    <tr><td>Admin approves an amount change after billing</td><td>If the billed total no longer matches, the order moves to Pending and you are told. Check and edit billing.</td></tr>
+    <tr><td>Only some stores billed</td><td>Raise further invoices for the remaining stores later.</td></tr>
+  </table>
+
+  <h3>Limits</h3>
+  <div class="call limit"><b class="t">The system will not let you</b>
+    <ul style="margin:4px 0 0">
+      <li>Bill more than the billable value of the stores covered.</li>
+      <li>Put one store on two invoices, or reuse an invoice number within an order.</li>
+      <li>Record more received than billed.</li>
+      <li>Change store coverage of an invoice that is already paid.</li>
+      <li>Create or edit orders, or close orders.</li>
+    </ul>
+  </div>
+
+  <h3>If something goes wrong</h3>
+  <table class="trouble">
+    <tr><th>Message you see</th><th>Why</th><th>What to do</th></tr>
+    <tr><td>Amount received cannot exceed the billed amount.</td><td>Received is more than billed.</td><td>Check the figure. If the customer paid extra, tell the Admin.</td></tr>
+    <tr><td>That invoice number already exists on this order.</td><td>Invoice numbers are unique per order.</td><td>Use the correct new number.</td></tr>
+    <tr><td>No billing record to edit — submit an invoice first.</td><td>There is no invoice yet.</td><td>Raise the invoice.</td></tr>
+    <tr><td>This invoice has been paid; its store coverage can no longer be changed.</td><td>Payment is recorded.</td><td>Ask the Admin if a correction is needed.</td></tr>
+    <tr><td>A store shows as not ready to bill</td><td>Its production is open or it is not installed.</td><td>Check the order; ask the CSM to mark it installed.</td></tr>
+  </table>
+</section>
+
+<!-- ======================================================= R7 CCM -->
+<section class="chapter" id="r7">
+  <div class="band"><div class="num">7</div><div><h1>Cost Control Manager</h1><p>Checks expense claims, pays them by UPI, and closes them once the paperwork is complete.</p></div><div class="tag">Home: Cost Control Dashboard<br />Portal: /cost-control</div></div>
+
+  <h3>Your dashboard</h3>
+  <p>One page holds everything: tiles for <b>Waiting on you</b>, <b>To be paid</b>, <b>Overdue</b> and <b>Paid this month</b>, a view of where requests wait, paid amounts by category, and the request list with filters and search.</p>
+
+  <h3>Step by step</h3>
+  <div class="task">
+    <h3>Review a request <span class="where">Dashboard › open request</span></h3>
+    <ol class="steps">
+      <li>Open a request in <b>Cost Control review</b>. Check the order, the order value, total already asked on the order, the payee and the files.</li>
+      <li><b>Approve</b>: it moves to Payment pending. <b>Return for info</b>: reason required, it goes back to the requester. <b>Reject</b>: reason required, final.</li>
+    </ol>
+    <p class="muted">A request can be approved and paid before its bill arrives. The bill is needed only to close it.</p>
+  </div>
+
+  <div class="task">
+    <h3>Pay and close <span class="where">Request › Payment pending</span></h3>
+    <ol class="steps">
+      <li>Send the money by UPI from the company account, outside the system.</li>
+      <li>Press <b>Mark paid</b>. Enter the amount paid and the UTR (optional but recommended). Paying less than asked needs a reason.</li>
+      <li>The requester is told. When the paperwork is complete, press <b>Close</b>.</li>
+    </ol>
+    <div class="call warn"><b class="t">Before you mark paid</b>If you find a problem while a request is Payment pending, you can still <b>Reject</b> it with a reason. Once marked paid it cannot be rejected or reversed in the system.</div>
+  </div>
+
+  <h3>Timers and reminders</h3>
+  <p>Each request shows how long it has waited at its step, in working days. After the overdue limit (default 10 working days) it turns red. Every working day after 09:30 you get one in-app summary of overdue requests waiting on you.</p>
+
+  <h3>Limits</h3>
+  <div class="call limit"><b class="t">The system will not let you</b>
+    <ul style="margin:4px 0 0">
+      <li>Act on requests still in Admin review.</li>
+      <li>Pay more than the amount asked.</li>
+      <li>Close a <i>Need to submit details</i> request without a bill attached.</li>
+      <li>Undo a payment. Bounced or wrong payments are handled outside the system with Accounts.</li>
+    </ul>
+  </div>
+
+  <h3>If something goes wrong</h3>
+  <table class="trouble">
+    <tr><th>Message you see</th><th>Why</th><th>What to do</th></tr>
+    <tr><td>Attach the bill before closing: this request needs details submitted.</td><td>No bill is attached.</td><td>Ask the requester to attach it, or attach it yourself.</td></tr>
+    <tr><td>The amount paid cannot be more than the ₹… asked for.</td><td>Paid amount is too high.</td><td>Enter the correct amount.</td></tr>
+    <tr><td>Say why ₹… less than asked is being paid.</td><td>You paid less than asked.</td><td>Add the reason.</td></tr>
+    <tr><td>Only the reviewer for this stage can do that.</td><td>The request is at Admin review.</td><td>Wait for the Admin.</td></tr>
+    <tr><td>Requests on ORD… now add up to more than the order value.</td><td>A warning, not a block.</td><td>Check carefully before approving.</td></tr>
+  </table>
+</section>
+
+<!-- ======================================================= R8 FIELD -->
+<section class="chapter" id="r8">
+  <div class="band orange"><div class="num">8</div><div><h1>Field Staff: Paster, Helper, Driver</h1><p>Does the installation work on site. Uses the system on a phone to see jobs, start and finish them, ask for leave, and claim expenses.</p></div><div class="tag">Home: My Work<br />Portal: /field</div></div>
+
+  <h3>Your tabs (bottom of the phone screen)</h3>
+  <table class="plain">
+    <tr><th style="width:22%">Tab</th><th>What it is for</th></tr>
+    <tr><td><b>Work</b></td><td>Your jobs: <b>Today</b>, <b>Coming up</b> and the <b>Last two weeks</b>. Each job shows the CSM (with a <b>Call</b> button), location, team and vehicle.</td></tr>
+    <tr><td><b>Leave</b></td><td>Ask for days off. See overtime recorded for you.</td></tr>
+    <tr><td><b>Payments</b></td><td>Claim expenses for your jobs and track them.</td></tr>
+    <tr><td><b>Alerts</b></td><td>Your notifications.</td></tr>
+    <tr><td><b>Profile</b></td><td>Password, photo and WhatsApp setting.</td></tr>
+  </table>
+
+  <h3>Step by step</h3>
+  <div class="task">
+    <h3>Start and finish a job <span class="where">Work</span></h3>
+    <ol class="steps">
+      <li>On the job's start date, open it and press <b>Start job</b>.</li>
+      <li>When the work is done, press <b>Mark completed</b>. Add a short note if needed (for example <i>All boards fixed; one store asked for a revisit</i>).</li>
+      <li>The CSM and the person who booked the job are told.</li>
+    </ol>
+    <p class="muted">Need to stop or cancel a job? Call the CSM or Operation Manager. Only managers can hold, cancel or reopen jobs.</p>
+  </div>
+
+  <div class="task">
+    <h3>Ask for leave <span class="where">Leave</span></h3>
+    <ol class="steps">
+      <li>Pick the from and to dates (today or later) and give a reason.</li>
+      <li>Send. The request is <span class="pill p-orange">Pending</span> until the Operation Manager decides. You are told the result.</li>
+      <li>You can <b>Withdraw</b> it while it is pending. Approved leave can only be cancelled by the Operation Manager.</li>
+    </ol>
+  </div>
+
+  <div class="task">
+    <h3>Claim an expense <span class="where">Payments</span></h3>
+    <ol class="steps">
+      <li>Press <b>New payment request</b>. Pick the order of one of your jobs.</li>
+      <li>Enter amount, category, purpose (for example <i>Auto fare to site, glue and tape</i>) and your UPI ID or UPI mobile number.</li>
+      <li>Choose the bill option, attach bill photos (JPG, PNG, WEBP, HEIC or PDF, up to 5 MB each), and submit.</li>
+      <li>Watch the status. If it is <b>Returned for info</b>, fix it and resubmit.</li>
+    </ol>
+    <p class="muted">You can claim on orders where you are on a job that is not cancelled, and only before the order is billed.</p>
+  </div>
+
+  <h3>Limits</h3>
+  <div class="call limit"><b class="t">The system will not let you</b>
+    <ul style="margin:4px 0 0">
+      <li>Start a job before its start date, or complete a job that was not started.</li>
+      <li>See other people's jobs, leave or requests.</li>
+      <li>Ask for leave for past dates.</li>
+      <li>Change your mobile number or email. Ask the Operation Manager.</li>
+    </ul>
+  </div>
+
+  <h3>If something goes wrong</h3>
+  <table class="trouble">
+    <tr><th>Message you see</th><th>Why</th><th>What to do</th></tr>
+    <tr><td>This job starts on 2026-11-12. You can mark it started from that day.</td><td>It is too early.</td><td>Start it on the start date.</td></tr>
+    <tr><td>Mark the job started first.</td><td>You pressed complete on a job not started.</td><td>Press Start job, then Mark completed.</td></tr>
+    <tr><td>You are no longer on ORD…</td><td>A manager changed the team.</td><td>Call the Operation Manager.</td></tr>
+    <tr><td>Leave can be asked for from today onwards.</td><td>A date is in the past.</td><td>Pick today or later. For past leave, tell the Operation Manager.</td></tr>
+    <tr><td>You already have leave asked for or approved on …</td><td>Those days are already requested.</td><td>Check the Leave tab.</td></tr>
+    <tr><td>Files can be up to 5 MB.</td><td>The photo is too big.</td><td>Take a new photo at lower quality, or crop it.</td></tr>
+  </table>
+</section>
+
+<!-- ======================================================= C1 -->
+<section class="chapter">
+  <h2 id="c1" style="margin-top:0">C1. Every status and what it means</h2>
+  <h3>Order status</h3>
+  <p>Order status is worked out by the system from stores, items and invoices. Nobody sets it by hand, except <b>Completed</b>, which only the Admin sets.</p>
+  <table class="plain">
+    <tr><th style="width:22%">Status</th><th>Meaning</th><th style="width:28%">Next step</th></tr>
+    <tr><td><span class="pill p-blue">Active</span></td><td>Being produced or installed.</td><td>Production, then CSM installs</td></tr>
+    <tr><td><span class="pill p-blue">Installed</span></td><td>All stores installed. Ready to bill.</td><td>Accountant raises invoice</td></tr>
+    <tr><td><span class="pill p-blue">Awaiting Payment</span></td><td>Billed in full. Waiting for the customer.</td><td>Accountant records payment</td></tr>
+    <tr><td><span class="pill p-orange">Pending</span></td><td>Billed short or paid short.</td><td>Follow up; Admin closes</td></tr>
+    <tr><td><span class="pill p-green">Payment Received</span></td><td>Fully paid. The normal end of an order.</td><td>Nothing</td></tr>
+    <tr><td><span class="pill p-green">Completed</span></td><td>Closed by the Admin with a remark. Final.</td><td>Nothing</td></tr>
+  </table>
+
+  <div class="grid2">
+    <div>
+      <h3>Field job status</h3>
+      <table class="plain">
+        <tr><th>Status</th><th>Meaning</th></tr>
+        <tr><td><span class="pill p-blue">Assigned</span></td><td>Booked, not started.</td></tr>
+        <tr><td><span class="pill p-blue">Started</span></td><td>Team is working.</td></tr>
+        <tr><td><span class="pill p-orange">On hold</span></td><td>Paused by a manager.</td></tr>
+        <tr><td><span class="pill p-green">Completed</span></td><td>Done. A manager can reopen it.</td></tr>
+        <tr><td><span class="pill p-red">Cancelled</span></td><td>Stopped. Dates freed. Final.</td></tr>
+      </table>
+    </div>
+    <div>
+      <h3>Leave and overtime</h3>
+      <table class="plain">
+        <tr><th>Status</th><th>Meaning</th></tr>
+        <tr><td><span class="pill p-orange">Pending</span></td><td>Waiting for a decision. Pending leave holds the days but does not block jobs.</td></tr>
+        <tr><td><span class="pill p-green">Approved</span></td><td>Leave blocks job booking and overtime that day.</td></tr>
+        <tr><td><span class="pill p-red">Rejected</span></td><td>Not granted. Reason shown.</td></tr>
+        <tr><td><span class="pill p-grey">Cancelled</span></td><td>Taken back or withdrawn.</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <h3>Payment request status</h3>
+  <table class="plain">
+    <tr><th style="width:24%">Status</th><th>Meaning</th><th style="width:26%">Who acts</th></tr>
+    <tr><td><span class="pill p-blue">Admin review</span></td><td>Waiting for the Admin.</td><td>Admin</td></tr>
+    <tr><td><span class="pill p-blue">Cost Control review</span></td><td>Waiting for Cost Control.</td><td>Cost Control Manager</td></tr>
+    <tr><td><span class="pill p-orange">Returned for info</span></td><td>Reviewer needs a fix or more detail.</td><td>Requester</td></tr>
+    <tr><td><span class="pill p-orange">Payment pending</span></td><td>Approved. Money to be sent.</td><td>Cost Control Manager</td></tr>
+    <tr><td><span class="pill p-green">Paid</span></td><td>Money sent.</td><td>Cost Control closes</td></tr>
+    <tr><td><span class="pill p-green">Closed</span></td><td>Complete. Final.</td><td>Nobody</td></tr>
+    <tr><td><span class="pill p-red">Rejected</span></td><td>Refused with a reason. Final.</td><td>Nobody</td></tr>
+    <tr><td><span class="pill p-grey">Cancelled</span></td><td>Withdrawn. Final.</td><td>Nobody</td></tr>
+  </table>
+</section>
+
+<!-- ======================================================= C2 -->
+<section class="chapter">
+  <h2 id="c2" style="margin-top:0">C2. Payment request routes in detail</h2>
+  <p>The route is fixed when the request is submitted. It depends on two things: the <b>amount</b> and the <b>bill option</b>.</p>
+
+  <div class="flowbox">
+    <h4 style="margin-top:0">Route A · Amount above the Admin limit (default ₹5,000), any bill option</h4>
+    <div class="flow"><div class="n">Admin review</div><span class="a">›</span><div class="n">Cost Control review</div><span class="a">›</span><div class="n hold">Payment pending</div><span class="a">›</span><div class="n">Paid</div><span class="a">›</span><div class="n end">Closed</div></div>
+  </div>
+  <div class="flowbox">
+    <h4 style="margin-top:0">Route B · Up to the limit, "No need to submit details"</h4>
+    <div class="flow"><div class="n">Admin review</div><span class="a">›</span><div class="n">Cost Control review</div><span class="a">›</span><div class="n hold">Payment pending</div><span class="a">›</span><div class="n">Paid</div><span class="a">›</span><div class="n end">Closed</div></div>
+  </div>
+  <div class="flowbox">
+    <h4 style="margin-top:0">Route C · Up to the limit, "Need to submit details"</h4>
+    <div class="flow"><div class="n">Cost Control review</div><span class="a">›</span><div class="n hold">Payment pending</div><span class="a">›</span><div class="n">Paid</div><span class="a">›</span><div class="n end">Closed<small>bill required</small></div></div>
+  </div>
+
+  <h3>Every possible move</h3>
+  <table class="plain">
+    <tr><th style="width:20%">Action</th><th style="width:28%">Who</th><th>When and what happens</th></tr>
+    <tr><td><b>Approve</b></td><td>Reviewer of the current stage</td><td>Admin review goes to Cost Control review. Cost Control review goes to Payment pending.</td></tr>
+    <tr><td><b>Return for info</b></td><td>Reviewer of the current stage</td><td>Reason required. Goes to the requester.</td></tr>
+    <tr><td><b>Resubmit</b></td><td>Requester</td><td>Goes back to the stage that returned it. If the amount went up or the UPI changed, review starts again from the beginning of the route.</td></tr>
+    <tr><td><b>Reject</b></td><td>Reviewer of the stage; Cost Control also during Payment pending</td><td>Reason required. Final. Not possible after Paid.</td></tr>
+    <tr><td><b>Cancel</b></td><td>Requester before any approval; Admin during review</td><td>Admin must give a reason. Final. After approval for payment nobody cancels; Cost Control rejects instead.</td></tr>
+    <tr><td><b>Mark paid</b></td><td>Cost Control Manager</td><td>From Payment pending. Paid amount up to the amount asked. UTR optional. Less than asked needs a reason.</td></tr>
+    <tr><td><b>Close</b></td><td>Cost Control Manager</td><td>From Paid. "Need to submit details" requests need a bill attached.</td></tr>
+  </table>
+  <div class="call info"><b class="t">Good to know</b>
+    <ul style="margin:2px 0 0">
+      <li><b>Files:</b> bills, photos and receipts in JPG, PNG, WEBP, HEIC or PDF, up to 5 MB each, up to 10 per request, no duplicates. Once a request is approved its files stay, but more can be added.</li>
+      <li><b>No cap:</b> there is no limit on requests per order. Reviewers see a warning when requests add up to more than the order value.</li>
+      <li><b>No Cost Control Manager?</b> If no Cost Control Manager account is active, the Admin can do the Cost Control steps, so payouts never stop.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ======================================================= C3 -->
+<section class="chapter">
+  <h2 id="c3" style="margin-top:0">C3. Line remarks and amount changes</h2>
+  <p>Every line has a remark. It decides how much of the line is billed. A line has one remark at a time.</p>
+  <table class="plain">
+    <tr><th style="width:22%">Remark</th><th>Effect on the bill</th><th style="width:26%">Who sets it</th></tr>
+    <tr><td><b>Normal</b></td><td>Billed as worked out. The default.</td><td>Automatic</td></tr>
+    <tr><td><b>Reprint</b></td><td>Not billed. Counted as a loss.</td><td>Admin</td></tr>
+    <tr><td><b>Sample</b></td><td>Not billed. Counted as a loss.</td><td>Admin</td></tr>
+    <tr><td><b>Under Warranty</b></td><td>Not billed. Counted as a loss.</td><td>Admin</td></tr>
+    <tr><td><b>Free of Cost</b></td><td>Not billed. Counted as a loss.</td><td>Admin</td></tr>
+    <tr><td><b>Other</b></td><td>Not billed. Reason required.</td><td>Admin</td></tr>
+    <tr><td><b>Revised</b> <span class="new">NEW</span></td><td>The Admin corrected size, quantity or rate. The new amount is billed. Not a loss. Reason required.</td><td>Admin only</td></tr>
+    <tr><td><b>Extra Amount</b> <span class="new">NEW</span></td><td>Line amount plus the extra figure. Reason required.</td><td>CSM asks, Admin decides</td></tr>
+    <tr><td><b>Less Amount</b> <span class="new">NEW</span></td><td>Line amount minus a discount, or a new lower amount. Reason required.</td><td>CSM asks, Admin decides</td></tr>
+  </table>
+  <p>Extra and Less Amount can also apply to the <b>whole order</b>. The Loss Report shows real losses separately from amount changes. Amount changes do not affect field staff pay.</p>
+</section>
+
+<!-- ======================================================= C4 -->
+<section class="chapter">
+  <h2 id="c4" style="margin-top:0">C4. Limits and numbers to remember</h2>
+  <table class="plain">
+    <tr><th style="width:50%">Rule</th><th>Value</th></tr>
+    <tr><td>Stores per order</td><td>1 to 50</td></tr>
+    <tr><td>SFT formula</td><td>Width (in) × Height (in) × Qty ÷ 144</td></tr>
+    <tr><td>Order number</td><td>ORD + FY start year + running number; restarts each FY</td></tr>
+    <tr><td>Team per field job</td><td>1–2 Pasters, 0–2 Helpers, exactly 1 Driver</td></tr>
+    <tr><td>Longest single field job</td><td>62 days</td></tr>
+    <tr><td>Longest single leave record</td><td>120 days</td></tr>
+    <tr><td>People per overtime entry</td><td>Up to 5</td></tr>
+    <tr><td>Admin review limit for payment requests</td><td>Above ₹5,000 (Admin can change)</td></tr>
+    <tr><td>Payment request overdue limit</td><td>10 working days (Admin can set 1–90)</td></tr>
+    <tr><td>Files per payment request</td><td>Up to 10, each up to 5 MB</td></tr>
+    <tr><td>Profile photo</td><td>Up to 512 KB</td></tr>
+    <tr><td>Sign-in attempts</td><td>10 per 15 minutes per network</td></tr>
+    <tr><td>Stay signed in</td><td>7 days</td></tr>
+    <tr><td>Working days</td><td>Monday to Saturday (India time)</td></tr>
+    <tr><td>Daily overdue reminder</td><td>After 09:30, Monday to Saturday</td></tr>
+    <tr><td>Excel import</td><td>One order per client; all-or-nothing for Bulk Import</td></tr>
+    <tr><td>Email export</td><td>Company email addresses only</td></tr>
+  </table>
+
+  <h3>What the system does not cover</h3>
+  <div class="call limit"><b class="t">Outside the system</b>
+    <ul style="margin:4px 0 0">
+      <li>Payroll, salaries, GST and tax filing.</li>
+      <li>Customer access. Customers never sign in.</li>
+      <li>Correcting a payout after it is marked paid (bounced payment, wrong UTR, recovery). Handle it with Accounts and the Admin.</li>
+      <li>Public holidays. They count as working days in timers.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ======================================================= C5 -->
+<section class="chapter">
+  <h2 id="c5" style="margin-top:0">C5. Common problems for everyone</h2>
+  <table class="trouble">
+    <tr><th>Problem or message</th><th>Why</th><th>What to do</th></tr>
+    <tr><td>A menu page is missing</td><td>Each role sees only its own pages.</td><td>Check chapter A5. If you need access, ask the Admin to check your role.</td></tr>
+    <tr><td>Request failed with status code 401</td><td>You were signed out, or your session ended.</td><td>Sign in again.</td></tr>
+    <tr><td>Request failed with status code 403</td><td>Your role cannot do that action.</td><td>Ask the person whose role does it (see A5).</td></tr>
+    <tr><td>… Reload and try again.</td><td>Someone else changed the same record a moment ago.</td><td>Reload the page, check what changed, then act again.</td></tr>
+    <tr><td>Invalid input</td><td>A required field is empty or a value is not allowed.</td><td>Look for fields marked in red and correct them.</td></tr>
+    <tr><td>Internal server error</td><td>An unexpected fault.</td><td>Note the time and what you did, take a screenshot, and contact support.</td></tr>
+    <tr><td>No WhatsApp message received</td><td>No mobile on your account, WhatsApp switched off on your profile, or WhatsApp is in test mode.</td><td>Check the in-app Notifications page. Ask the Admin to check your mobile number.</td></tr>
+    <tr><td>Open in app link asks me to sign in</td><td>You were signed out on that phone.</td><td>Sign in. You are taken straight to the item.</td></tr>
+    <tr><td>The number on the dashboard looks wrong</td><td>The page may be out of date.</td><td>Reload. Click the number to see the list behind it.</td></tr>
+    <tr><td>Wrong name, mobile or email on my account</td><td>Only the Admin (or the Operation Manager, for field staff) can change them.</td><td>Ask them to update it.</td></tr>
+  </table>
+
+  <h3>Before you contact support</h3>
+  <ol class="steps">
+    <li>Reload the page and try once more.</li>
+    <li>Note the <b>order number</b> or request, your <b>username</b>, and the <b>exact message</b>.</li>
+    <li>Take a screenshot if you can.</li>
+    <li>Contact support with these details. This makes the fix much faster.</li>
+  </ol>
+
+</section>
+
+<!-- ======================================================= C6 BACK COVER -->
+<section class="chapter backcover">
+  <div class="bars"><i style="flex:3;background:var(--blue-deep)"></i><i style="flex:2;background:var(--blue)"></i><i style="flex:2;background:var(--orange)"></i></div>
+  <div class="bc-inner">
+    <img class="bc-logo" src="logo.png" alt="Sai Balaji Digitals" />
+    <h2 id="c6">C6. Support and contacts</h2>
+    <p class="bc-lead">Stuck, unsure, or seeing something that looks wrong? Get in touch. Share your username, the order or request number, and the exact message you see.</p>
+    <div class="support">
+      <div>
+        <h3>For any queries about the OMS</h3>
+        <div class="line"><b>Email</b>pranav.motesha@gmail.com</div>
+        <div class="line"><b>Phone</b>+91 78939 53183</div>
+        <div style="font-size:9pt;color:#dbe9fb;margin-top:6px">Account access, password resets and role changes can also be handled by your Administrator.</div>
+      </div>
+    </div>
+    <div class="grid2" style="margin-top:14px;text-align:left">
+      <div class="card"><h4>Who to ask first</h4>
+        <ul style="margin:0">
+          <li>Password, account, role: Administrator</li>
+          <li>Field jobs, leave, overtime: Operation Manager</li>
+          <li>Production work: Production Manager</li>
+          <li>Billing questions: Accountant</li>
+          <li>Expense payouts: Cost Control Manager</li>
+        </ul>
+      </div>
+      <div class="card"><h4>Contact support directly for</h4>
+        <ul style="margin:0">
+          <li>Error messages not listed in this guide</li>
+          <li>Internal server error</li>
+          <li>The system not opening at all</li>
+          <li>Anything that looks like wrong data</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <p class="muted bc-foot">Sai Balaji Digitals · Order Management System · Staff User Guide v1.0 · November 2026<br />For internal use only. Do not share outside the company.</p>
+</section>
+
+<script>
+  // Repeat each table's header row on every page it spans.
+  document.querySelectorAll("table").forEach((t) => {
+    const first = t.querySelector("tr");
+    if (!first || !first.querySelector("th") || t.tHead) return;
+    const head = t.createTHead();
+    head.appendChild(first);
+  });
+  // Keep each "If something goes wrong" heading with its table.
+  document.querySelectorAll("table.trouble").forEach((t) => {
+    const h = t.previousElementSibling;
+    const box = document.createElement("div");
+    box.className = "avoid";
+    t.parentNode.insertBefore(box, h && h.tagName === "H3" ? h : t);
+    if (h && h.tagName === "H3") box.appendChild(h);
+    box.appendChild(t);
+  });
+</script>
+
+</body>
+</html>
