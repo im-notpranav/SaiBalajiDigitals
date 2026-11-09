@@ -208,7 +208,7 @@ async function orderMoney(db: Db, orderIds: number[]): Promise<Map<number, Order
   if (ids.length === 0) return out;
 
   const [orders, asked, paid] = await Promise.all([
-    db.order.findMany({ where: { id: { in: ids } }, select: { id: true, items: true } }),
+    db.order.findMany({ where: { id: { in: ids } }, select: { id: true, items: true, adjustments: { where: { status: "Approved" } } } }),
     db.paymentRequest.groupBy({
       by: ["order_id"],
       where: { order_id: { in: ids }, status: { in: LIVE_PAYMENT_STATUSES } },
@@ -224,7 +224,7 @@ async function orderMoney(db: Db, orderIds: number[]): Promise<Map<number, Order
   for (const o of orders) {
     const a = asked.find((x) => x.order_id === o.id);
     const p = paid.find((x) => x.order_id === o.id);
-    const order_value = computeTotals(o.items).total_amount;
+    const order_value = computeTotals(o.items, o.adjustments).total_amount;
     const requested = Number(a?._sum.amount ?? 0);
     out.set(o.id, {
       order_value,

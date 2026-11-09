@@ -11,9 +11,11 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { StatusBadge } from "./StatusBadge";
 import { inr } from "@/lib/format";
-import { remarkLabel, LOSS_REMARK_TYPES } from "@/lib/constants";
+import { remarkLabel, LOSS_REMARK_TYPES, isLossRemark, isAmountRemark, remarkNeedsReason, lineBillable, NORMAL_REMARK_LABEL } from "@/lib/constants";
 import type { Order, OrderItem, RemarkType } from "@sb-oms/shared-types";
-import { flagOrderItem, setItemLossRemark, markStoreInstalled, updateStore, updateOrderDetails } from "@/api/orders";
+import { flagOrderItem, setItemLossRemark, markStoreInstalled, updateStore, updateOrderDetails, type ItemRemarkPayload } from "@/api/orders";
+import { Textarea } from "@/components/ui/textarea";
+import { AdjustmentFigure, figureOf, OrderAdjustmentsPanel, RequestLineAdjustmentDialog } from "./OrderAdjustments";
 import { storeRef } from "@/lib/stores";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -107,14 +109,15 @@ export function OrderDetail({ order, actions, related, userRole, currentUserId }
     }
   };
 
-  const handleSetRemark = async (itemId: number, remark: string | null, custom?: string) => {
+  const handleSetRemark = async (itemId: number, payload: ItemRemarkPayload) => {
     setIsSubmitting(true);
     try {
-      await setItemLossRemark(order.id, itemId, remark, custom);
-      toast.success(remark ? "Loss remark saved" : "Loss remark removed");
+      await setItemLossRemark(order.id, itemId, payload);
+      toast.success(payload.remarks ? "Remark saved" : "Remark removed");
       queryClient.invalidateQueries({ queryKey: ["order", order.id.toString()] });
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
     } catch (err: any) {
-      toast.error("Failed to set remark", { description: err.message });
+      toast.error("Failed to set remark", { description: err?.response?.data?.message || err.message });
     } finally {
       setIsSubmitting(false);
     }
@@ -143,14 +146,24 @@ export function OrderDetail({ order, actions, related, userRole, currentUserId }
       )}
       {item.remarks && item.remarks_confirmed && (
         <div className="text-xs">
-          <span className="font-medium text-amber-600 dark:text-amber-500">Loss: {remarkLabel(item.remarks)}</span>
+          {isLossRemark(item.remarks) ? (
+            <span className="font-medium text-amber-600 dark:text-amber-500">Loss: {remarkLabel(item.remarks)}</span>
+          ) : (
+            <span className="font-medium text-primary">
+              {remarkLabel(item.remarks)}
+              {isAmountRemark(item.remarks) && ` ${item.remarks === "ExtraAmount" ? "+" : "−"}${inr(Number(item.adjustment_amount) || 0)}`}
+              {item.remarks === "Revised" && item.original_amount != null && ` (was ${inr(Number(item.original_amount))})`}
+            </span>
+          )}
           {item.remarks_other_text && <div className="text-muted-foreground mt-0.5 whitespace-pre-wrap max-w-[200px] truncate" title={item.remarks_other_text}>{item.remarks_other_text}</div>}
         </div>
       )}
       {item.remarks && !item.remarks_confirmed && (
         <div className="text-xs">
           <span className="inline-flex items-center rounded-md bg-blue-500/10 px-2 py-0.5 font-medium text-blue-600 dark:text-blue-400">
-            Proposed loss: {remarkLabel(item.remarks)}
+            {isAmountRemark(item.remarks)
+              ? `Requested: ${remarkLabel(item.remarks)} ${inr(Number(item.adjustment_amount) || 0)}`
+              : `Proposed loss: ${remarkLabel(item.remarks)}`}
           </span>
           <div className="text-muted-foreground mt-0.5">pending admin approval</div>
           {item.remarks_other_text && <div className="text-muted-foreground mt-0.5 whitespace-pre-wrap max-w-[200px] truncate" title={item.remarks_other_text}>{item.remarks_other_text}</div>}
@@ -183,15 +196,34 @@ export function OrderDetail({ order, actions, related, userRole, currentUserId }
           <Ban className="h-3.5 w-3.5" />
         </Button>
       )}
-      {userRole === "ADMIN" && (
+      {userRole === "ADMIN" && order.status !== "Completed" && (
         <RemarkDialog
           item={item}
-          onSave={(remark, custom) => handleSetRemark(item.id!, remark, custom)}
+          onSave={(payload) => handleSetRemark(item.id!, payload)}
           isSubmitting={isSubmitting}
         />
       )}
+      {userRole === "CSM" && isCreator && hasFinancials && !item.remarks && order.status !== "Completed" && (
+        <RequestLineAdjustmentDialog orderId={order.id} item={item} />
+      )}
     </div>
   );
+
+  /** What the line is billed at once its remark is confirmed; proposals stay at the plain amount. */
+  const billedAt = (item: OrderItem) =>
+    item.remarks_confirmed ? lineBillable(Number(item.amount) || 0, item.remarks, item.adjustment_amount) : Number(item.amount) || 0;
+  const AmountCell = ({ item }: { item: OrderItem }) => {
+    const plain = Number(item.amount) || 0;
+    const billed = billedAt(item);
+    return billed === plain ? (
+      <>{inr(plain)}</>
+    ) : (
+      <span className="inline-flex flex-col items-end leading-tight">
+        <span className="text-xs font-normal text-muted-foreground line-through">{inr(plain)}</span>
+        <span>{inr(billed)}</span>
+      </span>
+    );
+  };
 
   /**
    * The items, shared by the grouped and flat layouts: a stacked list on phones (nine
@@ -208,7 +240,7 @@ export function OrderDetail({ order, actions, related, userRole, currentUserId }
                 <span className="font-medium">{item.media}</span>
               </div>
               {hasFinancials && (
-                <span className="shrink-0 font-semibold tabular-nums">{inr(item.amount || 0)}</span>
+                <span className="shrink-0 font-semibold tabular-nums"><AmountCell item={item} /></span>
               )}
             </div>
             <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground tabular-nums">
@@ -248,7 +280,7 @@ export function OrderDetail({ order, actions, related, userRole, currentUserId }
                 <TableCell className="text-right">{item.qty}</TableCell>
                 <TableCell className="text-right">{(item.total_sft || 0).toFixed(2)}</TableCell>
                 {hasFinancials && <TableCell className="text-right">{item.rate}</TableCell>}
-                {hasFinancials && <TableCell className="text-right font-semibold">{inr(item.amount || 0)}</TableCell>}
+                {hasFinancials && <TableCell className="text-right font-semibold"><AmountCell item={item} /></TableCell>}
                 {showProduction && (
                   <TableCell>
                     <ProductionCell item={item} />
@@ -419,6 +451,10 @@ export function OrderDetail({ order, actions, related, userRole, currentUserId }
           <ItemsTable items={order.items ?? []} />
         )}
 
+        {hasFinancials && (
+          <OrderAdjustmentsPanel order={order} userRole={userRole} isCreator={isCreator} />
+        )}
+
         {hasFinancials && order.total_amount !== undefined && (
           <div className="bg-muted/30 p-6 flex flex-wrap justify-end gap-8">
             {order.loss_amount ? (
@@ -427,9 +463,17 @@ export function OrderDetail({ order, actions, related, userRole, currentUserId }
                 <div className="text-xl font-semibold text-amber-600 dark:text-amber-500">{inr(order.loss_amount)}</div>
               </div>
             ) : null}
+            {order.adjustment_amount ? (
+              <div className="text-right">
+                <div className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Amount changes</div>
+                <div className="text-xl font-semibold">
+                  {order.adjustment_amount > 0 ? "+" : "−"}{inr(Math.abs(order.adjustment_amount))}
+                </div>
+              </div>
+            ) : null}
             <div className="text-right">
               <div className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
-                {order.loss_amount ? "Billable Total" : "Total Order Value"}
+                {order.loss_amount || order.adjustment_amount ? "Billable Total" : "Total Order Value"}
               </div>
               <div className="text-3xl font-bold text-primary">{inr(order.total_amount)}</div>
             </div>
@@ -582,62 +626,134 @@ function FlagDialog({ item, onSave, isSubmitting }: { item: OrderItem, onSave: (
   );
 }
 
-function RemarkDialog({ item, onSave, isSubmitting }: { item: OrderItem, onSave: (r: string | null, custom?: string) => void, isSubmitting: boolean }) {
+/**
+ * Admin: set, confirm or clear a line remark. A CSM's proposal (loss or Extra / Less request)
+ * is approved by saving it, changed by picking another, or rejected with a note. Revised is
+ * not offered here: it comes from editing the line's size, qty or rate.
+ */
+function RemarkDialog({ item, onSave, isSubmitting }: { item: OrderItem, onSave: (p: ItemRemarkPayload) => void, isSubmitting: boolean }) {
   const [open, setOpen] = useState(false);
   const [remark, setRemark] = useState<string>(item.remarks || "none");
-  const [custom, setCustom] = useState(item.remarks_other_text || "");
+  const [reason, setReason] = useState(item.remarks_other_text || "");
+  const [figure, setFigure] = useState(item.adjustment_amount != null ? String(item.adjustment_amount) : "");
+  const [mode, setMode] = useState<"discount" | "newAmount">("discount");
+  const [note, setNote] = useState("");
 
   const isProposed = !!item.remarks && !item.remarks_confirmed;
+  const base = Number(item.amount) || 0;
+  const reset = () => {
+    setRemark(item.remarks || "none");
+    setReason(item.remarks_other_text || "");
+    setFigure(item.adjustment_amount != null ? String(item.adjustment_amount) : "");
+    setMode("discount");
+    setNote("");
+  };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (remark === "Other" && !custom.trim()) return toast.error("Custom remark is required");
-    onSave(remark === "none" ? null : remark, remark === "Other" ? custom : undefined);
+  const save = (r: string | null) => {
+    const payload: ItemRemarkPayload = { remarks: r, decision_note: note.trim() || null };
+    if (r && remarkNeedsReason(r)) {
+      if (!reason.trim()) return toast.error("A reason is required.");
+      payload.remarks_other_text = reason.trim();
+    }
+    if (isAmountRemark(r)) {
+      const amount = figureOf(r as "ExtraAmount" | "LessAmount", base, figure, mode);
+      if (!(amount > 0)) return toast.error("Enter the amount.");
+      if (r === "LessAmount" && amount > base) return toast.error("A Less Amount cannot be more than the line.");
+      payload.adjustment_amount = Number(amount.toFixed(2));
+    }
+    onSave(payload);
     setOpen(false);
   };
 
+  const picked = remark === "none" ? null : remark;
+  const options = [
+    ...LOSS_REMARK_TYPES,
+    { value: "ExtraAmount" as RemarkType, label: "Extra Amount" },
+    { value: "LessAmount" as RemarkType, label: "Less Amount" },
+    // Kept visible only when the line is already Revised.
+    ...(item.remarks === "Revised" ? [{ value: "Revised" as RemarkType, label: "Revised" }] : []),
+  ];
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o) reset(); }}>
       <DialogTrigger asChild>
         <Button
           variant={isProposed ? "default" : item.remarks ? "secondary" : "outline"}
           size="icon"
           className="h-7 w-7"
-          title={isProposed ? "Review proposed loss" : item.remarks ? "Update loss remark" : "Add loss remark"}
+          title={isProposed ? "Review the CSM's request" : item.remarks ? "Update remark" : "Add remark"}
         >
           <MessageSquare className="h-3.5 w-3.5" />
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{isProposed ? "Review Proposed Loss" : "Item Loss Remark"}</DialogTitle>
+          <DialogTitle>{isProposed ? "Review request" : "Line remark"}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4 pt-2">
+        <form onSubmit={(e) => { e.preventDefault(); save(picked); }} className="space-y-4 pt-2">
           {isProposed && (
             <div className="rounded-md bg-blue-500/10 p-3 text-xs text-blue-700 dark:text-blue-300">
-              An employee proposed this line as a loss. Confirm to write it off (it will be excluded from the
-              billable total), change the category, or set to <strong>None</strong> to reject and keep it billable.
+              The CSM asked for <strong>{remarkLabel(item.remarks)}</strong>
+              {isAmountRemark(item.remarks) && <> of <strong>{inr(Number(item.adjustment_amount) || 0)}</strong></>}.
+              Approve it as it is, change it, or reject it. The line is billed at {inr(base)} until you decide.
             </div>
           )}
           <div className="space-y-2">
-            <Label>Remark Category</Label>
+            <Label>Remark</Label>
             <Select value={remark} onValueChange={setRemark}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label="Remark"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="none" className="text-muted-foreground italic">None</SelectItem>
-                {LOSS_REMARK_TYPES.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
+                <SelectItem value="none" className="text-muted-foreground italic">{NORMAL_REMARK_LABEL}</SelectItem>
+                {options.map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
               </SelectContent>
             </Select>
+            <p className="text-xs text-muted-foreground">
+              {isLossRemark(picked)
+                ? "Not billed: the whole line is written off."
+                : isAmountRemark(picked)
+                  ? "Billed with the figure below."
+                  : picked === "Revised"
+                    ? "Edit the line on the order to change its size, qty or rate."
+                    : `Billed at ${inr(base)}.`}
+            </p>
           </div>
-          {remark === "Other" && (
+          {isAmountRemark(picked) && (
+            <AdjustmentFigure
+              type={picked as "ExtraAmount" | "LessAmount"}
+              base={base}
+              value={figure}
+              onChange={setFigure}
+              mode={mode}
+              onModeChange={setMode}
+              idPrefix={`remark-${item.id}`}
+            />
+          )}
+          {remarkNeedsReason(picked) && (
             <div className="space-y-2">
-              <Label>Custom Remark *</Label>
-              <Input aria-label="Custom Remark *" value={custom} onChange={e => setCustom(e.target.value)} placeholder="Type remark..." />
+              <Label htmlFor={`remark-${item.id}-reason`}>Reason *</Label>
+              <Textarea id={`remark-${item.id}-reason`} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why" />
             </div>
           )}
-          <DialogFooter>
+          {isProposed && (
+            <div className="space-y-2">
+              <Label htmlFor={`remark-${item.id}-note`}>Note to the CSM (optional)</Label>
+              <Input id={`remark-${item.id}-note`} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Sent with your decision" />
+            </div>
+          )}
+          <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-between">
+            {isProposed ? (
+              <Button
+                type="button"
+                variant="ghost"
+                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                disabled={isSubmitting}
+                onClick={() => save(null)}
+              >
+                Reject
+              </Button>
+            ) : <div />}
             <Button type="submit" disabled={isSubmitting}>
-              {isProposed ? (remark === "none" ? "Reject" : "Confirm loss") : "Save"}
+              {isProposed ? (picked === item.remarks ? "Approve" : picked ? "Save changed" : "Reject") : "Save"}
             </Button>
           </DialogFooter>
         </form>

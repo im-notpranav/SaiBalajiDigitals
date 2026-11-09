@@ -1,6 +1,7 @@
 import * as xlsx from "xlsx";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
+import { itemAdjustment, itemBillable } from "./order-totals";
 
 /**
  * The company's order spreadsheet, used for uploads, the downloadable template and exports.
@@ -12,6 +13,17 @@ export const ORDER_TEMPLATE_HEADER = [
   "S.No", "Date", "Client Name", "Location", "Store Name", "Order No", "Media",
   "Size (W) Inches", "Size (H) Inches", "Qty", "Total SFT", "Rate", "Amount",
 ];
+
+/**
+ * The export adds the line remark after the template's columns, so a re-import (which reads
+ * columns by heading) still works.
+ */
+export const ORDER_EXPORT_HEADER = [...ORDER_TEMPLATE_HEADER, "Remark", "Reason", "Adjustment", "Billed Amount"];
+
+const EXPORT_REMARK_LABELS: Record<string, string> = {
+  Reprint: "Reprint", Sample: "Sample", UnderWarranty: "Under Warranty", FreeOfCost: "Free of Cost",
+  Other: "Other", Revised: "Revised", ExtraAmount: "Extra Amount", LessAmount: "Less Amount",
+};
 
 const MAX_ROWS = 500;
 const MAX_STORES = 50;
@@ -244,6 +256,11 @@ export async function buildOrdersExport(where: Prisma.OrderWhereInput) {
           total_sft: true,
           rate: true,
           amount: true,
+          remarks: true,
+          remarks_other_text: true,
+          remarks_confirmed: true,
+          adjustment_amount: true,
+          original_amount: true,
           orderStore: { select: { store_name: true, location: true } },
         },
         orderBy: [{ orderStore: { s_no: "asc" } }, { s_no: "asc" }],
@@ -269,11 +286,18 @@ export async function buildOrdersExport(where: Prisma.OrderWhereInput) {
       "Total SFT": Number(item.total_sft),
       "Rate": Number(item.rate),
       "Amount": Number(item.amount),
+      // A CSM's unconfirmed proposal is marked, and is billed at the plain amount.
+      "Remark": item.remarks
+        ? `${EXPORT_REMARK_LABELS[item.remarks] ?? item.remarks}${item.remarks_confirmed ? "" : " (proposed)"}`
+        : "",
+      "Reason": item.remarks_other_text ?? "",
+      "Adjustment": itemAdjustment(item) || "",
+      "Billed Amount": itemBillable(item),
     })),
   );
 
-  const ws = xlsx.utils.json_to_sheet(rows, { header: ORDER_TEMPLATE_HEADER });
-  ws["!cols"] = ORDER_TEMPLATE_HEADER.map((h) => ({ wch: Math.max(10, h.length + 3) }));
+  const ws = xlsx.utils.json_to_sheet(rows, { header: ORDER_EXPORT_HEADER });
+  ws["!cols"] = ORDER_EXPORT_HEADER.map((h) => ({ wch: Math.max(10, h.length + 3) }));
   const wb = xlsx.utils.book_new();
   xlsx.utils.book_append_sheet(wb, ws, "Orders");
   const buffer: Buffer = xlsx.write(wb, { type: "buffer", bookType: "xlsx" });

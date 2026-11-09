@@ -1,3 +1,4 @@
+import { computeTotals } from "../utils/order-totals";
 import { Request, Response } from "express";
 import { prisma } from "../utils/prisma";
 import { CLOSED_STATUSES, REVENUE_STATUSES, OPEN_STATUSES } from "../utils/order-status";
@@ -113,12 +114,13 @@ export const getDashboard = async (req: Request, res: Response) => {
 export const getAdminDashboard = async (req: Request, res: Response) => {
   try {
     // 1. Pending Amount (₹)
-    const pendingAmountAgg = await prisma.orderItem.aggregate({
-      _sum: { amount: true },
-      // Exclude confirmed-loss items — they aren't billable, so they aren't "pending".
-      where: { order: { status: "Pending" }, OR: [{ remarks: null }, { remarks_confirmed: false }] },
+    // The billable value of Pending orders: confirmed losses out, Extra / Less / Revised and
+    // approved order adjustments in — the same sum the invoices are checked against.
+    const pendingOrders = await prisma.order.findMany({
+      where: { status: "Pending" },
+      select: { items: true, adjustments: { where: { status: "Approved" } } },
     });
-    const pendingAmount = Number(pendingAmountAgg._sum.amount) || 0;
+    const pendingAmount = pendingOrders.reduce((sum, o) => sum + computeTotals(o.items, o.adjustments).total_amount, 0);
 
     // 2. Revenue Trend (last 7 days)
     const sevenDaysAgo = new Date();

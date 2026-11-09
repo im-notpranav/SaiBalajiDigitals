@@ -24,6 +24,7 @@ export const REMARK_TYPES: { value: RemarkType; label: string }[] = [
   { value: "Other", label: "Other" },
 ];
 
+/** Remarks that take the whole line off the bill. */
 export const LOSS_REMARK_TYPES: { value: RemarkType; label: string }[] = [
   { value: "Reprint", label: "Reprint" },
   { value: "Sample", label: "Sample" },
@@ -31,6 +32,33 @@ export const LOSS_REMARK_TYPES: { value: RemarkType; label: string }[] = [
   { value: "FreeOfCost", label: "Free of Cost" },
   { value: "Other", label: "Other" },
 ];
+
+/**
+ * Remarks that change what a line is billed at. Revised is an admin's correction of a saved
+ * line; Extra / Less carry a rupee figure that a CSM may request and only an admin confirms.
+ */
+export const ADJUSTMENT_REMARK_TYPES: { value: RemarkType; label: string }[] = [
+  { value: "Revised", label: "Revised" },
+  { value: "ExtraAmount", label: "Extra Amount" },
+  { value: "LessAmount", label: "Less Amount" },
+];
+
+/** The default line remark: billed as worked out. */
+export const NORMAL_REMARK_LABEL = "Normal";
+
+export const isLossRemark = (r: string | null | undefined) => !!r && LOSS_REMARK_TYPES.some((t) => t.value === r);
+export const isAmountRemark = (r: string | null | undefined) => r === "ExtraAmount" || r === "LessAmount";
+export const remarkNeedsReason = (r: string | null | undefined) =>
+  r === "Other" || r === "Revised" || r === "ExtraAmount" || r === "LessAmount";
+
+/** What one line is billed at once its remark is confirmed. Mirrors the API's itemBillable. */
+export function lineBillable(amount: number, remarks: string | null | undefined, adjustment?: number | null): number {
+  if (isLossRemark(remarks)) return 0;
+  const adj = Number(adjustment) || 0;
+  if (remarks === "ExtraAmount") return amount + adj;
+  if (remarks === "LessAmount") return Math.max(0, amount - adj);
+  return amount;
+}
 
 export const ORDER_STATUSES = ["Active", "Installed", "Pending", "BillingCompleted", "PaymentReceived", "Completed"] as const;
 

@@ -21,6 +21,9 @@ import {
   forceCloseOrder,
   flagOrderItem,
   setItemLossRemark,
+  requestItemAdjustment,
+  createOrderAdjustment,
+  decideOrderAdjustment,
   assignOrderItem,
   bulkAssignOrderItems,
   getAssignSuggestions,
@@ -89,6 +92,10 @@ router.put("/:id/close", authorize("ADMIN"), closeOrder);
 router.put("/:id/force-close", authorize("ADMIN"), forceCloseOrder);
 router.patch("/:orderId/items/:itemId/flag", authorize("CSM", "ADMIN"), flagOrderItem);
 router.put("/:orderId/items/:itemId/remark", authorize("ADMIN"), setItemLossRemark);
+// Extra / Less Amount: the order's CSM requests, an admin decides. Whole-order ones sit on a store.
+router.post("/:orderId/items/:itemId/adjustment-request", authorize("CSM"), requestItemAdjustment);
+router.post("/:id/adjustments", authorize("CSM", "ADMIN"), createOrderAdjustment);
+router.patch("/:orderId/adjustments/:adjustmentId", authorize("ADMIN"), decideOrderAdjustment);
 router.patch("/:orderId/items/:itemId/assign", authorize("PRODUCTION_MANAGER", "ADMIN"), assignOrderItem);
 router.patch("/:orderId/items/assign", authorize("PRODUCTION_MANAGER", "ADMIN"), bulkAssignOrderItems);
 router.get("/:orderId/assign-suggestions", authorize("PRODUCTION_MANAGER", "ADMIN"), getAssignSuggestions);

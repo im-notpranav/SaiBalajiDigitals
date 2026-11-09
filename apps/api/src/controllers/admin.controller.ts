@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { prisma } from "../utils/prisma";
 import { serializeDecimals } from "../utils/serialize";
-import { computeTotals } from "../utils/order-totals";
+import { computeTotals, itemAdjustment, orderAdjustmentValue, LOSS_REMARKS, ADJUSTMENT_REMARKS } from "../utils/order-totals";
 import { currentStage } from "../utils/order-stage";
 import { OPEN_STATUSES } from "../utils/order-status";
 import { storeLabelOf, storeLocationOf } from "../utils/order-derive";
@@ -80,6 +80,7 @@ export const getOverdueReport = async (req: Request, res: Response) => {
       include: {
         items: { include: { assignments: true } },
         stores: { select: { id: true, s_no: true, store_name: true, location: true }, orderBy: { s_no: "asc" } },
+        adjustments: { where: { status: "Approved" } },
       },
       orderBy: { created_at: "asc" },
     });
@@ -104,7 +105,7 @@ export const getOverdueReport = async (req: Request, res: Response) => {
         stage: s.stage,
         stage_since: s.since,
         days_in_stage: s.days_in_stage,
-        total_amount: computeTotals(o.items).total_amount,
+        total_amount: computeTotals(o.items, o.adjustments).total_amount,
       });
     }
 
@@ -122,22 +123,34 @@ export const getOverdueReport = async (req: Request, res: Response) => {
 export const getLossReport = async (req: Request, res: Response) => {
   try {
     const { from, to } = req.query;
-    // Only admin-confirmed losses are real losses; employee proposals are excluded until approved.
-    const where: any = { remarks: { not: null }, remarks_confirmed: true };
-    if (from || to) {
-      where.remarks_set_at = {};
-      if (from) where.remarks_set_at.gte = new Date(String(from));
+    const range = (field: string) => {
+      if (!from && !to) return {};
+      const r: any = {};
+      if (from) r.gte = new Date(String(from));
       // Make `to` inclusive of the entire end day.
-      if (to) where.remarks_set_at.lte = new Date(String(to) + "T23:59:59.999Z");
-    }
+      if (to) r.lte = new Date(String(to) + "T23:59:59.999Z");
+      return { [field]: r };
+    };
+    const orderSelect = { select: { order_no: true, client_name: true, created_by: true, creator_name: true } };
 
-    const items = await prisma.orderItem.findMany({
-      where,
-      orderBy: { remarks_set_at: "desc" },
-      include: {
-        order: { select: { order_no: true, client_name: true, created_by: true, creator_name: true } },
-      },
-    });
+    // Only admin-confirmed remarks count; employee proposals are excluded until approved.
+    const [items, adjustedItems, orderAdjustments] = await Promise.all([
+      prisma.orderItem.findMany({
+        where: { remarks: { in: [...LOSS_REMARKS] as any }, remarks_confirmed: true, ...range("remarks_set_at") },
+        orderBy: { remarks_set_at: "desc" },
+        include: { order: orderSelect },
+      }),
+      prisma.orderItem.findMany({
+        where: { remarks: { in: [...ADJUSTMENT_REMARKS] as any }, remarks_confirmed: true, ...range("remarks_confirmed_at") },
+        orderBy: { remarks_confirmed_at: "desc" },
+        include: { order: orderSelect },
+      }),
+      prisma.orderAdjustment.findMany({
+        where: { status: "Approved", ...range("decided_at") },
+        orderBy: { decided_at: "desc" },
+        include: { order: orderSelect, orderStore: { select: { store_name: true } } },
+      }),
+    ]);
 
     const byCategory: Record<string, number> = {};
     const byEmployee: Record<string, { name: string; total: number }> = {};
@@ -152,12 +165,51 @@ export const getLossReport = async (req: Request, res: Response) => {
       byEmployee[empKey].total += amount;
     }
 
+    // Adjustments are reported apart from losses: Less takes money off, Extra adds it, and
+    // Revised is the difference between the corrected and the original line.
+    const adjustments = [
+      ...adjustedItems.map((i: any) => ({
+        key: `item-${i.id}`,
+        scope: "line" as const,
+        type: i.remarks,
+        order_id: i.order_id,
+        order: i.order,
+        description: `${i.media} · ${Number(i.width_inches)}x${Number(i.height_inches)} · ${Number(i.qty)} qty`,
+        reason: i.remarks_other_text,
+        original_amount: i.remarks === "Revised" ? i.original_amount : i.amount,
+        effect: itemAdjustment(i),
+        at: i.remarks_confirmed_at,
+      })),
+      ...orderAdjustments.map((a: any) => ({
+        key: `order-${a.id}`,
+        scope: "order" as const,
+        type: a.type,
+        order_id: a.order_id,
+        order: a.order,
+        description: `Whole order · ${a.orderStore?.store_name ?? ""}`,
+        reason: a.reason,
+        original_amount: null,
+        effect: orderAdjustmentValue(a),
+        at: a.decided_at,
+      })),
+    ].sort((x, y) => new Date(y.at ?? 0).getTime() - new Date(x.at ?? 0).getTime());
+
+    const adjustmentsByType: Record<string, { count: number; amount: number }> = {};
+    for (const a of adjustments) {
+      const t = (adjustmentsByType[a.type] ??= { count: 0, amount: 0 });
+      t.count += 1;
+      t.amount += a.effect;
+    }
+
     return res.status(200).json(
       serializeDecimals({
         items,
         by_category: byCategory,
         by_employee: Object.values(byEmployee),
         total_loss: items.reduce((s: number, i: any) => s + Number(i.amount), 0),
+        adjustments,
+        adjustments_by_type: adjustmentsByType,
+        net_adjustment: adjustments.reduce((s, a) => s + a.effect, 0),
       })
     );
   } catch (err) {

@@ -54,7 +54,7 @@ function LossReportPage() {
     <>
       <PageHeader
         title="Loss Report"
-        description="Loss from line items with loss remarks."
+        description="Loss from line items with loss remarks, and amount changes (Revised, Extra, Less) apart from it."
         crumbs={[{ label: "Automated System" }, { label: "Reports" }, { label: "Loss Report" }]}
       />
       
@@ -81,9 +81,11 @@ function LossReportPage() {
           <LoadingState label="Loading loss report…" />
         ) : error ? (
           <ErrorState title="Couldn't load the report" error={error} onRetry={() => refetch()} />
-        ) : data?.items?.length === 0 ? (
+        ) : data?.items?.length === 0 && !(data?.adjustments?.length > 0) ? (
           <EmptyState icon={TrendingDown} title="No lost items in this period" description="Try a wider date range." />
         ) : (
+          <>
+          {data?.items?.length > 0 && (
           <div className="grid gap-6 lg:grid-cols-3">
             <section className="lg:col-span-2 surface-panel p-0 overflow-hidden">
               <div className="p-6 border-b">
@@ -148,8 +150,89 @@ function LossReportPage() {
               </div>
             </section>
           </div>
+          )}
+
+          {data?.adjustments?.length > 0 && <AdjustmentsSection data={data} />}
+          </>
         )}
       </div>
     </>
+  );
+}
+
+/**
+ * Revised, Extra Amount and Less Amount, kept apart from losses so the loss total stays a
+ * write-off figure. Each row's effect is signed: + billed more, − billed less.
+ */
+function AdjustmentsSection({ data }: { data: any }) {
+  const rows: any[] = data.adjustments ?? [];
+  const byType = Object.entries((data.adjustments_by_type ?? {}) as Record<string, { count: number; amount: number }>);
+  const net = Number(data.net_adjustment ?? 0);
+  const signed = (n: number) => `${n > 0 ? "+" : n < 0 ? "−" : ""}${inr(Math.abs(n))}`;
+  return (
+    <div className="grid gap-6 lg:grid-cols-3">
+      <section className="lg:col-span-2 surface-panel p-0 overflow-hidden">
+        <div className="p-6 border-b">
+          <h3 className="text-sm font-semibold uppercase tracking-wider">Adjustments</h3>
+          <p className="mt-1 text-xs text-muted-foreground">Revised, Extra Amount and Less Amount. Not part of the loss total.</p>
+        </div>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Order</TableHead>
+              <TableHead>What</TableHead>
+              <TableHead>Type</TableHead>
+              <TableHead className="text-right">Effect</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((a) => (
+              <TableRow key={a.key}>
+                <TableCell className="font-medium">
+                  {a.order?.order_no || "Unknown"}
+                  <div className="text-xs text-muted-foreground font-normal mt-0.5">{a.order?.client_name}</div>
+                </TableCell>
+                <TableCell>
+                  <div className="text-sm">{a.description}</div>
+                  {a.scope === "line" && a.original_amount != null && (
+                    <div className="text-xs text-muted-foreground mt-0.5">
+                      {a.type === "Revised" ? "Was" : "Line"} {inr(Number(a.original_amount))}
+                    </div>
+                  )}
+                </TableCell>
+                <TableCell>
+                  <span className="font-medium">{remarkLabel(a.type)}</span>
+                  {a.reason && <div className="text-xs text-muted-foreground mt-0.5 max-w-[180px] truncate" title={a.reason}>{a.reason}</div>}
+                </TableCell>
+                <TableCell className={`text-right font-semibold tabular-nums ${a.effect < 0 ? "text-destructive" : a.effect > 0 ? "text-success" : ""}`}>
+                  {signed(Number(a.effect))}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </section>
+
+      <section className="space-y-6">
+        <div className="surface-panel p-6">
+          <div className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-4">Net adjustment</div>
+          <div className={`text-4xl font-bold ${net < 0 ? "text-destructive" : net > 0 ? "text-success" : ""}`}>{signed(net)}</div>
+          <div className="mt-2 text-xs text-muted-foreground">From {rows.length} change{rows.length === 1 ? "" : "s"}</div>
+        </div>
+        <div className="surface-panel p-6">
+          <div className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-4">By Type</div>
+          <div className="space-y-3">
+            {byType.map(([type, t]) => (
+              <div key={type} className="flex justify-between text-sm">
+                <span className="font-medium">
+                  {remarkLabel(type as any)} <span className="text-xs font-normal text-muted-foreground">· {t.count}</span>
+                </span>
+                <span className="font-semibold tabular-nums">{signed(t.amount)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+    </div>
   );
 }

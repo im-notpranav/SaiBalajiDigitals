@@ -52,6 +52,16 @@ const lineRemarkProblem = (item: any, lineAmount: number, isNew: boolean): strin
   return null;
 };
 
+const inr2 = (n: number) => `₹${Number(n).toFixed(2)}`;
+/** "Extra Amount ₹500.00 on 2 lines" — the request summary admins read. */
+const describeLineRequests = (items: any[]): string => {
+  if (items.length === 1) {
+    const i = items[0];
+    return `${i.remarks === "ExtraAmount" ? "Extra Amount" : "Less Amount"} of ${inr2(i.adjustment_amount)} on a line`;
+  }
+  return `Extra / Less Amount on ${items.length} lines`;
+};
+
 /** Tell every admin a CSM is asking for an amount change — in the app and on WhatsApp. */
 const notifyAdminsOfAdjustmentRequest = async (
   order: { id: number; order_no: string; client_name: string },
@@ -371,6 +381,15 @@ export const createOrder = async (req: Request, res: Response) => {
       }
     };
 
+    // Every line is new here, so Revised is refused; Less Amount cannot exceed its line.
+    for (const st of stores) {
+      for (const item of st.items as any[]) {
+        const lineAmount = Number((((Number(item.width_inches) * Number(item.height_inches)) / 144) * Number(item.qty) * Number(item.rate)).toFixed(2));
+        const problem = lineRemarkProblem(item, lineAmount, true);
+        if (problem) return res.status(400).json({ message: problem });
+      }
+    }
+
     ensureLookupValue("client", client_name);
     stores.forEach((s) => s.items.forEach((item: any) => ensureLookupValue("media", item.media)));
 
@@ -398,10 +417,9 @@ export const createOrder = async (req: Request, res: Response) => {
           total_sft: parseFloat(total_sft),
           rate: r,
           amount: parseFloat(amount),
-          // Loss remarks: employees may PROPOSE (remarks_confirmed=false, still billable until admin approves);
-          // an admin setting a remark auto-confirms it (excluded from the billable total).
-          remarks: item.remarks ?? null,
-          remarks_other_text: item.remarks === "Other" ? item.remarks_other_text : null,
+          // Line remarks: employees may PROPOSE (remarks_confirmed=false, billed at the plain amount
+          // until an admin approves); an admin setting a remark auto-confirms it.
+          ...remarkColumns(item),
           remarks_set_at: item.remarks ? new Date() : null,
           remarks_set_by: item.remarks ? user.id : null,
           remarks_confirmed: item.remarks ? isAdmin : false,
@@ -411,8 +429,10 @@ export const createOrder = async (req: Request, res: Response) => {
       })
     );
 
-    // If a non-admin proposed any loss remarks, flag the order for admin review.
-    const hasProposedLoss = !isAdmin && processedByStore.some((si) => si.some((i: any) => i.remarks != null));
+    // If a non-admin proposed any remarks, flag the order for admin review.
+    const proposed = isAdmin ? [] : processedByStore.flat().filter((i: any) => i.remarks != null);
+    const hasProposedLoss = proposed.some((i: any) => !AMOUNT_REMARKS.has(i.remarks));
+    const proposedAmountChanges = proposed.filter((i: any) => AMOUNT_REMARKS.has(i.remarks));
 
     const order_no = await generateOrderId();
 
@@ -474,6 +494,9 @@ export const createOrder = async (req: Request, res: Response) => {
         "warning",
         order.id
       );
+    }
+    if (proposedAmountChanges.length > 0) {
+      await notifyAdminsOfAdjustmentRequest(order, user, describeLineRequests(proposedAmountChanges));
     }
 
     const { total_amount, loss_amount } = computeTotals(order.items);
@@ -609,7 +632,8 @@ export const updateOrder = async (req: Request, res: Response) => {
             Number(newItem.qty) !== Number(oldItem.qty) ||
             Number(newItem.rate) !== Number(oldItem.rate) ||
             (newItem.remarks ?? null) !== (oldItem.remarks ?? null) ||
-            (newItem.remarks_other_text ?? null) !== (oldItem.remarks_other_text ?? null);
+            (newItem.remarks_other_text ?? null) !== (oldItem.remarks_other_text ?? null) ||
+            Number(newItem.adjustment_amount ?? 0) !== Number((oldItem as any).adjustment_amount ?? 0);
           if (changed) {
             return res.status(403).json({ message: "Existing line items cannot be edited — flag it and add a corrected line instead." });
           }
@@ -630,10 +654,21 @@ export const updateOrder = async (req: Request, res: Response) => {
             Number(newItem.rate) !== Number(oldItem.rate);
           if (amountChanged && !newItem.remarks) {
             return res.status(400).json({
-              message: `A remark is required to adjust the amount on item #${oldItem.s_no}. Select a reason for the change.`,
+              message: `A remark is required to adjust the amount on item #${oldItem.s_no}. Select Revised and give the reason.`,
             });
           }
         }
+      }
+
+      // Revised only on a saved line, and only by an admin; Less Amount never above its line.
+      for (const newItem of items as any[]) {
+        const isNew = !(newItem.id && oldItemsById.has(newItem.id));
+        if (newItem.remarks === "Revised" && !isAdmin) {
+          return res.status(403).json({ message: "Only an administrator can revise a line." });
+        }
+        const lineAmount = Number((((Number(newItem.width_inches) * Number(newItem.height_inches)) / 144) * Number(newItem.qty) * Number(newItem.rate)).toFixed(2));
+        const problem = lineRemarkProblem(newItem, lineAmount, isNew);
+        if (problem) return res.status(400).json({ message: problem });
       }
     }
 
@@ -668,6 +703,7 @@ export const updateOrder = async (req: Request, res: Response) => {
     }
 
     let proposedLossDuringUpdate = false;
+    const proposedAmountChanges: any[] = [];
     const updatedOrder = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT set_config('app.current_user_id', ${user.id.toString()}, true)`;
 
@@ -702,7 +738,9 @@ export const updateOrder = async (req: Request, res: Response) => {
 
           if (newItem.id && oldItemsById.has(newItem.id)) {
             const oldItem = oldItemsById.get(newItem.id)!;
-            const remarkChanged = (newItem.remarks ?? null) !== (oldItem?.remarks ?? null);
+            const remarkChanged =
+              (newItem.remarks ?? null) !== (oldItem?.remarks ?? null) ||
+              Number(newItem.adjustment_amount ?? 0) !== Number(oldItem?.adjustment_amount ?? 0);
             // Only admins can reach here with a changed remark (employees are blocked by the
             // append-only check above). An admin changing a remark sets AND confirms it.
             const adminRemarkUpdate = isAdmin && remarkChanged
@@ -719,8 +757,9 @@ export const updateOrder = async (req: Request, res: Response) => {
               data: {
                 media: newItem.media, width_inches: w, height_inches: h,
                 qty: q, total_sft: parseFloat(total_sft), rate: r, amount: parseFloat(amount),
-                remarks: newItem.remarks ?? null,
-                remarks_other_text: newItem.remarks === "Other" ? newItem.remarks_other_text : null,
+                ...remarkColumns(newItem),
+                // Revised keeps what the line came to before its first correction.
+                original_amount: newItem.remarks === "Revised" ? (oldItem.original_amount ?? oldItem.amount) : null,
                 ...adminRemarkUpdate,
               },
             });
@@ -733,9 +772,8 @@ export const updateOrder = async (req: Request, res: Response) => {
                 order_id: id, order_store_id: targetStoreId, s_no: sNo, media: newItem.media,
                 width_inches: w, height_inches: h, qty: q,
                 total_sft: parseFloat(total_sft), rate: r, amount: parseFloat(amount),
-                // Loss remarks: employees propose (unconfirmed, still billable); admins auto-confirm.
-                remarks: newItem.remarks ?? null,
-                remarks_other_text: newItem.remarks === "Other" ? newItem.remarks_other_text : null,
+                // Line remarks: employees propose (unconfirmed, billed at the plain amount); admins auto-confirm.
+                ...remarkColumns(newItem),
                 remarks_set_at: newItem.remarks ? new Date() : null,
                 remarks_set_by: newItem.remarks ? user.id : null,
                 remarks_confirmed: newItem.remarks ? isAdmin : false,
@@ -743,7 +781,10 @@ export const updateOrder = async (req: Request, res: Response) => {
                 remarks_confirmed_by: newItem.remarks && isAdmin ? user.id : null,
               },
             });
-            if (newItem.remarks && !isAdmin) proposedLossDuringUpdate = true;
+            if (newItem.remarks && !isAdmin) {
+              if (AMOUNT_REMARKS.has(newItem.remarks)) proposedAmountChanges.push(newItem);
+              else proposedLossDuringUpdate = true;
+            }
           }
         }
       }
@@ -763,7 +804,7 @@ export const updateOrder = async (req: Request, res: Response) => {
       // Line-item changes move the billable total, which can flip an order between
       // BillingCompleted and Pending.
       await recomputeOrderStatus(tx, id);
-      return tx.order.findUnique({ where: { id }, include: { items: true } });
+      return tx.order.findUnique({ where: { id }, include: { items: true, adjustments: { where: { status: "Approved" } } } });
     });
 
     if (changes.length > 0 && user.role === "CSM") {
@@ -784,9 +825,12 @@ export const updateOrder = async (req: Request, res: Response) => {
         id
       );
     }
+    if (proposedAmountChanges.length > 0) {
+      await notifyAdminsOfAdjustmentRequest(existingOrder, user, describeLineRequests(proposedAmountChanges));
+    }
 
-    const { total_amount, loss_amount } = computeTotals(updatedOrder?.items);
-    return res.status(200).json(serializeDecimals({ ...updatedOrder, total_amount, loss_amount }));
+    const { total_amount, loss_amount, adjustment_amount } = computeTotals(updatedOrder?.items, updatedOrder?.adjustments);
+    return res.status(200).json(serializeDecimals({ ...updatedOrder, total_amount, loss_amount, adjustment_amount }));
   } catch (err) {
     console.error(err);
     return res.status(500).json({ message: "Internal server error" });
@@ -1221,7 +1265,10 @@ export const createInvoice = async (req: Request, res: Response) => {
 
     const order = await prisma.order.findUnique({
       where: { id },
-      include: { stores: { include: { items: { include: { assignments: true } } }, orderBy: { s_no: "asc" } } },
+      include: {
+        stores: { include: { items: { include: { assignments: true } } }, orderBy: { s_no: "asc" } },
+        adjustments: { where: { status: "Approved" } },
+      },
     });
     if (!order) return res.status(404).json({ message: "Order not found" });
 
@@ -1247,9 +1294,13 @@ export const createInvoice = async (req: Request, res: Response) => {
       return res.status(409).json({ message: `Invoice ${invoice_no} already exists on this order.` });
     }
 
-    // The value this invoice is measured against: only the covered stores' items,
-    // confirmed losses excluded.
-    const coveredTotal = computeTotals(covered.flatMap((s) => s.items)).total_amount;
+    // The value this invoice is measured against: only the covered stores' items and
+    // approved order adjustments, confirmed losses excluded.
+    const coveredIds = new Set(covered.map((s) => s.id));
+    const coveredTotal = computeTotals(
+      covered.flatMap((s) => s.items),
+      order.adjustments.filter((a) => coveredIds.has(a.order_store_id)),
+    ).total_amount;
     if (Number(bill_amount) > coveredTotal) {
       return res.status(400).json({
         message: `Bill amount cannot exceed the ₹${coveredTotal.toFixed(2)} billable across the selected store(s).`,
@@ -1593,7 +1644,7 @@ export const forceCloseOrder = async (req: Request, res: Response) => {
   }
 };
 
-import { flagItemSchema, itemLossRemarkSchema, assignItemSchema, bulkAssignSchema, completeItemSchema, editBillingSchema, editPaymentSchema, followUpSchema } from "../utils/validators";
+import { flagItemSchema, itemLossRemarkSchema, itemAdjustmentRequestSchema, orderAdjustmentSchema, decideAdjustmentSchema, assignItemSchema, bulkAssignSchema, completeItemSchema, editBillingSchema, editPaymentSchema, followUpSchema } from "../utils/validators";
 
 /** PATCH /api/orders/:orderId/invoices/:invoiceId/billing */
 export const editInvoiceBilling = async (req: Request, res: Response) => {
@@ -1612,6 +1663,7 @@ export const editInvoiceBilling = async (req: Request, res: Response) => {
       include: {
         invoices: true,
         stores: { include: { items: { include: { assignments: true } } }, orderBy: { s_no: "asc" } },
+        adjustments: { where: { status: "Approved" } },
       },
     });
     if (!order) return res.status(404).json({ message: "Order not found" });
@@ -1643,7 +1695,11 @@ export const editInvoiceBilling = async (req: Request, res: Response) => {
       covered = next;
     }
 
-    const coveredTotal = computeTotals(covered.flatMap((s) => s.items)).total_amount;
+    const coveredIds = new Set(covered.map((s) => s.id));
+    const coveredTotal = computeTotals(
+      covered.flatMap((s) => s.items),
+      order.adjustments.filter((a) => coveredIds.has(a.order_store_id)),
+    ).total_amount;
     const effectiveAmount = bill_amount !== undefined ? Number(bill_amount) : Number(invoice.bill_amount ?? 0);
     if (effectiveAmount > coveredTotal) {
       return res.status(400).json({
@@ -2267,36 +2323,308 @@ export const flagOrderItem = async (req: Request, res: Response) => {
   }
 };
 
+const REMARK_LABELS: Record<string, string> = {
+  Reprint: "Reprint", Sample: "Sample", UnderWarranty: "Under Warranty", FreeOfCost: "Free of Cost",
+  Other: "Other", Revised: "Revised", ExtraAmount: "Extra Amount", LessAmount: "Less Amount",
+};
+const remarkName = (r: string | null | undefined) => (r ? REMARK_LABELS[r] ?? r : "Normal");
+
+/** Statuses an adjustment can knock back to Pending once the invoice no longer matches. */
+const INVOICED_STATUSES = new Set(["BillingCompleted", "PaymentReceived"]);
+
+/** When an amount change unsettles an invoiced order, Accounts must fix the invoice. */
+const notifyAccountsIfUnsettled = async (
+  order: { id: number; order_no: string; client_name: string },
+  before: string,
+  after: string,
+) => {
+  if (!INVOICED_STATUSES.has(before) || after !== "Pending") return;
+  await notifyRole("ACCOUNTS", `Invoice no longer matches on ${order.order_no}`, "An admin changed the billable amount. Check the invoice and correct it.", "warning", order.id);
+  await queueWhatsAppRole(prisma, "ORDER_UPDATE", "ACCOUNTS", [order.order_no, order.client_name, "the billable amount changed, so the invoice needs correcting"], { type: "order", id: order.id })
+    .catch((err) => console.error("WhatsApp ORDER_UPDATE could not be queued:", err?.message ?? err));
+};
+
+/** Tell the CSM who asked what the admin decided — in the app and on WhatsApp. */
+const notifyRequesterOfDecision = async (
+  order: { id: number; order_no: string; client_name: string },
+  requesterId: number | null | undefined,
+  outcome: string,
+  rejected: boolean,
+  note?: string | null,
+) => {
+  if (!requesterId) return;
+  const body = note ? `${outcome}. Note: ${note}` : outcome;
+  await notifyUser(requesterId, `Request decided on ${order.order_no}`, body, rejected ? "warning" : "success", order.id);
+  await queueWhatsAppAfter("ORDER_UPDATE", [requesterId], [order.order_no, order.client_name, body], { type: "order", id: order.id });
+};
+
+/**
+ * PUT /api/orders/:orderId/items/:itemId/remark — admin only.
+ * Setting a remark confirms it: a loss leaves the bill, Extra / Less change it. Clearing a
+ * CSM's proposal rejects it, and the line is billed at its plain amount again.
+ */
 export const setItemLossRemark = async (req: Request, res: Response) => {
   try {
     const parseResult = itemLossRemarkSchema.safeParse(req.body);
     if (!parseResult.success) return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parseResult.error) });
-    const { remarks, remarks_other_text } = parseResult.data;
+    const { remarks, decision_note } = parseResult.data;
     const itemId = parseInt(req.params.itemId as string, 10);
+    const orderId = parseInt(req.params.orderId as string, 10);
     const user = req.user!;
 
-    // An admin setting a remark confirms it as a real loss (excluded from the billable total).
-    // Clearing the remark rejects it — the line becomes chargeable again.
-    const item = await prisma.$transaction(async (tx) => {
+    const existing = await prisma.orderItem.findUnique({
+      where: { id: itemId },
+      include: { order: { select: { id: true, order_no: true, client_name: true, status: true } } },
+    });
+    if (!existing || existing.order_id !== orderId) return res.status(404).json({ message: "Item not found" });
+    if (existing.order.status === "Completed") return res.status(400).json({ message: "This order is closed." });
+
+    // Revised comes from editing the line's size, qty or rate, not from this dialog.
+    if (remarks === "Revised" && existing.remarks !== "Revised") {
+      return res.status(400).json({ message: "To revise a line, edit its size, qty or rate on the order and choose Revised." });
+    }
+    const problem = lineRemarkProblem(parseResult.data, Number(existing.amount), false);
+    if (problem) return res.status(400).json({ message: problem });
+
+    const wasProposal = existing.remarks != null && !existing.remarks_confirmed;
+    const proposer = wasProposal ? existing.remarks_set_by : null;
+    const keepsProposal = wasProposal && remarks === existing.remarks;
+    const before = existing.order.status;
+    const cols = remarkColumns(parseResult.data);
+
+    const { item, after } = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT set_config('app.current_user_id', ${user.id.toString()}, true)`;
       const updated = await tx.orderItem.update({
         where: { id: itemId },
         data: {
-          remarks,
-          remarks_other_text: remarks === "Other" ? remarks_other_text : null,
-          remarks_set_at: remarks ? new Date() : null,
-          remarks_set_by: remarks ? user.id : null,
+          ...cols,
+          original_amount: remarks === "Revised" ? existing.original_amount : null,
+          // Approving a proposal keeps who proposed it and when.
+          remarks_set_at: remarks ? (keepsProposal ? existing.remarks_set_at : new Date()) : null,
+          remarks_set_by: remarks ? (keepsProposal ? existing.remarks_set_by : user.id) : null,
           remarks_confirmed: remarks ? true : false,
           remarks_confirmed_at: remarks ? new Date() : null,
           remarks_confirmed_by: remarks ? user.id : null,
         },
       });
-      // Confirming or rejecting a loss changes the billable total the invoices are
-      // reconciled against.
-      await recomputeOrderStatus(tx, updated.order_id);
-      return updated;
+      // Confirming or rejecting changes the billable total the invoices are reconciled against.
+      const after = await recomputeOrderStatus(tx, updated.order_id);
+      return { item: updated, after };
     });
+
+    if (proposer && proposer !== user.id) {
+      const asked = remarkName(existing.remarks);
+      const figure = remarks && AMOUNT_REMARKS.has(remarks) ? ` at ${inr2(Number(cols.adjustment_amount))}` : "";
+      const outcome = !remarks
+        ? `Your ${asked} request on item #${existing.s_no} was rejected`
+        : keepsProposal
+          ? `Your ${asked} request on item #${existing.s_no} was approved${figure}`
+          : `Your ${asked} request on item #${existing.s_no} was changed to ${remarkName(remarks)}${figure}`;
+      await notifyRequesterOfDecision(existing.order, proposer, outcome, !remarks, decision_note);
+    }
+    await notifyAccountsIfUnsettled(existing.order, before, after);
+
     return res.status(200).json(serializeDecimals(item));
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+/**
+ * POST /api/orders/:orderId/items/:itemId/adjustment-request — the order's CSM asks for an
+ * Extra / Less Amount on a saved line. Billed at the plain amount until an admin decides.
+ */
+export const requestItemAdjustment = async (req: Request, res: Response) => {
+  try {
+    const parsed = itemAdjustmentRequestSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parsed.error) });
+    const { type, amount, reason } = parsed.data;
+    const itemId = parseInt(req.params.itemId as string, 10);
+    const orderId = parseInt(req.params.orderId as string, 10);
+    const user = req.user!;
+
+    const item = await prisma.orderItem.findUnique({
+      where: { id: itemId },
+      include: { order: { select: { id: true, order_no: true, client_name: true, status: true, created_by: true } } },
+    });
+    if (!item || item.order_id !== orderId) return res.status(404).json({ message: "Item not found" });
+    if (item.order.created_by !== user.id) {
+      return res.status(403).json({ message: "Only the order's CSM can ask for an amount change." });
+    }
+    if (item.order.status === "Completed") return res.status(400).json({ message: "This order is closed." });
+    if (item.remarks) {
+      return res.status(409).json({
+        message: item.remarks_confirmed
+          ? `This line already has ${remarkName(item.remarks)}. Ask an admin to change it.`
+          : `A ${remarkName(item.remarks)} request is already waiting on this line.`,
+      });
+    }
+    const problem = lineRemarkProblem({ remarks: type, adjustment_amount: amount }, Number(item.amount), false);
+    if (problem) return res.status(400).json({ message: problem });
+
+    const updated = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.current_user_id', ${user.id.toString()}, true)`;
+      return tx.orderItem.update({
+        where: { id: itemId },
+        data: {
+          remarks: type,
+          remarks_other_text: reason,
+          adjustment_amount: amount,
+          original_amount: null,
+          remarks_set_at: new Date(),
+          remarks_set_by: user.id,
+          remarks_confirmed: false,
+          remarks_confirmed_at: null,
+          remarks_confirmed_by: null,
+        },
+      });
+    });
+
+    await notifyAdminsOfAdjustmentRequest(item.order, user, `${remarkName(type)} of ${inr2(amount)} on item #${item.s_no}`);
+    return res.status(200).json(serializeDecimals(updated));
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+/** The approved billable value of one store, for capping a Less Amount. */
+const storeBillable = async (orderId: number, storeId: number, excludeAdjustmentId?: number) => {
+  const [items, adjustments] = await Promise.all([
+    prisma.orderItem.findMany({ where: { order_id: orderId, order_store_id: storeId } }),
+    prisma.orderAdjustment.findMany({
+      where: {
+        order_id: orderId,
+        order_store_id: storeId,
+        status: "Approved",
+        ...(excludeAdjustmentId ? { id: { not: excludeAdjustmentId } } : {}),
+      },
+    }),
+  ]);
+  return computeTotals(items, adjustments).total_amount;
+};
+
+/**
+ * POST /api/orders/:id/adjustments — a whole-order Extra / Less Amount on one store.
+ * From the order's CSM it is a request; from an admin it is approved at once.
+ */
+export const createOrderAdjustment = async (req: Request, res: Response) => {
+  try {
+    const parsed = orderAdjustmentSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parsed.error) });
+    const { order_store_id, type, amount, reason } = parsed.data;
+    const orderId = parseInt(req.params.id as string, 10);
+    const user = req.user!;
+    const isAdmin = user.role === "ADMIN";
+
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: { stores: { select: { id: true, s_no: true, store_name: true } } },
+    });
+    if (!order) return res.status(404).json({ message: "Order not found" });
+    if (!isAdmin && order.created_by !== user.id) {
+      return res.status(403).json({ message: "Only the order's CSM can ask for an amount change." });
+    }
+    if (order.status === "Completed") return res.status(400).json({ message: "This order is closed." });
+    const store = order.stores.find((st) => st.id === order_store_id);
+    if (!store) return res.status(400).json({ message: "That store is not on this order." });
+
+    if (type === "LessAmount") {
+      const cap = await storeBillable(orderId, order_store_id);
+      if (amount > cap) {
+        return res.status(400).json({ message: `The Less Amount cannot be more than ${store.store_name}'s ${inr2(cap)}.` });
+      }
+    }
+
+    const before = order.status;
+    const { adjustment, after } = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.current_user_id', ${user.id.toString()}, true)`;
+      const adjustment = await tx.orderAdjustment.create({
+        data: {
+          order_id: orderId,
+          order_store_id,
+          type,
+          amount,
+          requested_amount: isAdmin ? null : amount,
+          reason,
+          status: isAdmin ? "Approved" : "Requested",
+          requested_by: user.id,
+          decided_by: isAdmin ? user.id : null,
+          decided_at: isAdmin ? new Date() : null,
+        },
+      });
+      const after = isAdmin ? await recomputeOrderStatus(tx, orderId) : order.status;
+      return { adjustment, after };
+    });
+
+    if (isAdmin) await notifyAccountsIfUnsettled(order, before, after);
+    else await notifyAdminsOfAdjustmentRequest(order, user, `${remarkName(type)} of ${inr2(amount)} on the whole order (${store.store_name})`);
+
+    return res.status(201).json(serializeDecimals(adjustment));
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+/**
+ * PATCH /api/orders/:orderId/adjustments/:adjustmentId — admin approves (optionally at a
+ * different figure) or rejects. Rejecting an approved one takes it back off the bill.
+ */
+export const decideOrderAdjustment = async (req: Request, res: Response) => {
+  try {
+    const parsed = decideAdjustmentSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parsed.error) });
+    const { action, amount, note } = parsed.data;
+    const orderId = parseInt(req.params.orderId as string, 10);
+    const adjustmentId = parseInt(req.params.adjustmentId as string, 10);
+    const user = req.user!;
+
+    const adj = await prisma.orderAdjustment.findUnique({
+      where: { id: adjustmentId },
+      include: {
+        order: { select: { id: true, order_no: true, client_name: true, status: true } },
+        orderStore: { select: { store_name: true } },
+      },
+    });
+    if (!adj || adj.order_id !== orderId) return res.status(404).json({ message: "Adjustment not found" });
+    if (adj.order.status === "Completed") return res.status(400).json({ message: "This order is closed." });
+    if (adj.status === "Rejected") return res.status(409).json({ message: "This request was already rejected." });
+
+    const figure = action === "approve" ? (amount ?? Number(adj.amount)) : Number(adj.amount);
+    if (action === "approve" && adj.type === "LessAmount") {
+      const cap = await storeBillable(orderId, adj.order_store_id, adj.id);
+      if (figure > cap) {
+        return res.status(400).json({ message: `The Less Amount cannot be more than ${adj.orderStore.store_name}'s ${inr2(cap)}.` });
+      }
+    }
+
+    const before = adj.order.status;
+    const { updated, after } = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.current_user_id', ${user.id.toString()}, true)`;
+      const updated = await tx.orderAdjustment.update({
+        where: { id: adjustmentId },
+        data: {
+          status: action === "approve" ? "Approved" : "Rejected",
+          amount: figure,
+          decided_by: user.id,
+          decided_at: new Date(),
+          decision_note: note?.trim() || null,
+        },
+      });
+      const after = await recomputeOrderStatus(tx, orderId);
+      return { updated, after };
+    });
+
+    if (adj.status === "Requested" && adj.requested_by && adj.requested_by !== user.id) {
+      const what = `${remarkName(adj.type)} request (${adj.orderStore.store_name})`;
+      const outcome = action === "approve" ? `Your ${what} was approved at ${inr2(figure)}` : `Your ${what} was rejected`;
+      await notifyRequesterOfDecision(adj.order, adj.requested_by, outcome, action === "reject", note);
+    }
+    await notifyAccountsIfUnsettled(adj.order, before, after);
+
+    return res.status(200).json(serializeDecimals(updated));
   } catch (err) {
     console.error(err);
     return res.status(500).json({ message: "Internal server error" });

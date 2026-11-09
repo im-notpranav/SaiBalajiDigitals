@@ -7,7 +7,9 @@ import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -15,7 +17,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { downloadOrderTemplate } from "@/api/orders";
 import { inr } from "@/lib/format";
-import { LOSS_REMARK_TYPES } from "@/lib/constants";
+import {
+  LOSS_REMARK_TYPES,
+  ADJUSTMENT_REMARK_TYPES,
+  NORMAL_REMARK_LABEL,
+  isLossRemark,
+  isAmountRemark,
+  remarkNeedsReason,
+  lineBillable,
+} from "@/lib/constants";
 import type { CreateOrderInput, CreateOrderItemInput, Order, UserRole } from "@sb-oms/shared-types";
 import { ClientCombobox, MediaCombobox } from "./AutocompleteComboboxes";
 import {
@@ -44,6 +54,14 @@ interface Line {
   rate: string;
   remarks?: string | null;
   remarks_other_text?: string | null;
+  /** Extra / Less figure as typed. For Less in "new amount" mode it is the amount after discount. */
+  adjustment_amount: string;
+  /** How a Less Amount is typed: the discount itself, or the new line amount. */
+  lessMode: "discount" | "newAmount";
+  /** The saved remark was confirmed by an admin (a saved line only). */
+  confirmed?: boolean;
+  /** Revised only: what the saved line came to before its first correction. */
+  original_amount?: number | null;
 }
 
 /**
@@ -88,7 +106,7 @@ interface StoreBlock {
 
 const blankLine = (): Line => ({
   id: crypto.randomUUID(), media: "", width_inches: "", height_inches: "", qty: 1, rate: "",
-  remarks: null, remarks_other_text: null,
+  remarks: null, remarks_other_text: null, adjustment_amount: "", lessMode: "discount",
 });
 
 const blankStore = (): StoreBlock => ({
@@ -105,6 +123,10 @@ const toLine = (item: any): Line => ({
   rate: item.rate == null ? "" : String(item.rate),
   remarks: item.remarks ?? null,
   remarks_other_text: item.remarks_other_text ?? null,
+  adjustment_amount: item.adjustment_amount == null ? "" : String(item.adjustment_amount),
+  lessMode: "discount",
+  confirmed: !!item.remarks_confirmed,
+  original_amount: item.original_amount ?? null,
 });
 
 /**
@@ -193,7 +215,19 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
   const isAdmin = userRole === "ADMIN";
   const getSft = (l: Line) => (numOf(l.width_inches) * numOf(l.height_inches)) / 144;
   const getLineTotal = (l: Line) => getSft(l) * l.qty * numOf(l.rate);
-  const isLossLine = (l: Line) => l.remarks != null;
+  const isLossLine = (l: Line) => isLossRemark(l.remarks);
+  /** The Extra / Less figure in rupees, whichever way the Less Amount was typed. */
+  const getAdjustment = (l: Line) => {
+    const typed = numOf(l.adjustment_amount);
+    if (l.remarks === "LessAmount" && l.lessMode === "newAmount") return Math.max(0, getLineTotal(l) - typed);
+    return typed;
+  };
+  /**
+   * What a line comes to on the bill. An admin's remark is confirmed on save; a CSM's new
+   * remark is only a proposal, so it is billed at the plain amount until an admin decides.
+   */
+  const getLineBillable = (l: Line) =>
+    isAdmin || l.confirmed ? lineBillable(getLineTotal(l), l.remarks, getAdjustment(l)) : getLineTotal(l);
   const storeTotal = (s: StoreBlock) => s.lines.reduce((sum, l) => sum + getLineTotal(l), 0);
 
   const allLines = useMemo(() => stores.flatMap((s) => s.lines), [stores]);
@@ -201,9 +235,13 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
   const totalSft = useMemo(() => allLines.reduce((s, l) => s + (getSft(l) * l.qty), 0), [allLines]);
   const lossTotal = useMemo(() => allLines.filter(isLossLine).reduce((s, l) => s + getLineTotal(l), 0), [allLines]);
   const lossCount = useMemo(() => allLines.filter(isLossLine).length, [allLines]);
-  // An admin's loss remarks are applied on save (excluded from billable); an employee's are proposals
-  // that keep billing until confirmed.
-  const billable = isAdmin ? total - lossTotal : total;
+  // An admin's remarks are applied on save; an employee's are proposals that keep billing at
+  // the plain amount until confirmed.
+  const billable = useMemo(() => allLines.reduce((s, l) => s + getLineBillable(l), 0), [allLines, isAdmin]);
+  const adjustmentNet = useMemo(
+    () => allLines.filter((l) => !isLossLine(l)).reduce((s, l) => s + getLineBillable(l) - getLineTotal(l), 0),
+    [allLines, isAdmin],
+  );
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   /** A parsed sheet held while the user decides how to merge it into a form with content. */
@@ -253,7 +291,18 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
 
   const update = (storeId: string, id: string, patch: Partial<Line>) =>
     setStores((ss) => ss.map((s) => (s.id === storeId
-      ? { ...s, lines: s.lines.map((l) => (l.id === id ? { ...l, ...patch } : l)) }
+      ? {
+          ...s,
+          lines: s.lines.map((l) => {
+            if (l.id !== id) return l;
+            const next = { ...l, ...patch };
+            // An admin changing a saved line's size, qty or rate is revising it: preselect
+            // Revised so the reason gets asked for, instead of a loss type.
+            const sizeOrRate = "width_inches" in patch || "height_inches" in patch || "qty" in patch || "rate" in patch;
+            if (isAdmin && l.originalId && sizeOrRate && !l.remarks) next.remarks = "Revised";
+            return next;
+          }),
+        }
       : s)));
   const addLine = (storeId: string) =>
     setStores((ss) => ss.map((s) => (s.id === storeId ? { ...s, lines: [...s.lines, blankLine()] } : s)));
@@ -345,6 +394,17 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
     if (allLines.some((l) => !l.media.trim() || numOf(l.width_inches) <= 0 || numOf(l.height_inches) <= 0 || l.qty <= 0 || numOf(l.rate) <= 0)) {
       throw new Error("Every line item needs valid media, dimensions, quantity, and rate.");
     }
+    for (const l of allLines) {
+      if (remarkNeedsReason(l.remarks) && !(l.remarks_other_text ?? "").trim()) {
+        throw new Error(`Give a reason for every line marked ${l.remarks === "Other" ? "Other" : "Revised, Extra Amount or Less Amount"}.`);
+      }
+      if (isAmountRemark(l.remarks)) {
+        if (!(getAdjustment(l) > 0)) throw new Error("Enter the amount for every Extra Amount or Less Amount line.");
+        if (l.remarks === "LessAmount" && getAdjustment(l) > getLineTotal(l)) {
+          throw new Error("A Less Amount cannot be more than its line.");
+        }
+      }
+    }
 
     const payload: CreateOrderInput = {
       client_name: clientName,
@@ -363,7 +423,8 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
           qty: l.qty,
           rate: numOf(l.rate),
           remarks: (l.remarks ?? null) as CreateOrderItemInput["remarks"],
-          remarks_other_text: l.remarks === "Other" ? l.remarks_other_text : null,
+          remarks_other_text: remarkNeedsReason(l.remarks) ? (l.remarks_other_text ?? "").trim() : null,
+          adjustment_amount: isAmountRemark(l.remarks) ? Number(getAdjustment(l).toFixed(2)) : null,
         })),
       })),
     };
@@ -513,7 +574,8 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
             {store.lines.map((line, idx) => {
               const isReadOnlyItem = lineItemsLocked || (userRole === "CSM" && !!line.originalId);
               const showLoss = !line.originalId || isAdmin;
-              const lossLabel = isAdmin ? "Loss remark (optional)" : "Propose loss remark (needs admin approval)";
+              const lossLabel = isAdmin ? "Remark (optional)" : "Propose a remark (needs admin approval)";
+              const lineTotal = getLineTotal(line);
 
               return (
               <div key={line.id} className="rounded-xl border bg-background/60 p-2.5">
@@ -578,21 +640,58 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
                 </div>
 
                 {/* Line 2: loss remark, then what the line comes to. */}
-                <div className="mt-2 flex items-center gap-2 sm:pl-8">
+                <div className="mt-2 flex flex-wrap items-center gap-2 sm:pl-8">
                   {showLoss && (
                     <Select value={line.remarks ?? "none"} onValueChange={(v) => update(store.id, line.id, { remarks: v === "none" ? null : v })}>
-                      <SelectTrigger aria-label={lossLabel} title={lossLabel} className="h-8 min-w-0 flex-1 text-xs sm:w-52 sm:flex-none">
+                      <SelectTrigger aria-label={lossLabel} title={lossLabel} className="h-8 min-w-0 flex-1 text-xs sm:w-44 sm:flex-none">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="none">No loss</SelectItem>
-                        {LOSS_REMARK_TYPES.map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
+                        <SelectItem value="none">{NORMAL_REMARK_LABEL}</SelectItem>
+                        <SelectGroup>
+                          <SelectLabel className="text-[10px] uppercase tracking-wider text-muted-foreground">Not billed</SelectLabel>
+                          {LOSS_REMARK_TYPES.map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
+                        </SelectGroup>
+                        <SelectGroup>
+                          <SelectLabel className="text-[10px] uppercase tracking-wider text-muted-foreground">Amount change</SelectLabel>
+                          {ADJUSTMENT_REMARK_TYPES
+                            // Revised corrects a saved line, and only an admin does that.
+                            .filter((r) => r.value !== "Revised" || (isAdmin && !!line.originalId) || line.remarks === "Revised")
+                            .map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
+                        </SelectGroup>
                       </SelectContent>
                     </Select>
                   )}
+                  {showLoss && line.remarks === "LessAmount" && (
+                    <Select value={line.lessMode} onValueChange={(v) => update(store.id, line.id, { lessMode: v as Line["lessMode"] })}>
+                      <SelectTrigger aria-label="How the Less Amount is entered" className="h-8 w-28 shrink-0 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="discount">Discount</SelectItem>
+                        <SelectItem value="newAmount">New amount</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                  {showLoss && isAmountRemark(line.remarks) && (
+                    <PrefixedInput
+                      prefix="₹"
+                      aria-label={line.remarks === "ExtraAmount" ? "Extra amount in rupees" : line.lessMode === "newAmount" ? "New line amount in rupees" : "Discount in rupees"}
+                      title={line.remarks === "ExtraAmount" ? "Added to this line" : line.lessMode === "newAmount" ? "What the line should come to" : "Taken off this line"}
+                      inputMode="decimal"
+                      placeholder={line.remarks === "ExtraAmount" ? "extra" : line.lessMode === "newAmount" ? "new amt" : "discount"}
+                      className="!h-8 w-28 text-xs"
+                      value={line.adjustment_amount}
+                      onChange={(e) => update(store.id, line.id, { adjustment_amount: sanitizeDecimal(e.target.value) })}
+                      onBlur={() => update(store.id, line.id, { adjustment_amount: normalizeDecimal(line.adjustment_amount) })}
+                    />
+                  )}
                   <div className="ml-auto flex shrink-0 items-center gap-2 text-xs sm:gap-3">
                     <span className="tabular-nums text-muted-foreground">{(getSft(line) * line.qty).toFixed(2)} sft</span>
-                    <span className="min-w-[4.5rem] text-right font-semibold tabular-nums">{inr(getLineTotal(line))}</span>
+                    {getLineBillable(line) !== lineTotal && (
+                      <span className="tabular-nums text-muted-foreground line-through">{inr(lineTotal)}</span>
+                    )}
+                    <span className="min-w-[4.5rem] text-right font-semibold tabular-nums">{inr(getLineBillable(line))}</span>
                     <Button
                       type="button"
                       variant="ghost"
@@ -607,23 +706,30 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
                   </div>
                 </div>
 
-                {showLoss && line.remarks === "Other" && (
+                {showLoss && remarkNeedsReason(line.remarks) && (
                   <Textarea
                     className="mt-2 min-h-[60px] text-xs sm:ml-8 sm:w-[calc(100%-2rem)]"
-                    placeholder="Describe the reason"
-                    aria-label="Loss reason"
+                    placeholder="Reason (required)"
+                    aria-label="Remark reason"
                     value={line.remarks_other_text ?? ""}
                     onChange={(e) => update(store.id, line.id, { remarks_other_text: e.target.value })}
                   />
                 )}
                 {showLoss && line.remarks && !isAdmin && (
                   <p className="mt-1 text-[10px] text-muted-foreground sm:pl-8">
-                    Still billed until an admin confirms.
+                    {isAmountRemark(line.remarks)
+                      ? "Sent to an admin, who sets the final figure. Billed at the plain amount until then."
+                      : "Still billed until an admin confirms."}
                   </p>
                 )}
-                {showLoss && line.remarks && isAdmin && line.originalId && (
+                {showLoss && line.remarks && isAdmin && (
                   <p className="mt-1 text-[10px] text-muted-foreground sm:pl-8">
-                    Confirmed loss: not billed.
+                    {isLossRemark(line.remarks)
+                      ? line.originalId ? "Confirmed loss: not billed." : "Not billed."
+                      : line.remarks === "Revised"
+                        ? `Revised: was ${inr(line.original_amount ?? lineTotal)}, now ${inr(lineTotal)}.`
+                        : `Billed at ${inr(getLineBillable(line))} (${line.remarks === "ExtraAmount" ? "+" : "−"}${inr(getAdjustment(line))}).`}
+                    {line.originalId && !line.confirmed && " Saving confirms the CSM's request."}
                   </p>
                 )}
               </div>
@@ -668,7 +774,7 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
       >
         <div className="surface-panel overflow-hidden">
           <div className="border-b bg-gradient-to-br from-primary/10 to-transparent p-4">
-            <div className={sectionTitle}>{lossCount > 0 ? "Billable" : "Total"}</div>
+            <div className={sectionTitle}>{billable !== total ? "Billable" : "Total"}</div>
             <div className="mt-1 text-2xl font-bold tabular-nums">{inr(billable)}</div>
             <div className="text-xs text-muted-foreground">
               {allLines.length} item{allLines.length === 1 ? "" : "s"} · {stores.length} store{stores.length === 1 ? "" : "s"} · {totalSft.toFixed(2)} sft
@@ -676,6 +782,11 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
             {lossCount > 0 && (
               <div className="mt-1 text-xs text-amber-600 dark:text-amber-500">
                 {isAdmin ? "Loss" : "Proposed loss"}: {inr(lossTotal)} · {lossCount} item{lossCount === 1 ? "" : "s"}
+              </div>
+            )}
+            {Math.abs(adjustmentNet) >= 0.005 && (
+              <div className="mt-1 text-xs text-muted-foreground">
+                Amount changes: {adjustmentNet > 0 ? "+" : "−"}{inr(Math.abs(adjustmentNet))}
               </div>
             )}
           </div>

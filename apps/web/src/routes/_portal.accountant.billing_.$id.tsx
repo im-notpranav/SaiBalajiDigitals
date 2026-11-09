@@ -317,6 +317,9 @@ function OrderDetailAccountant() {
                   Pick the stores this invoice covers. Its expected value is the billable total of
                   just those stores.
                   {order.loss_amount ? ` Confirmed losses of ${inr(order.loss_amount)} are excluded.` : ""}
+                  {order.adjustment_amount
+                    ? ` Approved amount changes (Revised, Extra, Less) of ${order.adjustment_amount > 0 ? "+" : "−"}${inr(Math.abs(order.adjustment_amount))} are included; see the line items and the whole-order changes above.`
+                    : ""}
                 </p>
 
                 <div className="mb-4 space-y-2">

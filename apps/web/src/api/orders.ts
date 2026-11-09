@@ -263,12 +263,44 @@ export async function flagOrderItem(orderId: number, itemId: number, is_flagged:
   return res;
 }
 
-export async function setItemLossRemark(orderId: number, itemId: number, remarks: string | null, remarks_other_text?: string | null) {
-  const res = await apiFetch<any>(`/orders/${orderId}/items/${itemId}/remark`, {
-    method: "PUT",
-    data: { remarks, remarks_other_text },
-  });
-  return res;
+export interface ItemRemarkPayload {
+  remarks: string | null;
+  remarks_other_text?: string | null;
+  /** Extra / Less Amount figure. */
+  adjustment_amount?: number | null;
+  /** Sent to the CSM when their proposal is rejected or changed. */
+  decision_note?: string | null;
+}
+
+/** Admin: set and confirm a line remark, or clear it (which rejects a CSM's proposal). */
+export async function setItemLossRemark(orderId: number, itemId: number, payload: ItemRemarkPayload) {
+  return apiFetch<any>(`/orders/${orderId}/items/${itemId}/remark`, { method: "PUT", data: payload });
+}
+
+/** CSM: ask an admin for an Extra / Less Amount on a saved line. */
+export async function requestItemAdjustment(
+  orderId: number,
+  itemId: number,
+  data: { type: "ExtraAmount" | "LessAmount"; amount: number; reason: string },
+) {
+  return apiFetch<any>(`/orders/${orderId}/items/${itemId}/adjustment-request`, { method: "POST", data });
+}
+
+/** A whole-order Extra / Less Amount on one store: a request from a CSM, approved at once from an admin. */
+export async function createOrderAdjustment(
+  orderId: number,
+  data: { order_store_id: number; type: "ExtraAmount" | "LessAmount"; amount: number; reason: string },
+) {
+  return apiFetch<any>(`/orders/${orderId}/adjustments`, { method: "POST", data });
+}
+
+/** Admin: approve (optionally at another figure) or reject a whole-order adjustment. */
+export async function decideOrderAdjustment(
+  orderId: number,
+  adjustmentId: number,
+  data: { action: "approve" | "reject"; amount?: number; note?: string | null },
+) {
+  return apiFetch<any>(`/orders/${orderId}/adjustments/${adjustmentId}`, { method: "PATCH", data });
 }
 export async function assignOrderItem(orderId: number, itemId: number, assigned_to: number[]) {
   return apiFetch<any>(`/orders/${orderId}/items/${itemId}/assign`, {

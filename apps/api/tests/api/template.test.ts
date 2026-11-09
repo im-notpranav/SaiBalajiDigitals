@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import * as xlsx from "xlsx";
 import { as, makeUser, prisma, uniq } from "./helpers";
-import { ORDER_TEMPLATE_HEADER, buildOrderTemplate, parseOrderTemplate } from "../../src/utils/order-template";
+import { ORDER_EXPORT_HEADER, ORDER_TEMPLATE_HEADER, buildOrderTemplate, parseOrderTemplate } from "../../src/utils/order-template";
 
 /** A sheet shaped like the company's file, whose Amount heading is padded with spaces. */
 function sheetOf(rows: unknown[][], header: string[] = [...ORDER_TEMPLATE_HEADER.slice(0, 12), " Amount "]): Buffer {
@@ -146,7 +146,7 @@ describe("uploading orders", () => {
     expect(res.status).toBe(403);
   });
 
-  it("exports the template's columns and nothing else", async () => {
+  it("exports the template's columns, then the line remark columns", async () => {
     const client = uniq("Export");
     await as(csm).post("/api/orders/bulk").send({ orders: [order(client)] });
     const res = await as(csm).get("/api/orders/export").buffer(true).parse((r, done) => {
@@ -157,9 +157,11 @@ describe("uploading orders", () => {
     expect(res.status).toBe(200);
     const wb = xlsx.read(res.body, { type: "buffer" });
     const rows = xlsx.utils.sheet_to_json<Record<string, unknown>>(wb.Sheets[wb.SheetNames[0]!]!);
-    expect(Object.keys(rows[0]!)).toEqual(ORDER_TEMPLATE_HEADER);
+    // The template's columns come first and unchanged, so the file still re-imports.
+    expect(Object.keys(rows[0]!)).toEqual(ORDER_EXPORT_HEADER);
+    expect(ORDER_EXPORT_HEADER.slice(0, ORDER_TEMPLATE_HEADER.length)).toEqual(ORDER_TEMPLATE_HEADER);
     const mine = rows.find((r) => r["Client Name"] === client)!;
-    expect(mine).toMatchObject({ "Store Name": "Malakpet", Location: "Bajaj", Media: "Vinly", "Total SFT": 12.4, Amount: 620 });
+    expect(mine).toMatchObject({ "Store Name": "Malakpet", Location: "Bajaj", Media: "Vinly", "Total SFT": 12.4, Amount: 620, "Billed Amount": 620 });
     expect(mine.Date).toBe("1/4/2026");
   });
 

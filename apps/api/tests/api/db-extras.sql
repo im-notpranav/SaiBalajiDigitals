@@ -130,3 +130,7 @@ ALTER TABLE "WhatsAppMessage" ADD CONSTRAINT "WhatsAppMessage_link_check"
 
 -- 20261028000000_add_app_settings
 ALTER TABLE "AppSetting" ADD CONSTRAINT "AppSetting_key_check" CHECK ("key" ~ '^[a-z][a-z0-9_]{1,63}$');
+
+-- Whole-order adjustments: Extra / Less only, always a positive figure (20261109000000).
+ALTER TABLE "OrderAdjustment" ADD CONSTRAINT "OrderAdjustment_type_check" CHECK ("type" IN ('ExtraAmount', 'LessAmount'));
+ALTER TABLE "OrderAdjustment" ADD CONSTRAINT "OrderAdjustment_amount_check" CHECK ("amount" > 0);
