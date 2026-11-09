@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { FieldTabBar, PreloadNavPages, Sidebar, isFieldRole } from "@/components/layout/Sidebar";
 import { cn } from "@/lib/utils";
 import { TopHeader } from "@/components/layout/TopHeader";
+import { BrandLoader } from "@/components/brand/BrandLoader";
 import { useAuth, type UserRole, roleHome } from "@/lib/auth-store";
 
 export const Route = createFileRoute("/_portal")({
@@ -47,6 +48,7 @@ function PortalLayout() {
     }
   }, [user, isLoading, location.pathname, location.href, navigate]);
 
+  if (isLoading && !user) return <BrandLoader label="Signing you in" />;
   if (!user) return null;
   const field = isFieldRole(user.role);
 

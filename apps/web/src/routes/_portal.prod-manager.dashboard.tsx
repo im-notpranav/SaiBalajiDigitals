@@ -302,7 +302,7 @@ function TeamCard({
       aria-pressed={selected}
       onClick={onSelect}
       className={cn(
-        "rounded-xl border bg-card p-5 text-left shadow-soft transition-all hover:border-primary/40 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+        "rounded-xl border bg-card p-5 text-left shadow-soft transition-[color,background-color,border-color,box-shadow,opacity,transform] hover:border-primary/40 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         selected && "border-primary ring-1 ring-primary/40",
       )}
     >

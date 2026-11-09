@@ -277,7 +277,7 @@ function SidebarBody({
                 onClick={onNavigate}
                 className={cn(
                   // min-h-11 keeps every row at a comfortable touch target on a phone.
-                  "group relative flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all",
+                  "group relative flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-[color,background-color,border-color,box-shadow,opacity,transform]",
                   active
                     ? "bg-primary/10 text-primary shadow-sm dark:bg-transparent dark:text-foreground dark:shadow-none"
                     : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
@@ -305,7 +305,7 @@ function SidebarBody({
         <button
           type="button"
           onClick={handleLogout}
-          className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-destructive transition-all hover:bg-destructive/10"
+          className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-destructive transition-[color,background-color,border-color,box-shadow,opacity,transform] hover:bg-destructive/10"
         >
           <LogOut className="h-[18px] w-[18px]" />
           Sign out

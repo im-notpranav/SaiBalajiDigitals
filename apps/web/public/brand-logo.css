@@ -1,0 +1,141 @@
+/*
+  The logo putting itself together: the two arcs swing in from opposite sides, the cube's
+  halves slide in and click shut, then the shadow and the word settle underneath.
+
+  A plain file in /public, linked from index.html, so the first-paint splash can use it before
+  any JavaScript arrives, and the React BrandLoader / login page share the very same rules.
+
+  Only transform and opacity animate, so it all runs on the compositor and stays smooth on
+  phones even while the app is still starting. Idle motion uses `alternate`, so a loop swings
+  back instead of jumping to its first frame.
+
+  Layers come from public/logo-parts, cut from the logo artwork by apps/web/scripts/split-logo.py.
+*/
+.sb-logo {
+  position: relative;
+  flex-shrink: 0;
+}
+.sb-logo i {
+  position: absolute;
+  inset: 0;
+  display: block;
+  font-style: normal;
+}
+.sb-part {
+  background: center / 100% 100% no-repeat;
+  backface-visibility: hidden;
+}
+.sb-arc-blue { background-image: url(/logo-parts/light-arc-blue.webp); }
+.sb-arc-orange { background-image: url(/logo-parts/light-arc-orange.webp); }
+.sb-cube-left { background-image: url(/logo-parts/light-cube-left.webp); }
+.sb-cube-right { background-image: url(/logo-parts/light-cube-right.webp); }
+.sb-shadow { background-image: url(/logo-parts/light-shadow.webp); }
+.sb-word { background-image: url(/logo-parts/light-word.webp); }
+.dark .sb-arc-blue { background-image: url(/logo-parts/dark-arc-blue.webp); }
+.dark .sb-arc-orange { background-image: url(/logo-parts/dark-arc-orange.webp); }
+.dark .sb-cube-left { background-image: url(/logo-parts/dark-cube-left.webp); }
+.dark .sb-cube-right { background-image: url(/logo-parts/dark-cube-right.webp); }
+.dark .sb-shadow { display: none; }
+.dark .sb-word { background-image: url(/logo-parts/dark-word.webp); }
+
+/* ---- Assemble (only with .sb-play) ---- */
+.sb-play .sb-arc-blue { animation: sb-arc-in-a 1s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.sb-play .sb-arc-orange { animation: sb-arc-in-b 1s 0.1s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.sb-play .sb-cube-left { animation: sb-slide-l 0.7s 0.3s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.sb-play .sb-cube-right { animation: sb-slide-r 0.7s 0.3s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.sb-play .sb-cube { animation: sb-click 0.45s 0.88s cubic-bezier(0.33, 1, 0.68, 1) both; transform-origin: 53% 50%; }
+.sb-play .sb-shadow { animation: sb-shadow-in 0.5s 0.85s cubic-bezier(0.16, 1, 0.3, 1) both; transform-origin: 53% 73%; }
+.sb-play .sb-word { animation: sb-word-in 0.55s 1s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+@keyframes sb-arc-in-a {
+  0% { opacity: 0; transform: rotate(-150deg) scale(0.72); }
+  35% { opacity: 1; }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes sb-arc-in-b {
+  0% { opacity: 0; transform: rotate(150deg) scale(0.72); }
+  35% { opacity: 1; }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes sb-slide-l {
+  0% { opacity: 0; transform: translateX(-34%); }
+  40% { opacity: 1; }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes sb-slide-r {
+  0% { opacity: 0; transform: translateX(34%); }
+  40% { opacity: 1; }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes sb-click {
+  0%, 100% { transform: scale(1); }
+  35% { transform: scale(1.055); }
+}
+@keyframes sb-shadow-in {
+  from { opacity: 0; transform: scaleX(0.2); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes sb-word-in {
+  from { opacity: 0; transform: translateY(5%); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ---- Idle (always; waits for the assembly when .sb-play) ---- */
+.sb-idle .sb-float { animation: sb-float 2.8s ease-in-out infinite alternate; }
+.sb-idle .sb-sway-a { animation: sb-sway-a 3.4s ease-in-out infinite alternate; }
+.sb-idle .sb-sway-b { animation: sb-sway-b 3.4s ease-in-out infinite alternate; }
+.sb-play.sb-idle .sb-float,
+.sb-play.sb-idle .sb-sway-a,
+.sb-play.sb-idle .sb-sway-b { animation-delay: 1.45s; }
+
+/* Every idle loop starts at the resting pose, so it never jumps when it begins. */
+@keyframes sb-float { to { transform: translateY(-3%); } }
+@keyframes sb-sway-a { to { transform: rotate(-7deg); } }
+@keyframes sb-sway-b { to { transform: rotate(9deg); } }
+
+/* ---- Splash screen (index.html) and the React full-screen loader ---- */
+.sb-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  background: #fff;
+  transition: opacity 0.35s ease, visibility 0.35s;
+}
+.dark .sb-splash { background: #0f1320; }
+.sb-splash.sb-gone { opacity: 0; visibility: hidden; }
+.sb-bar {
+  position: relative;
+  width: 112px;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: rgba(10, 123, 232, 0.14);
+  animation: sb-fade 0.4s 0.9s both;
+}
+.sb-bar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 45%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #0a7be8, #f5a300);
+  animation: sb-bar 1.15s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+@keyframes sb-bar {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(222%); }
+}
+@keyframes sb-fade { from { opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .sb-logo *,
+  .sb-bar,
+  .sb-bar::after {
+    animation: none !important;
+  }
+}

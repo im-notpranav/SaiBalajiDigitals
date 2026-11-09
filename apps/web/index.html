@@ -17,6 +17,7 @@
     <link rel="icon" href="/favicon-32x32.png" type="image/png" sizes="32x32" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/site.webmanifest" />
+    <link rel="stylesheet" href="/brand-logo.css" />
     <link rel="icon" href="/favicon-dark-32x32.png" type="image/png" sizes="32x32" media="(prefers-color-scheme: dark)" />
     <meta name="theme-color" content="#0b8ce0" />
     <!-- Runs before the first paint so a dark-mode user never sees a white flash. See lib/theme.ts. -->
@@ -31,6 +32,45 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- First-paint splash, built before any JavaScript arrives. main.tsx fades it out once the
+         sign-in check is done. Styles: public/brand-logo.css. -->
+    <div id="sb-splash" class="sb-splash" role="status" aria-label="Loading">
+      <div id="sb-splash-logo" class="sb-logo sb-idle" style="opacity:0;width:128px;height:128px" aria-hidden="true">
+        <i class="sb-float">
+          <i class="sb-sway-a"><i class="sb-part sb-arc-blue"></i></i>
+          <i class="sb-sway-b"><i class="sb-part sb-arc-orange"></i></i>
+          <i class="sb-cube"><i class="sb-part sb-cube-left"></i><i class="sb-part sb-cube-right"></i></i>
+          <i class="sb-part sb-shadow"></i>
+          <i class="sb-part sb-word"></i>
+        </i>
+      </div>
+      <span class="sb-bar" aria-hidden="true"></span>
+    </div>
+    <script>
+      // Start the assembly only once its pieces are decoded, so none pops in half-way through.
+      (function () {
+        var logo = document.getElementById("sb-splash-logo");
+        var set = document.documentElement.classList.contains("dark") ? "dark" : "light";
+        var parts = ["arc-blue", "arc-orange", "cube-left", "cube-right", "word"];
+        if (set === "light") parts.push("shadow");
+        var started = false;
+        function start() {
+          if (started) return;
+          started = true;
+          logo.style.opacity = "";
+          logo.classList.add("sb-play");
+          window.__sbSplashStart = performance.now();
+        }
+        Promise.all(
+          parts.map(function (p) {
+            var img = new Image();
+            img.src = "/logo-parts/" + set + "-" + p + ".webp";
+            return img.decode ? img.decode().catch(function () {}) : Promise.resolve();
+          })
+        ).then(start);
+        setTimeout(start, 1500);
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

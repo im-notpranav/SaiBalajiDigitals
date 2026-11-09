@@ -95,7 +95,7 @@ export function KpiCard({
   );
 
   const className = cn(
-    "group relative flex h-full w-full flex-col overflow-hidden rounded-2xl border bg-card p-4 text-left shadow-soft transition-all sm:p-5",
+    "group relative flex h-full w-full flex-col overflow-hidden rounded-2xl border bg-card p-4 text-left shadow-soft transition-[color,background-color,border-color,box-shadow,opacity,transform] sm:p-5",
     // Only something that can be clicked may look as if it can be.
     interactive &&
       "cursor-pointer hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",

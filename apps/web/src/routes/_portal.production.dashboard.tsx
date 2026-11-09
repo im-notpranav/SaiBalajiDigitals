@@ -163,7 +163,7 @@ function ProductionDashboard() {
                         to="/production/orders/$id"
                         params={{ id: String(o.id) }}
                         aria-label={`Open order ${o.order_no}, ${o.client_name}. ${finished} of ${total} of your items finished${held ? ", on hold" : ""}`}
-                        className="group grid gap-2 rounded-xl border bg-card p-4 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        className="group grid gap-2 rounded-xl border bg-card p-4 transition-[color,background-color,border-color,box-shadow,opacity,transform] hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                       >
                         <span className="flex items-center justify-between gap-2">
                           <span className="font-mono text-xs font-semibold text-primary">{o.order_no}</span>

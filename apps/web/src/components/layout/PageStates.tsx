@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import { AlertTriangle, Inbox, Loader2, RotateCw } from "lucide-react";
+import { InlineBrandLoader } from "@/components/brand/BrandLoader";
 import { Button } from "@/components/ui/button";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
@@ -32,13 +33,13 @@ export function LoadingState({
   /** No panel of its own, for use inside a card or table that already has one. */
   bare?: boolean;
 }) {
+  if (!bare) return <InlineBrandLoader label={label} className={cn("surface-panel", className)} />;
   return (
     <div
       role="status"
       aria-live="polite"
       className={cn(
         "flex items-center justify-center gap-2 p-8 text-sm text-muted-foreground",
-        !bare && "surface-panel",
         className,
       )}
     >

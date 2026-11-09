@@ -96,7 +96,7 @@ export function PipelineStages({
                 if (!open) scrollToSection(panelId(stage.key));
               }}
               className={cn(
-                "group flex flex-col rounded-xl border p-4 text-left transition-all hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                "group flex flex-col rounded-xl border p-4 text-left transition-[color,background-color,border-color,box-shadow,opacity,transform] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                 open ? `${stage.border} ${stage.bg} shadow-md` : "bg-card hover:-translate-y-0.5",
               )}
             >

@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useEffect, useState } from "react";
+import { motion, AnimatePresence, useAnimate } from "framer-motion";
 import {
   User,
   Lock,
@@ -12,10 +12,14 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-store";
 import { LogoImage } from "@/components/brand/Logo";
+import { AssemblingLogo } from "@/components/brand/BrandLoader";
 
 type FieldState = "idle" | "error" | "success";
 
 const easeOutExpo = [0.16, 1, 0.3, 1] as const;
+
+/** Right after the index.html splash the logo has just assembled, so here it only fades in. */
+const afterSplash = () => typeof window !== "undefined" && !!window.__sbSplashShown;
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -29,6 +33,8 @@ export default function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  // The words wait for the cube to click shut, unless the splash already showed the logo.
+  const [heroDelay] = useState(() => (afterSplash() ? 0.1 : 0.85));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,11 +89,10 @@ export default function LoginPage() {
               "radial-gradient(420px 340px at 66% 36%, rgba(10,123,232,0.42), transparent 70%), radial-gradient(360px 300px at 84% 70%, rgba(245,163,0,0.24), transparent 70%)",
           }}
         />
-        <motion.svg
-          className="absolute -left-40 -bottom-40 h-[700px] w-[700px] dark:hidden"
+        <svg
+          className="login-drift-a absolute -left-40 -bottom-40 h-[700px] w-[700px] dark:hidden"
           viewBox="0 0 600 600"
-          animate={{ y: [0, -12, 0], x: [0, 6, 0] }}
-          transition={{ duration: 25, repeat: Infinity, ease: "easeInOut" }}
+          aria-hidden
         >
           <defs>
             <linearGradient id="blueWave" x1="0" y1="0" x2="1" y2="1">
@@ -99,12 +104,11 @@ export default function LoginPage() {
             fill="url(#blueWave)"
             d="M0,600 C120,520 220,520 320,470 C440,410 520,300 600,260 L600,600 Z"
           />
-        </motion.svg>
-        <motion.svg
-          className="absolute -top-40 -right-40 h-[600px] w-[600px] dark:hidden"
+        </svg>
+        <svg
+          className="login-drift-b absolute -top-40 -right-40 h-[600px] w-[600px] dark:hidden"
           viewBox="0 0 600 600"
-          animate={{ y: [0, 10, 0], rotate: [0, 1.5, 0] }}
-          transition={{ duration: 25, repeat: Infinity, ease: "easeInOut" }}
+          aria-hidden
         >
           <defs>
             <linearGradient id="orangeArc" x1="0" y1="0" x2="0" y2="1">
@@ -116,15 +120,15 @@ export default function LoginPage() {
             fill="url(#orangeArc)"
             d="M300,0 C420,60 500,160 540,300 C560,380 520,460 460,500 C480,380 440,240 360,160 C320,120 260,80 300,0 Z"
           />
-        </motion.svg>
+        </svg>
       </div>
 
       <div className="relative z-10 flex min-h-screen flex-col">
         {/* Header */}
         <motion.header
-          initial={{ opacity: 0, y: -20 }}
+          initial={{ opacity: 0, y: -12 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, ease: easeOutExpo, delay: 0.1 }}
+          transition={{ duration: 0.5, ease: easeOutExpo }}
           className="flex shrink-0 items-center px-4 py-4 sm:px-8 lg:px-12"
         >
           <div className="flex min-w-0 items-center gap-3">
@@ -142,26 +146,20 @@ export default function LoginPage() {
         </motion.header>
 
         <section className="mx-auto grid w-full max-w-[1400px] flex-1 grid-cols-1 items-center gap-8 px-4 pb-8 sm:px-8 lg:grid-cols-2 lg:px-12">
-          {/* Hero */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, delay: 0.3, ease: easeOutExpo }}
-            className="flex flex-col items-center justify-center text-center"
-          >
+          {/* Hero: the logo puts itself together, then the words follow it in. */}
+          <div className="flex flex-col items-center justify-center text-center">
             <motion.div
-              animate={{ y: [-6, 6, -6] }}
-              transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+              initial={afterSplash() ? { opacity: 0, scale: 0.96 } : false}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.5, ease: easeOutExpo }}
+              className="drop-shadow-[0_20px_40px_rgba(10,123,232,0.18)] dark:drop-shadow-[0_24px_50px_rgba(10,123,232,0.35)]"
             >
-              <LogoImage
-                alt="Sai Balaji Digitals logo"
-                className="h-32 w-32 rounded-full drop-shadow-[0_20px_50px_rgba(10,123,232,0.2)] sm:h-40 sm:w-40 lg:h-52 lg:w-52 dark:drop-shadow-[0_24px_60px_rgba(10,123,232,0.4)]"
-              />
+              <AssemblingLogo play={!afterSplash()} className="h-36 w-36 sm:h-44 sm:w-44 lg:h-56 lg:w-56" />
             </motion.div>
             <motion.h1
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 14 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.7, delay: 0.7, ease: easeOutExpo }}
+              transition={{ duration: 0.6, delay: heroDelay, ease: easeOutExpo }}
               className="mt-6 text-3xl font-bold tracking-tight text-[#0F172A] sm:text-4xl dark:text-white"
             >
               Welcome Back
@@ -169,7 +167,7 @@ export default function LoginPage() {
             <motion.p
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.85, ease: easeOutExpo }}
+              transition={{ duration: 0.6, delay: heroDelay + 0.08, ease: easeOutExpo }}
               className="mt-2 max-w-sm text-sm text-slate-500 sm:text-base dark:text-slate-400"
             >
               Sign in to your Order Management workspace
@@ -177,20 +175,20 @@ export default function LoginPage() {
             <motion.div
               initial={{ opacity: 0, scaleX: 0 }}
               animate={{ opacity: 1, scaleX: 1 }}
-              transition={{ duration: 0.6, delay: 1.0, ease: easeOutExpo }}
+              transition={{ duration: 0.6, delay: heroDelay + 0.16, ease: easeOutExpo }}
               className="mt-5 flex items-center gap-1.5"
             >
               <span className="h-1 w-10 rounded-full bg-[#0A7BE8]" />
               <span className="h-1 w-10 rounded-full bg-[#F5A300]" />
             </motion.div>
 
-          </motion.div>
+          </div>
 
           {/* Login card */}
           <motion.div
-            initial={{ opacity: 0, y: 30 }}
+            initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, delay: 0.4, ease: easeOutExpo }}
+            transition={{ duration: 0.6, delay: 0.1, ease: easeOutExpo }}
             className="flex w-full items-center justify-center"
           >
             <div
@@ -208,7 +206,7 @@ export default function LoginPage() {
               <form onSubmit={handleSubmit} className="mt-6 space-y-4" noValidate>
                 <FormField
                   label="Username"
-                  delay={0.9}
+                  delay={0.2}
                   shakeKey={usernameShake}
                   state={usernameState}
                   error={usernameState === "error" && !formError ? "Please enter your username" : ""}
@@ -231,7 +229,7 @@ export default function LoginPage() {
 
                 <FormField
                   label="Password"
-                  delay={1.0}
+                  delay={0.28}
                   shakeKey={passwordShake}
                   state={passwordState}
                   error={passwordState === "error" && !formError ? "Enter your password" : ""}
@@ -337,6 +335,11 @@ function FormField({
   shakeKey: number;
   rightSlot?: React.ReactNode;
 }) {
+  const [scope, animate] = useAnimate<HTMLDivElement>();
+  useEffect(() => {
+    if (shakeKey > 0) animate(scope.current, { x: [0, -7, 6, -4, 3, 0] }, { duration: 0.4, ease: "easeOut" });
+  }, [shakeKey, animate, scope]);
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
@@ -344,17 +347,8 @@ function FormField({
       transition={{ duration: 0.5, delay, ease: easeOutExpo }}
     >
       <label className="mb-1.5 block text-xs font-semibold text-[#0F172A] dark:text-slate-200">{label}</label>
-      <motion.div
-        key={shakeKey}
-        animate={
-          state === "error" && shakeKey > 0
-            ? { x: [0, -8, 8, -6, 6, -3, 3, 0] }
-            : { x: 0 }
-        }
-        transition={{ duration: 0.45 }}
-      >
-        {children}
-      </motion.div>
+      {/* Shaken in place: re-mounting it (a changing key) would drop focus from the input. */}
+      <div ref={scope}>{children}</div>
       <AnimatePresence>
         {state === "error" && error && (
           <motion.p
@@ -391,7 +385,7 @@ function InputWithIcon({
 
   return (
     <div
-      className={`group flex h-11 items-center gap-2.5 rounded-xl border bg-white px-3 transition-all duration-200 focus-within:ring-4 dark:bg-white/[0.05] ${borderClass}`}
+      className={`group flex h-11 items-center gap-2.5 rounded-xl border bg-white px-3 transition-[color,background-color,border-color,box-shadow,opacity,transform] duration-200 focus-within:ring-4 dark:bg-white/[0.05] ${borderClass}`}
     >
       <span className="text-slate-400 transition-colors group-focus-within:text-[#0A7BE8] dark:group-focus-within:text-sky-400">
         {icon}
