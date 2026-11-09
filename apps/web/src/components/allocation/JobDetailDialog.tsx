@@ -120,6 +120,7 @@ export function JobDetailDialog({
                     {s.items.length === 0 ? (
                       <p className="px-3 py-2 text-sm text-muted-foreground">No items yet.</p>
                     ) : (
+                      <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead>
                           <tr className="text-left text-xs text-muted-foreground">
@@ -142,6 +143,7 @@ export function JobDetailDialog({
                           ))}
                         </tbody>
                       </table>
+                      </div>
                     )}
                   </div>
                 ))}

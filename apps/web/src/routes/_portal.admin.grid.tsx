@@ -98,43 +98,52 @@ function WeeklyGridPage() {
       />
 
       <div className="surface-panel mb-4 flex flex-wrap items-center gap-2 p-3">
-        <Button
-          variant="outline"
-          size="icon"
-          aria-label="Earlier"
-          onClick={() => showRange(addDays(from, -days))}
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
-        <Input
-          type="date"
-          aria-label="Go to date"
-          value={selected}
-          onChange={(e) => e.target.value && showRange(mondayOf(e.target.value), e.target.value)}
-          className="w-40"
-        />
-        <Button
-          variant="outline"
-          size="icon"
-          aria-label="Later"
-          onClick={() => showRange(addDays(from, days))}
-        >
-          <ChevronRight className="h-4 w-4" />
-        </Button>
-        {(selected !== today || from !== mondayOf(today)) && (
-          <Button variant="ghost" onClick={() => showRange(mondayOf(today), today)}>
-            Today
+        {/* On a phone the date controls take one full row, the filters the rows below. */}
+        <div className="flex w-full items-center gap-2 sm:w-auto">
+          <Button
+            variant="outline"
+            size="icon"
+            className="shrink-0"
+            aria-label="Earlier"
+            onClick={() => showRange(addDays(from, -days))}
+          >
+            <ChevronLeft className="h-4 w-4" />
           </Button>
-        )}
+          <Input
+            type="date"
+            aria-label="Go to date"
+            value={selected}
+            onChange={(e) => e.target.value && showRange(mondayOf(e.target.value), e.target.value)}
+            className="min-w-0 flex-1 sm:w-40 sm:flex-none"
+          />
+          <Button
+            variant="outline"
+            size="icon"
+            className="shrink-0"
+            aria-label="Later"
+            onClick={() => showRange(addDays(from, days))}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          {(selected !== today || from !== mondayOf(today)) && (
+            <Button
+              variant="ghost"
+              className="shrink-0 px-3"
+              onClick={() => showRange(mondayOf(today), today)}
+            >
+              Today
+            </Button>
+          )}
+        </div>
         <span className="min-w-0 text-sm text-muted-foreground">
           {fmt(from, { day: "numeric", month: "short" })} –{" "}
           {fmt(to, { day: "numeric", month: "short", year: "numeric" })}
         </span>
-        <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto">
+        <div className="grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:ml-auto sm:flex sm:w-auto sm:flex-wrap">
           <div
             role="radiogroup"
             aria-label="Who to show"
-            className="inline-flex rounded-xl border bg-muted/40 p-1 text-sm"
+            className="col-span-2 grid grid-cols-4 rounded-xl border bg-muted/40 p-1 text-sm sm:inline-flex"
           >
             {ROLE_FILTERS.map(([r, label]) => (
               <button
@@ -144,7 +153,7 @@ function WeeklyGridPage() {
                 aria-checked={role === r}
                 onClick={() => setRole(r)}
                 className={cn(
-                  "min-h-8 rounded-lg px-2.5 font-medium transition-colors",
+                  "min-h-8 min-w-0 truncate rounded-lg px-1.5 font-medium transition-colors sm:px-2.5",
                   role === r
                     ? "bg-background text-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground",
@@ -157,7 +166,7 @@ function WeeklyGridPage() {
           <div
             role="radiogroup"
             aria-label="View"
-            className="inline-flex rounded-xl border bg-muted/40 p-1 text-sm"
+            className="grid grid-cols-2 rounded-xl border bg-muted/40 p-1 text-sm sm:inline-flex"
           >
             {(
               [
@@ -172,7 +181,7 @@ function WeeklyGridPage() {
                 aria-checked={view === v}
                 onClick={() => setView(v)}
                 className={cn(
-                  "min-h-8 rounded-lg px-3 font-medium transition-colors",
+                  "min-h-8 min-w-0 truncate rounded-lg px-2 font-medium transition-colors sm:px-3",
                   view === v
                     ? "bg-background text-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground",
@@ -190,7 +199,7 @@ function WeeklyGridPage() {
               setSelected((s) => (s >= from && s <= addDays(from, n - 1) ? s : from));
             }}
           >
-            <SelectTrigger className="w-32" aria-label="How many weeks">
+            <SelectTrigger className="w-[6.5rem] sm:w-32" aria-label="How many weeks">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -583,7 +592,8 @@ function PeopleGrid({
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="bg-muted/40">
-              <th className="sticky left-0 z-10 min-w-[11rem] border-b bg-muted px-3 py-2 text-left text-xs font-medium text-muted-foreground">
+              {/* A phone keeps the name column narrow, so a day's column still fits beside it. */}
+              <th className="sticky left-0 z-10 w-28 min-w-28 border-b bg-muted px-2 py-2 text-left text-xs font-medium text-muted-foreground sm:w-auto sm:min-w-[11rem] sm:px-3">
                 Person
               </th>
               {dates.map((d) => {
@@ -592,7 +602,7 @@ function PeopleGrid({
                   <th
                     key={d}
                     className={cn(
-                      "min-w-[10rem] border-b border-l px-2 py-2 text-center text-xs font-medium",
+                      "min-w-[8.5rem] border-b border-l px-2 py-2 text-center text-xs font-medium sm:min-w-[10rem]",
                       d === today
                         ? "bg-primary/10 text-primary"
                         : h.sunday
@@ -623,8 +633,8 @@ function PeopleGrid({
                   </tr>
                   {rows.map((r) => (
                     <tr key={r.id} className="group">
-                      <td className="sticky left-0 z-10 max-w-[11rem] border-b bg-card px-3 py-1.5 group-hover:bg-muted">
-                        <div className="truncate font-medium" title={r.name}>
+                      <td className="sticky left-0 z-10 max-w-28 border-b bg-card px-2 py-1.5 group-hover:bg-muted sm:max-w-[11rem] sm:px-3">
+                        <div className="break-words font-medium leading-tight sm:truncate" title={r.name}>
                           {r.name}
                         </div>
                         {r.emp_code && (
@@ -689,7 +699,7 @@ function PeopleGrid({
           <tfoot>
             {roles.map((footRole) => (
               <tr key={footRole} className="bg-muted/30 text-xs">
-                <td className="sticky left-0 z-10 border-t bg-muted px-3 py-1.5 font-medium text-muted-foreground">
+                <td className="sticky left-0 z-10 border-t bg-muted px-2 py-1.5 font-medium text-muted-foreground sm:px-3">
                   Free {FIELD_ROLE_LABELS[footRole].toLowerCase()}s
                 </td>
                 {data.free.map((f, i) => (
