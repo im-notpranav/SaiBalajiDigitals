@@ -177,24 +177,16 @@ const sectionTitle = "text-xs font-semibold uppercase tracking-wider text-muted-
 /** Field labels: small, so the boxes carry the weight. */
 const fieldLabel = "text-xs font-medium text-muted-foreground";
 
-/** A small input with its field name inside it ("W", "Qty"), so one row needs no labels above. */
-function PrefixedInput({ prefix, className, ...props }: React.ComponentProps<typeof Input> & { prefix: string }) {
+/** A small line-item input. The field name is a placeholder, so it vanishes on typing and the whole box holds the value. */
+function LineInput({ className, ...props }: React.ComponentProps<typeof Input>) {
   return (
-    <div className="relative">
-      <span
-        className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[11px] font-medium uppercase text-muted-foreground"
-        aria-hidden
-      >
-        {prefix}
-      </span>
-      <Input
-        type="text"
-        autoComplete="off"
-        {...props}
-        // No number spinners: they ate the room the value needs.
-        className={`h-9 tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${prefix.length > 1 ? "pl-10" : "pl-6"} ${className ?? ""}`}
-      />
-    </div>
+    <Input
+      type="text"
+      autoComplete="off"
+      {...props}
+      // No number spinners: they ate the room the value needs.
+      className={`h-9 tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${className ?? ""}`}
+    />
   );
 }
 
@@ -593,32 +585,30 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
                       className="h-9"
                     />
                   </div>
-                  <PrefixedInput
-                    prefix="W"
+                  <LineInput
                     aria-label="Width in inches"
                     title="Width in inches"
                     inputMode="decimal"
-                    placeholder="in"
+                    placeholder="Width"
                     value={line.width_inches}
                     onChange={(e) => update(store.id, line.id, { width_inches: sanitizeDecimal(e.target.value) })}
                     onBlur={() => update(store.id, line.id, { width_inches: normalizeDecimal(line.width_inches) })}
                     disabled={isReadOnlyItem}
                   />
-                  <PrefixedInput
-                    prefix="H"
+                  <LineInput
                     aria-label="Height in inches"
                     title="Height in inches"
                     inputMode="decimal"
-                    placeholder="in"
+                    placeholder="Height"
                     value={line.height_inches}
                     onChange={(e) => update(store.id, line.id, { height_inches: sanitizeDecimal(e.target.value) })}
                     onBlur={() => update(store.id, line.id, { height_inches: normalizeDecimal(line.height_inches) })}
                     disabled={isReadOnlyItem}
                   />
-                  <PrefixedInput
-                    prefix="Qty"
+                  <LineInput
                     aria-label="Quantity"
                     title="Quantity"
+                    placeholder="Qty"
                     type="number"
                     min={1}
                     step={1}
@@ -626,12 +616,11 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
                     onChange={(e) => update(store.id, line.id, { qty: Number(e.target.value) })}
                     disabled={isReadOnlyItem}
                   />
-                  <PrefixedInput
-                    prefix="₹"
+                  <LineInput
                     aria-label="Rate in rupees"
                     title="Rate in rupees per sft"
                     inputMode="decimal"
-                    placeholder="rate"
+                    placeholder="Rate ₹"
                     value={line.rate}
                     onChange={(e) => update(store.id, line.id, { rate: sanitizeDecimal(e.target.value) })}
                     onBlur={() => update(store.id, line.id, { rate: normalizeDecimal(line.rate) })}
@@ -674,8 +663,7 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
                     </Select>
                   )}
                   {showLoss && isAmountRemark(line.remarks) && (
-                    <PrefixedInput
-                      prefix="₹"
+                    <LineInput
                       aria-label={line.remarks === "ExtraAmount" ? "Extra amount in rupees" : line.lessMode === "newAmount" ? "New line amount in rupees" : "Discount in rupees"}
                       title={line.remarks === "ExtraAmount" ? "Added to this line" : line.lessMode === "newAmount" ? "What the line should come to" : "Taken off this line"}
                       inputMode="decimal"
