@@ -67,7 +67,9 @@ export function JobDetailDialog({
         </DialogHeader>
 
         {isLoading ? (
-          <LoadingState bare />
+          // Roughly the height of a loaded job, so the dialog does not open small and then
+          // jump in size while its opening animation is still running.
+          <LoadingState bare className="min-h-[18rem]" />
         ) : !job ? (
           <ErrorState bare title="Couldn't load this job" error={error} onRetry={() => refetch()} />
         ) : (

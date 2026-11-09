@@ -36,10 +36,6 @@ import {
   PLACE_LABELS,
   apiErrorMessage,
   createWorkJob,
-  fetchAreas,
-  fetchCsmCodes,
-  fetchCsmOptions,
-  fetchFieldStaff,
   fetchOrderOptions,
   fetchLeave,
   fetchWorkJobs,
@@ -55,6 +51,7 @@ import {
   type WorkJobInput,
 } from "@/api/allocation";
 import { TeamPicker, teamShortfall } from "./TeamPicker";
+import { areasQuery, csmCodesQuery, csmOptionsQuery, fieldStaffQuery } from "./jobLookups";
 
 const NONE = "__none__";
 
@@ -145,38 +142,28 @@ export function JobDialog({
   const [leaveConflicts, setLeaveConflicts] = useState<LeaveClash[]>([]);
   const [showMore, setShowMore] = useState(false);
 
-  useEffect(() => {
-    if (!open) return;
+  // Reset the form when the dialog opens (or is pointed at another job or date). This runs
+  // during render, not in an effect, so the first frame of the dialog already holds the right
+  // dates: an effect would paint once with the old form, fetch who is busy on the wrong days,
+  // then render again in the middle of the opening animation.
+  const [openedFor, setOpenedFor] = useState<{ job?: WorkJob | null; date?: string } | null>(null);
+  if (open && (!openedFor || openedFor.job !== job || openedFor.date !== defaultDate)) {
+    setOpenedFor({ job, date: defaultDate });
     setForm(job ? formFromJob(job) : blankForm(defaultDate ?? todayIST(), defaultMemberIds));
     setConflicts([]);
     setLeaveConflicts([]);
     setShowMore(!!job && !!(job.route || job.extra_tag || job.instructions || job.csm2_code));
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only when the dialog opens
-  }, [open, job, defaultDate]);
+  } else if (!open && openedFor) {
+    setOpenedFor(null);
+  }
 
   const set = <K extends keyof Form>(key: K, value: Form[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
 
-  const { data: areaData } = useQuery({
-    queryKey: ["masters", "areas"],
-    queryFn: fetchAreas,
-    enabled: open,
-  });
-  const { data: codeData } = useQuery({
-    queryKey: ["masters", "csm-codes"],
-    queryFn: fetchCsmCodes,
-    enabled: open,
-  });
-  const { data: csmData } = useQuery({
-    queryKey: ["work-jobs", "csm-options"],
-    queryFn: fetchCsmOptions,
-    enabled: open,
-  });
-  const { data: staffData } = useQuery({
-    queryKey: ["field-staff"],
-    queryFn: fetchFieldStaff,
-    enabled: open,
-  });
+  const { data: areaData } = useQuery({ ...areasQuery, enabled: open });
+  const { data: codeData } = useQuery({ ...csmCodesQuery, enabled: open });
+  const { data: csmData } = useQuery({ ...csmOptionsQuery, enabled: open });
+  const { data: staffData } = useQuery({ ...fieldStaffQuery, enabled: open });
 
   const csms = csmData?.csms ?? [];
   /** The order's creator, when a CSM: the order fills the CSM dropdown with them. */
@@ -219,7 +206,7 @@ export function JobDialog({
   const datesValid = !!form.start_date && end >= form.start_date;
 
   // Who is already booked over these dates (other jobs only), to mark them in the picker.
-  const { data: overlapData } = useQuery({
+  const { data: overlapData, isPending: overlapPending } = useQuery({
     queryKey: ["work-jobs", "list", { from: form.start_date, to: end }],
     queryFn: () => fetchWorkJobs({ from: form.start_date, to: end }),
     enabled: open && datesValid,
@@ -238,11 +225,13 @@ export function JobDialog({
   }, [overlapData, job?.id]);
 
   // Who is on approved leave over these dates. Leave is a hard stop, so they cannot be picked.
-  const { data: leaveData } = useQuery({
+  const { data: leaveData, isPending: leavePending } = useQuery({
     queryKey: ["leave", "list", { from: form.start_date, to: end, status: "APPROVED" }],
     queryFn: () => fetchLeave({ from: form.start_date, to: end, status: "APPROVED" }),
     enabled: open && datesValid,
   });
+  // Until both answers are in for these dates, nobody can be called free or busy.
+  const checking = datesValid && (overlapPending || leavePending);
   const onLeave = useMemo(() => {
     const map = new Map<number, string>();
     for (const l of leaveData?.leave ?? [])
@@ -311,7 +300,9 @@ export function JobDialog({
     ? "Pick the CSM."
     : !datesValid
       ? "Fix the dates."
-      : teamShortfall(roleCount, helpersRequired);
+      : (teamShortfall(roleCount, helpersRequired) ??
+        // Saving before this is known could book someone twice without the warning showing.
+        (checking ? "Checking who is free on these dates…" : null));
   const canSave = !missing;
 
   const setTeam = (ids: number[]) => {
@@ -471,6 +462,7 @@ export function JobDialog({
               helpersRequired={helpersRequired}
               busy={busy}
               onLeave={onLeave}
+              checking={checking}
               onChange={setTeam}
               onHelpersRequired={setHelpersRequired}
             />

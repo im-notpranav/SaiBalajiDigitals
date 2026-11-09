@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Fragment, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { AlertTriangle, ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { JobDialog } from "@/components/allocation/JobDialog";
+import { usePrefetchJobLookups } from "@/components/allocation/jobLookups";
 import { JobDetailDialog } from "@/components/allocation/JobDetailDialog";
 import { JobStatusMenu, LocalityTag, cellStyles } from "@/components/allocation/JobBits";
 import {
@@ -73,9 +74,13 @@ function WeeklyGridPage() {
   const [role, setRole] = useState<RoleFilter>("ALL");
   const [dialog, setDialog] = useState<DialogState>(null);
   const [detail, setDetail] = useState<number | null>(null);
-  const { data, isLoading, error, refetch } = useQuery({
+  usePrefetchJobLookups();
+  const { data, isLoading, isPlaceholderData, error, refetch } = useQuery({
     queryKey: ["work-jobs", "grid", from, days],
     queryFn: () => fetchWeeklyGrid(from, days),
+    // Moving a week keeps the current one on screen, dimmed, until the next arrives, instead
+    // of swapping the whole grid for a loader and back.
+    placeholderData: keepPreviousData,
   });
 
   const to = addDays(from, days - 1);
@@ -218,6 +223,7 @@ function WeeklyGridPage() {
       ) : view === "dates" ? (
         <>
           <DateCalendar
+            loading={isPlaceholderData}
             data={data}
             rows={data.rows.filter(onRole)}
             today={today}
@@ -237,6 +243,7 @@ function WeeklyGridPage() {
         </>
       ) : (
         <PeopleGrid
+          loading={isPlaceholderData}
           data={data}
           role={role}
           today={today}
@@ -286,12 +293,15 @@ function daySummaries(data: WeeklyGrid, rows: WeeklyGrid["rows"]) {
 
 /** Whole weeks of day tiles. A tile shows counts only, never names. */
 function DateCalendar({
+  loading,
   data,
   rows,
   today,
   selected,
   onSelect,
 }: {
+  /** The tiles are still the last range's while the new one loads. */
+  loading?: boolean;
   data: WeeklyGrid;
   /** The people counted: all of them, or one role. */
   rows: WeeklyGrid["rows"];
@@ -301,7 +311,13 @@ function DateCalendar({
 }) {
   const sums = daySummaries(data, rows);
   return (
-    <div className="surface-panel mb-4 p-2 sm:p-3">
+    <div
+      aria-busy={loading}
+      className={cn(
+        "surface-panel mb-4 p-2 transition-opacity duration-150 sm:p-3",
+        loading && "pointer-events-none opacity-60",
+      )}
+    >
       <div className="mb-1 grid grid-cols-7 gap-1 sm:gap-2" aria-hidden>
         {data.dates.slice(0, 7).map((d) => (
           <div
@@ -414,9 +430,12 @@ function DayPanel({
   onAssign: () => void;
   onOpenJob: (id: number) => void;
 }) {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isPlaceholderData } = useQuery({
     queryKey: ["work-jobs", "list", { from: date, to: date, status: LIVE }],
     queryFn: () => fetchWorkJobs({ from: date, to: date, status: LIVE }),
+    // Picking another day keeps the last day's cards, dimmed, so the panel does not collapse
+    // to a spinner and spring back open.
+    placeholderData: keepPreviousData,
   });
   const jobs = (data?.jobs ?? []).filter(
     (j) => role === "ALL" || j.members.some((m) => m.slot_role === role),
@@ -430,7 +449,7 @@ function DayPanel({
           <h2 id="day-title" className="text-lg font-semibold">
             {fmt(date, { weekday: "long", day: "numeric", month: "long" })}
           </h2>
-          {free && (
+          {free ? (
             <p className="mt-0.5 text-sm text-muted-foreground">
               Free:{" "}
               {freeRoles.map((r, i) => (
@@ -444,6 +463,9 @@ function DayPanel({
               ))}
               {onLeave > 0 && ` · ${onLeave} on leave`}
             </p>
+          ) : (
+            // Holds the line's height while a new week loads, so nothing below jumps.
+            <p className="mt-0.5 h-5" aria-hidden />
           )}
         </div>
         <Button className="rounded-xl" onClick={onAssign}>
@@ -454,11 +476,25 @@ function DayPanel({
       {isLoading ? (
         <LoadingState bare className="p-4" />
       ) : jobs.length === 0 ? (
-        <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
-          Nothing is booked on this date. Use “Assign workers” to book a team.
+        <div
+          aria-busy={isPlaceholderData}
+          className={cn(
+            "rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground transition-opacity duration-150",
+            isPlaceholderData && "opacity-60",
+          )}
+        >
+          {isPlaceholderData
+            ? "Loading this date…"
+            : "Nothing is booked on this date. Use “Assign workers” to book a team."}
         </div>
       ) : (
-        <ul className="grid gap-3 md:grid-cols-2">
+        <ul
+          aria-busy={isPlaceholderData}
+          className={cn(
+            "grid gap-3 transition-opacity duration-150 md:grid-cols-2",
+            isPlaceholderData && "pointer-events-none opacity-60",
+          )}
+        >
           {jobs.map((j) => {
             const dayNo =
               Math.round((Date.parse(date) - Date.parse(j.start_date)) / 86_400_000) + 1;
@@ -489,7 +525,8 @@ function DayPanel({
                   <span className="flex items-center gap-1">
                     {jobPlace(j) ?? "Location not set"} <LocalityTag locality={j.locality} />
                   </span>
-                  {j.days > 1 && (
+                  {/* A held-over card belongs to the last day picked, so its day number would be wrong. */}
+                  {j.days > 1 && !isPlaceholderData && (
                     <span>
                       · Day {dayNo} of {j.days} ({formatJobDates(j.start_date, j.end_date)})
                     </span>
@@ -566,12 +603,15 @@ function JobBox({
  * open the job's details, or an empty cell to start a job for that person on that day.
  */
 function PeopleGrid({
+  loading,
   data,
   role,
   today,
   onOpenJob,
   onNewJob,
 }: {
+  /** The sheet is still the last range's while the new one loads. */
+  loading?: boolean;
   data: WeeklyGrid;
   role: RoleFilter;
   today: string;
@@ -588,7 +628,13 @@ function PeopleGrid({
 
   return (
     <>
-      <div className="surface-panel overflow-x-auto">
+      <div
+        aria-busy={loading}
+        className={cn(
+          "surface-panel overflow-x-auto transition-opacity duration-150",
+          loading && "pointer-events-none opacity-60",
+        )}
+      >
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="bg-muted/40">

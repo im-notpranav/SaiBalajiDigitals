@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import {
   AlertTriangle,
   CalendarOff,
@@ -14,12 +14,14 @@ import {
   Wrench,
   LayoutGrid,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { EmptyState, ErrorState, LoadingState } from "@/components/layout/PageStates";
 import { KpiCard } from "@/components/kpi/KpiCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { JobDialog } from "@/components/allocation/JobDialog";
+import { usePrefetchJobLookups } from "@/components/allocation/jobLookups";
 import { JobStatusMenu, LocalityTag } from "@/components/allocation/JobBits";
 import {
   FIELD_ROLE_LABELS,
@@ -49,10 +51,18 @@ function DailyBoardPage() {
   const linked = Route.useSearch();
   const [date, setDate] = useState(linked.date ?? today);
   const [dialog, setDialog] = useState<{ job: WorkJob | null } | null>(null);
-  const { data, isLoading, error, refetch } = useQuery({
+  usePrefetchJobLookups();
+  const { data, isLoading, isPlaceholderData, error, refetch } = useQuery({
     queryKey: ["work-jobs", "board", date],
     queryFn: () => fetchDailyBoard(date),
+    // Stepping a day keeps the last day on screen, dimmed, until the next arrives, instead of
+    // dropping every card to a loader and back.
+    placeholderData: keepPreviousData,
   });
+  const stale = cn(
+    "transition-opacity duration-150",
+    isPlaceholderData && "pointer-events-none opacity-60",
+  );
 
   const label = new Date(`${date}T00:00:00Z`).toLocaleDateString("en-IN", {
     weekday: "long",
@@ -106,7 +116,10 @@ function DailyBoardPage() {
         )}
       </div>
 
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      <div
+        aria-busy={isPlaceholderData}
+        className={cn("mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6", stale)}
+      >
         <KpiCard
           label="Jobs running"
           value={data?.counts.jobs ?? "–"}
@@ -151,7 +164,12 @@ function DailyBoardPage() {
       </div>
 
       {doubled.length > 0 && (
-        <div className="mb-4 flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
+        <div
+          className={cn(
+            "mb-4 flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm",
+            stale,
+          )}
+        >
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
           <span>
             {doubled.map((p, i) => (
@@ -166,7 +184,10 @@ function DailyBoardPage() {
         </div>
       )}
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
+      <div
+        aria-busy={isPlaceholderData}
+        className={cn("grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]", stale)}
+      >
         <section>
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
             Jobs on this day

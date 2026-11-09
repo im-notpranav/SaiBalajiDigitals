@@ -38,6 +38,7 @@ export function TeamPicker({
   helpersRequired,
   busy,
   onLeave,
+  checking,
   onChange,
   onHelpersRequired,
 }: {
@@ -46,6 +47,8 @@ export function TeamPicker({
   helpersRequired: boolean;
   busy: Map<number, string[]>;
   onLeave: Map<number, string>;
+  /** Who is busy or on leave over the dates is still loading. */
+  checking?: boolean;
   onChange: (ids: number[]) => void;
   onHelpersRequired: (on: boolean) => void;
 }) {
@@ -80,6 +83,7 @@ export function TeamPicker({
           )}
           busy={busy}
           onLeave={onLeave}
+          checking={checking}
           onChange={(id) => setSlot(role, i, id)}
         />
       </div>
@@ -134,6 +138,7 @@ function PersonSelect({
   people,
   busy,
   onLeave,
+  checking,
   disabled,
   onChange,
 }: {
@@ -142,6 +147,7 @@ function PersonSelect({
   people: Person[];
   busy: Map<number, string[]>;
   onLeave: Map<number, string>;
+  checking?: boolean;
   disabled?: boolean;
   onChange: (id: number | null) => void;
 }) {
@@ -167,7 +173,7 @@ function PersonSelect({
             {current ? (
               <span className="min-w-0">
                 <span className="block truncate">{current.name}</span>
-                <PersonStatus id={current.id} busy={busy} onLeave={onLeave} />
+                <PersonStatus id={current.id} busy={busy} onLeave={onLeave} checking={checking} />
               </span>
             ) : (
               <span className="text-muted-foreground">Pick a {label}</span>
@@ -201,7 +207,7 @@ function PersonSelect({
                           <span className="text-xs text-muted-foreground"> · {p.emp_code}</span>
                         )}
                       </span>
-                      <PersonStatus id={p.id} busy={busy} onLeave={onLeave} />
+                      <PersonStatus id={p.id} busy={busy} onLeave={onLeave} checking={checking} />
                     </span>
                   </CommandItem>
                 ))}
@@ -230,11 +236,15 @@ function PersonStatus({
   id,
   busy,
   onLeave,
+  checking,
 }: {
   id: number;
   busy: Map<number, string[]>;
   onLeave: Map<number, string>;
+  checking?: boolean;
 }) {
+  // Saying "Free" before the dates' bookings are in would be a guess.
+  if (checking) return <span className="block text-xs text-muted-foreground">Checking…</span>;
   const leave = onLeave.get(id);
   if (leave) return <span className="block text-xs text-destructive">On leave · {leave}</span>;
   const jobs = busy.get(id);

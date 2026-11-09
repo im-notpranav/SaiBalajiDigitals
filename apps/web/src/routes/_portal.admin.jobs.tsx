@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Pencil, Plus, Search } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { TableStateRow } from "@/components/layout/PageStates";
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { JobDialog } from "@/components/allocation/JobDialog";
+import { usePrefetchJobLookups } from "@/components/allocation/jobLookups";
 import { JobStatusMenu, LocalityTag, teamLine } from "@/components/allocation/JobBits";
 import {
   JOB_EDITABLE,
@@ -76,9 +78,13 @@ function JobsPage() {
     locality: locality === ALL ? undefined : locality,
     q: debouncedQ || undefined,
   };
-  const { data, isLoading, error, refetch } = useQuery({
+  usePrefetchJobLookups();
+  const { data, isLoading, isPlaceholderData, error, refetch } = useQuery({
     queryKey: ["work-jobs", "list", filters],
     queryFn: () => fetchWorkJobs(filters),
+    // Typing a search or changing a filter keeps the last rows, dimmed, until the new ones
+    // arrive, instead of collapsing the table to a loader on every keystroke.
+    placeholderData: keepPreviousData,
   });
   const jobs = data?.jobs ?? [];
 
@@ -152,7 +158,13 @@ function JobsPage() {
         </Select>
       </div>
 
-      <div className="surface-panel overflow-x-auto">
+      <div
+        aria-busy={isPlaceholderData}
+        className={cn(
+          "surface-panel overflow-x-auto transition-opacity duration-150",
+          isPlaceholderData && "pointer-events-none opacity-60",
+        )}
+      >
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
