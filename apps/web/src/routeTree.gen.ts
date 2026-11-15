@@ -17,7 +17,6 @@ import { Route as PortalSheetRouteImport } from './routes/_portal.sheet'
 import { Route as GoSplatRouteImport } from './routes/go.$'
 import { Route as PortalAccountantBillingRouteImport } from './routes/_portal.accountant.billing'
 import { Route as PortalAccountantDashboardRouteImport } from './routes/_portal.accountant.dashboard'
-import { Route as PortalAccountantFinancialYearRouteImport } from './routes/_portal.accountant.financial-year'
 import { Route as PortalAccountantNotificationsRouteImport } from './routes/_portal.accountant.notifications'
 import { Route as PortalAccountantOrdersRouteImport } from './routes/_portal.accountant.orders'
 import { Route as PortalAccountantReportsRouteImport } from './routes/_portal.accountant.reports'
@@ -25,7 +24,6 @@ import { Route as PortalAdminAuditRouteImport } from './routes/_portal.admin.aud
 import { Route as PortalAdminBoardRouteImport } from './routes/_portal.admin.board'
 import { Route as PortalAdminDashboardRouteImport } from './routes/_portal.admin.dashboard'
 import { Route as PortalAdminFieldStaffRouteImport } from './routes/_portal.admin.field-staff'
-import { Route as PortalAdminFinancialYearRouteImport } from './routes/_portal.admin.financial-year'
 import { Route as PortalAdminGridRouteImport } from './routes/_portal.admin.grid'
 import { Route as PortalAdminImportRouteImport } from './routes/_portal.admin.import'
 import { Route as PortalAdminJobsRouteImport } from './routes/_portal.admin.jobs'
@@ -114,12 +112,6 @@ const PortalAccountantDashboardRoute =
     path: '/accountant/dashboard',
     getParentRoute: () => PortalRoute,
   } as any)
-const PortalAccountantFinancialYearRoute =
-  PortalAccountantFinancialYearRouteImport.update({
-    id: '/accountant/financial-year',
-    path: '/accountant/financial-year',
-    getParentRoute: () => PortalRoute,
-  } as any)
 const PortalAccountantNotificationsRoute =
   PortalAccountantNotificationsRouteImport.update({
     id: '/accountant/notifications',
@@ -156,12 +148,6 @@ const PortalAdminFieldStaffRoute = PortalAdminFieldStaffRouteImport.update({
   path: '/admin/field-staff',
   getParentRoute: () => PortalRoute,
 } as any)
-const PortalAdminFinancialYearRoute =
-  PortalAdminFinancialYearRouteImport.update({
-    id: '/admin/financial-year',
-    path: '/admin/financial-year',
-    getParentRoute: () => PortalRoute,
-  } as any)
 const PortalAdminGridRoute = PortalAdminGridRouteImport.update({
   id: '/admin/grid',
   path: '/admin/grid',
@@ -420,7 +406,6 @@ export interface FileRoutesByFullPath {
   '/go/$': typeof GoSplatRoute
   '/accountant/billing': typeof PortalAccountantBillingRoute
   '/accountant/dashboard': typeof PortalAccountantDashboardRoute
-  '/accountant/financial-year': typeof PortalAccountantFinancialYearRoute
   '/accountant/notifications': typeof PortalAccountantNotificationsRoute
   '/accountant/orders': typeof PortalAccountantOrdersRoute
   '/accountant/reports': typeof PortalAccountantReportsRoute
@@ -428,7 +413,6 @@ export interface FileRoutesByFullPath {
   '/admin/board': typeof PortalAdminBoardRoute
   '/admin/dashboard': typeof PortalAdminDashboardRoute
   '/admin/field-staff': typeof PortalAdminFieldStaffRoute
-  '/admin/financial-year': typeof PortalAdminFinancialYearRoute
   '/admin/grid': typeof PortalAdminGridRoute
   '/admin/import': typeof PortalAdminImportRoute
   '/admin/jobs': typeof PortalAdminJobsRoute
@@ -485,7 +469,6 @@ export interface FileRoutesByTo {
   '/go/$': typeof GoSplatRoute
   '/accountant/billing': typeof PortalAccountantBillingRoute
   '/accountant/dashboard': typeof PortalAccountantDashboardRoute
-  '/accountant/financial-year': typeof PortalAccountantFinancialYearRoute
   '/accountant/notifications': typeof PortalAccountantNotificationsRoute
   '/accountant/orders': typeof PortalAccountantOrdersRoute
   '/accountant/reports': typeof PortalAccountantReportsRoute
@@ -493,7 +476,6 @@ export interface FileRoutesByTo {
   '/admin/board': typeof PortalAdminBoardRoute
   '/admin/dashboard': typeof PortalAdminDashboardRoute
   '/admin/field-staff': typeof PortalAdminFieldStaffRoute
-  '/admin/financial-year': typeof PortalAdminFinancialYearRoute
   '/admin/grid': typeof PortalAdminGridRoute
   '/admin/import': typeof PortalAdminImportRoute
   '/admin/jobs': typeof PortalAdminJobsRoute
@@ -552,7 +534,6 @@ export interface FileRoutesById {
   '/go/$': typeof GoSplatRoute
   '/_portal/accountant/billing': typeof PortalAccountantBillingRoute
   '/_portal/accountant/dashboard': typeof PortalAccountantDashboardRoute
-  '/_portal/accountant/financial-year': typeof PortalAccountantFinancialYearRoute
   '/_portal/accountant/notifications': typeof PortalAccountantNotificationsRoute
   '/_portal/accountant/orders': typeof PortalAccountantOrdersRoute
   '/_portal/accountant/reports': typeof PortalAccountantReportsRoute
@@ -560,7 +541,6 @@ export interface FileRoutesById {
   '/_portal/admin/board': typeof PortalAdminBoardRoute
   '/_portal/admin/dashboard': typeof PortalAdminDashboardRoute
   '/_portal/admin/field-staff': typeof PortalAdminFieldStaffRoute
-  '/_portal/admin/financial-year': typeof PortalAdminFinancialYearRoute
   '/_portal/admin/grid': typeof PortalAdminGridRoute
   '/_portal/admin/import': typeof PortalAdminImportRoute
   '/_portal/admin/jobs': typeof PortalAdminJobsRoute
@@ -619,7 +599,6 @@ export interface FileRouteTypes {
     | '/go/$'
     | '/accountant/billing'
     | '/accountant/dashboard'
-    | '/accountant/financial-year'
     | '/accountant/notifications'
     | '/accountant/orders'
     | '/accountant/reports'
@@ -627,7 +606,6 @@ export interface FileRouteTypes {
     | '/admin/board'
     | '/admin/dashboard'
     | '/admin/field-staff'
-    | '/admin/financial-year'
     | '/admin/grid'
     | '/admin/import'
     | '/admin/jobs'
@@ -684,7 +662,6 @@ export interface FileRouteTypes {
     | '/go/$'
     | '/accountant/billing'
     | '/accountant/dashboard'
-    | '/accountant/financial-year'
     | '/accountant/notifications'
     | '/accountant/orders'
     | '/accountant/reports'
@@ -692,7 +669,6 @@ export interface FileRouteTypes {
     | '/admin/board'
     | '/admin/dashboard'
     | '/admin/field-staff'
-    | '/admin/financial-year'
     | '/admin/grid'
     | '/admin/import'
     | '/admin/jobs'
@@ -750,7 +726,6 @@ export interface FileRouteTypes {
     | '/go/$'
     | '/_portal/accountant/billing'
     | '/_portal/accountant/dashboard'
-    | '/_portal/accountant/financial-year'
     | '/_portal/accountant/notifications'
     | '/_portal/accountant/orders'
     | '/_portal/accountant/reports'
@@ -758,7 +733,6 @@ export interface FileRouteTypes {
     | '/_portal/admin/board'
     | '/_portal/admin/dashboard'
     | '/_portal/admin/field-staff'
-    | '/_portal/admin/financial-year'
     | '/_portal/admin/grid'
     | '/_portal/admin/import'
     | '/_portal/admin/jobs'
@@ -873,13 +847,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PortalAccountantDashboardRouteImport
       parentRoute: typeof PortalRoute
     }
-    '/_portal/accountant/financial-year': {
-      id: '/_portal/accountant/financial-year'
-      path: '/accountant/financial-year'
-      fullPath: '/accountant/financial-year'
-      preLoaderRoute: typeof PortalAccountantFinancialYearRouteImport
-      parentRoute: typeof PortalRoute
-    }
     '/_portal/accountant/notifications': {
       id: '/_portal/accountant/notifications'
       path: '/accountant/notifications'
@@ -927,13 +894,6 @@ declare module '@tanstack/react-router' {
       path: '/admin/field-staff'
       fullPath: '/admin/field-staff'
       preLoaderRoute: typeof PortalAdminFieldStaffRouteImport
-      parentRoute: typeof PortalRoute
-    }
-    '/_portal/admin/financial-year': {
-      id: '/_portal/admin/financial-year'
-      path: '/admin/financial-year'
-      fullPath: '/admin/financial-year'
-      preLoaderRoute: typeof PortalAdminFinancialYearRouteImport
       parentRoute: typeof PortalRoute
     }
     '/_portal/admin/grid': {
@@ -1273,7 +1233,6 @@ interface PortalRouteChildren {
   PortalSheetRoute: typeof PortalSheetRoute
   PortalAccountantBillingRoute: typeof PortalAccountantBillingRoute
   PortalAccountantDashboardRoute: typeof PortalAccountantDashboardRoute
-  PortalAccountantFinancialYearRoute: typeof PortalAccountantFinancialYearRoute
   PortalAccountantNotificationsRoute: typeof PortalAccountantNotificationsRoute
   PortalAccountantOrdersRoute: typeof PortalAccountantOrdersRoute
   PortalAccountantReportsRoute: typeof PortalAccountantReportsRoute
@@ -1281,7 +1240,6 @@ interface PortalRouteChildren {
   PortalAdminBoardRoute: typeof PortalAdminBoardRoute
   PortalAdminDashboardRoute: typeof PortalAdminDashboardRoute
   PortalAdminFieldStaffRoute: typeof PortalAdminFieldStaffRoute
-  PortalAdminFinancialYearRoute: typeof PortalAdminFinancialYearRoute
   PortalAdminGridRoute: typeof PortalAdminGridRoute
   PortalAdminImportRoute: typeof PortalAdminImportRoute
   PortalAdminJobsRoute: typeof PortalAdminJobsRoute
@@ -1336,7 +1294,6 @@ const PortalRouteChildren: PortalRouteChildren = {
   PortalSheetRoute: PortalSheetRoute,
   PortalAccountantBillingRoute: PortalAccountantBillingRoute,
   PortalAccountantDashboardRoute: PortalAccountantDashboardRoute,
-  PortalAccountantFinancialYearRoute: PortalAccountantFinancialYearRoute,
   PortalAccountantNotificationsRoute: PortalAccountantNotificationsRoute,
   PortalAccountantOrdersRoute: PortalAccountantOrdersRoute,
   PortalAccountantReportsRoute: PortalAccountantReportsRoute,
@@ -1344,7 +1301,6 @@ const PortalRouteChildren: PortalRouteChildren = {
   PortalAdminBoardRoute: PortalAdminBoardRoute,
   PortalAdminDashboardRoute: PortalAdminDashboardRoute,
   PortalAdminFieldStaffRoute: PortalAdminFieldStaffRoute,
-  PortalAdminFinancialYearRoute: PortalAdminFinancialYearRoute,
   PortalAdminGridRoute: PortalAdminGridRoute,
   PortalAdminImportRoute: PortalAdminImportRoute,
   PortalAdminJobsRoute: PortalAdminJobsRoute,

@@ -23,7 +23,6 @@ import {
   MessageCircle,
   Wallet,
   Receipt,
-  CalendarClock,
   AlarmClock,
   FileBarChart2,
   Users,
@@ -73,7 +72,6 @@ const ORDER_SYSTEM: NavItem[] = (
     { to: "/admin/overdue", label: "Overdue Orders", icon: AlarmClock },
     { to: "/admin/loss-report", label: "Loss Report", icon: FileBarChart2 },
     { to: "/admin/reports", label: "Reports", icon: FileBarChart2 },
-    { to: "/admin/financial-year", label: "Financial Year", icon: CalendarClock },
     { to: "/admin/audit", label: "Audit Logs", icon: ShieldCheck },
   ] as NavItem[]
 ).map((i) => ({ ...i, group: "Automated System" as const }));
@@ -145,7 +143,6 @@ const NAV: Record<UserRole, NavItem[]> = {
     { to: "/accountant/billing", label: "Billing Queue", icon: Receipt },
     { to: "/accountant/orders", label: "All Orders", icon: Boxes },
     { to: "/accountant/reports", label: "Financial Reports", icon: FileBarChart2 },
-    { to: "/accountant/financial-year", label: "Financial Year", icon: CalendarClock },
     { to: "/sheet", label: "Sheet View", icon: FileSpreadsheet },
     { to: "/accountant/notifications", label: "Notifications", icon: Bell },
     { to: "/profile", label: "Profile", icon: UserCircle },

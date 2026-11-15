@@ -52,21 +52,6 @@ export const getAuditLog = async (req: Request, res: Response) => {
   }
 };
 
-export const getFinancialYearConfig = async (req: Request, res: Response) => {
-  try {
-    const seq = await prisma.orderSequence.findUnique({ where: { id: 1 } });
-    if (!seq) {
-      return res.status(404).json({ message: "Sequence not found" });
-    }
-    return res.status(200).json({
-      year_code: seq.year_code,
-      last_number: seq.last_number,
-    });
-  } catch (err) {
-    return res.status(500).json({ message: "Internal server error" });
-  }
-};
-
 /**
  * Overdue report (Phase 6): open orders stuck at their current stage longer than
  * the threshold (default 5 days). Surfaces where each order is stalled.
