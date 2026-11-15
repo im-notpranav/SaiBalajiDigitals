@@ -6,12 +6,15 @@ import { OrderDetail } from "@/components/orders/OrderDetail";
 import { fetchOrder, markOrderInstalled, getFollowUps, createFollowUp } from "@/api/orders";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Store, PackageCheck, CheckCircle2, MessageSquarePlus, Clock } from "lucide-react";
+import { Loader2, Store, PackageCheck, CheckCircle2, MessageSquarePlus, Clock, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-store";
 import { formatDistanceToNow } from "date-fns";
 import type { OrderItem } from "@sb-oms/shared-types";
 import { billingRollup, installedAt } from "@/lib/stores";
+
+/** Statuses the edit page opens for (header always; line items only while Active or Installed). */
+const EDITABLE = ["Active", "Installed", "BillingCompleted", "Pending"];
 
 export const Route = createFileRoute("/_portal/employee/orders_/$id")({
   head: () => ({ meta: [{ title: "Order Details — SB OMS" }] }),
@@ -178,20 +181,30 @@ function OrderDetailEmployee() {
         title={`Order ${order.order_no}`}
         description="Order details and line items."
         crumbs={[{ label: "Employee" }, { label: "Orders", to: "/employee/orders" }, { label: "Details" }]}
+        actions={
+          // An order with no line items has its own "Add Line Items" button just below.
+          !needsStores && EDITABLE.includes(order.status) ? (
+            <Button asChild variant="outline">
+              <Link to="/employee/edit-order/$id" params={{ id: String(order.id) }}>
+                <Pencil className="mr-2 h-4 w-4" aria-hidden /> Edit order
+              </Link>
+            </Button>
+          ) : undefined
+        }
       />
       {needsStores && (
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-warning/40 bg-warning/10 p-4 text-sm">
           <div>
             <div className="flex items-center gap-2 font-semibold">
-              <Store className="h-4 w-4" aria-hidden /> This order has no stores yet
+              <Store className="h-4 w-4" aria-hidden /> This order has not been assigned line items
             </div>
             <p className="mt-0.5 text-muted-foreground">
-              Add the stores and items before production can begin.
+              Add its line items before production can begin.
             </p>
           </div>
           <Button asChild size="sm">
             <Link to="/employee/edit-order/$id" params={{ id: String(order.id) }}>
-              Add stores
+              Add Line Items
             </Link>
           </Button>
         </div>

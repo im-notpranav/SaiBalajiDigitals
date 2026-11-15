@@ -111,6 +111,7 @@ model User {
   adjustmentsRequested OrderAdjustment[]     @relation("AdjustmentRequester")
   adjustmentsDecided   OrderAdjustment[]     @relation("AdjustmentDecider")
   flaggedItems         OrderItem[]           @relation("ItemFlagger")
+  returnedItems        OrderItem[]           @relation("ItemReturner")
   assignments          OrderItemAssignment[] @relation("AssignmentAssignee")
   assignmentsMade      OrderItemAssignment[] @relation("AssignmentAssigner")
   followUps            PaymentFollowUp[]     @relation("FollowUpAuthor")
@@ -152,31 +153,33 @@ model OrderSequence {
 /// The identity and numbering record for a job. Stores, line items and invoices hang off
 /// it; nothing about a particular store or a particular invoice lives here any more.
 model Order {
-  id                 Int               @id @default(autoincrement())
-  order_no           String            @unique
-  client_name        String
-  date               DateTime          @default(now())
+  id                  Int               @id @default(autoincrement())
+  order_no            String            @unique
+  client_name         String
+  date                DateTime          @default(now())
   /// Job-level PO covering the whole order. Per-store POs live on OrderStore.
-  po_number          String?
+  po_number           String?
   /// Derived from the stores and invoices — see utils/order-derive.ts. Never assign it
   /// directly, except `Completed`, which an admin sets by closing the order.
-  status             OrderStatus       @default(Active)
-  created_by         Int?
-  creator            User?             @relation(fields: [created_by], references: [id], onDelete: SetNull)
-  creator_name       String
-  remarks            RemarkType?
-  remarks_other_text String?
-  items              OrderItem[]
-  stores             OrderStore[]
-  invoices           Invoice[]
-  changeLogs         OrderChangeLog[]
-  notifications      Notification[]    @relation("OrderNotifications")
-  followUps          PaymentFollowUp[]
-  workJobs           WorkJob[]
-  paymentRequests    PaymentRequest[]
-  adjustments        OrderAdjustment[]
-  created_at         DateTime          @default(now())
-  updated_at         DateTime          @updatedAt
+  status              OrderStatus       @default(Active)
+  created_by          Int?
+  creator             User?             @relation(fields: [created_by], references: [id], onDelete: SetNull)
+  creator_name        String
+  remarks             RemarkType?
+  remarks_other_text  String?
+  items               OrderItem[]
+  stores              OrderStore[]
+  invoices            Invoice[]
+  changeLogs          OrderChangeLog[]
+  notifications       Notification[]    @relation("OrderNotifications")
+  /// When Accounts last reminded the CSM to send the invoice details; one reminder an hour.
+  invoice_reminded_at DateTime?
+  followUps           PaymentFollowUp[]
+  workJobs            WorkJob[]
+  paymentRequests     PaymentRequest[]
+  adjustments         OrderAdjustment[]
+  created_at          DateTime          @default(now())
+  updated_at          DateTime          @updatedAt
 
   @@index([client_name])
   @@index([status])
@@ -227,6 +230,12 @@ model OrderItem {
   assignments             OrderItemAssignment[]
   production_completed    Boolean               @default(false)
   production_completed_at DateTime?
+  /// A production team member sent the item back as wrongly given to them. Shown to the
+  /// Production Manager until the item is assigned again.
+  returned_reason         String?
+  returned_at             DateTime?
+  returned_by             Int?
+  returner                User?                 @relation("ItemReturner", fields: [returned_by], references: [id], onDelete: SetNull)
 
   @@index([order_id])
   @@index([order_store_id])
@@ -380,6 +389,9 @@ model Notification {
   read       Boolean  @default(false)
   order_id   Int?
   order      Order?   @relation("OrderNotifications", fields: [order_id], references: [id], onDelete: SetNull)
+  /// Where clicking it goes, in the /go link form: "order/30", "pr/28", "job/12/30", "leave",
+  /// "overtime", "library/requests". The web app turns it into a page for the reader's role.
+  link       String?
   created_at DateTime @default(now())
 
   @@index([user_id, created_at])

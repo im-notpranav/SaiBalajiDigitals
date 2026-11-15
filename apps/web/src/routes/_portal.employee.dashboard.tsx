@@ -18,7 +18,6 @@ import {
   DashboardGuide,
   DateRangeControl,
   formatCurrency,
-  scrollToSection,
   useDateRange,
   type AttentionItem,
 } from "@/components/dashboard/DashboardBits";
@@ -84,9 +83,9 @@ function EmployeeDashboard() {
     attention.push({
       key: "stores",
       tone: "warning",
-      title: `${needStores} ${plural(needStores, "order is", "orders are")} allotted to you — add stores and items`,
-      detail: "The Admin allotted these orders to you. Production can't begin until they have stores and items.",
-      cta: "Add stores",
+      title: `${needStores} ${plural(needStores, "order is", "orders are")} allotted to you — add line items`,
+      detail: "The Admin allotted these orders to you. Production can't begin until they have line items.",
+      cta: "Add Line Items",
       to: "/employee/orders",
       search: { section: "active", waiting: true },
     });
@@ -112,7 +111,7 @@ function EmployeeDashboard() {
           <>
             <Button asChild variant="outline" size="lg" className="rounded-xl">
               <Link to="/employee/upload-orders">
-                <Upload className="mr-2 h-4 w-4" aria-hidden /> Upload orders
+                <Upload className="mr-2 h-4 w-4" aria-hidden /> Bulk Upload
               </Link>
             </Button>
             <Button asChild size="lg" className="rounded-xl shadow-soft">
@@ -171,8 +170,9 @@ function EmployeeDashboard() {
               icon={Factory}
               accent="primary"
               hint="Yours, dated in the range above"
-              cta="See by stage"
-              onClick={() => scrollToSection("pipeline")}
+              cta="Open the list"
+              to="/employee/orders"
+              search={{ section: "all", from, to }}
             />
             <KpiCard
               label={viewMode === "amount" ? "Total Amount" : "Total Quantity"}
@@ -180,8 +180,9 @@ function EmployeeDashboard() {
               icon={viewMode === "amount" ? IndianRupee : Hash}
               accent="success"
               hint={viewMode === "amount" ? "Order value of those orders" : "Pieces across those orders"}
-              cta="See by stage"
-              onClick={() => scrollToSection("pipeline")}
+              cta="Open the list"
+              to="/employee/orders"
+              search={{ section: "all", from, to }}
             />
             <KpiCard
               label="Open Orders"

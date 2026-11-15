@@ -8,7 +8,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { fetchOrders, fetchWaitingOrderCount, exportOrders } from "@/api/orders";
 
 /** An order the Admin allotted to this CSM, with no stores or items yet. */
-const WAITING_LABEL = "Allotted — add stores and items";
+const WAITING_LABEL = "Allotted — add line items";
 
 export const Route = createFileRoute("/_portal/employee/orders")({
   head: () => ({ meta: [{ title: "My Orders — SB OMS" }] }),
@@ -45,9 +45,11 @@ function MyOrders() {
         crumbs={[{ label: "Employee" }, { label: "My Orders" }]}
         actions={
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" className="rounded-xl" onClick={handleExport}>
-              <Download className="mr-2 h-4 w-4" /> Export {section === "active" ? "Active" : "Completed"}
-            </Button>
+            {section !== "all" && (
+              <Button variant="outline" className="rounded-xl" onClick={handleExport}>
+                <Download className="mr-2 h-4 w-4" /> Export {section === "active" ? "Active" : "Completed"}
+              </Button>
+            )}
             <Button variant="secondary" className="rounded-xl shadow-soft" onClick={() => exportOrders({})}>
               <Download className="mr-2 h-4 w-4" /> Export All
             </Button>
@@ -68,7 +70,7 @@ function MyOrders() {
         orders={orders} 
         waitingLabel={WAITING_LABEL}
         rowLink={(o) => ({ to: "/employee/orders/$id", params: { id: String(o.id) } })}
-        emptyText={filters.search.waiting ? "Nothing is waiting for your stores and items." : undefined}
+        emptyText={filters.search.waiting ? "Nothing is waiting for your line items." : undefined}
         action={(o) => (
           <div className="flex justify-end gap-2">
             <Link to="/employee/orders/$id" params={{ id: String(o.id) }} className={buttonVariants({ size: "sm", variant: "ghost" })}>
@@ -78,7 +80,7 @@ function MyOrders() {
                 link follows the header rule, not the line-item one. */}
             {["Active", "Installed", "BillingCompleted", "Pending"].includes(o.status) && (
               <Link to="/employee/edit-order/$id" params={{ id: String(o.id) }} className={buttonVariants({ size: "sm", variant: "outline" })}>
-                <Edit className="mr-1 h-3.5 w-3.5" /> {o.store_count === 0 ? "Add stores" : "Edit"}
+                <Edit className="mr-1 h-3.5 w-3.5" /> {o.store_count === 0 ? "Add Line Items" : "Edit"}
               </Link>
             )}
           </div>

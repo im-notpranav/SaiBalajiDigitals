@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table,
   TableBody,
@@ -7,7 +8,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { StatusBadge } from "@/components/orders/StatusBadge";
+import { OrderStageBadge } from "@/components/orders/StatusBadge";
+import { STAGE_ORDER, orderStage } from "@/lib/order-stage";
 import { inr } from "@/lib/format";
 import type { Order } from "@sb-oms/shared-types";
 import { formatDistanceToNow } from "date-fns";
@@ -33,6 +35,13 @@ interface OrdersTableProps {
   emptyText?: string;
   /** What an allotted, not-yet-filled order says where its store would be. */
   waitingLabel?: string;
+  /** Tick boxes on each row, for acting on many orders at once. */
+  selection?: {
+    selected: ReadonlySet<number>;
+    onChange: (next: Set<number>) => void;
+    /** Rows that can't be ticked show no box. */
+    canSelect?: (o: Order) => boolean;
+  };
 }
 
 const created = (o: Order) =>
@@ -63,6 +72,7 @@ export function OrdersTable({
   onRetry,
   emptyText = "No orders match your filters.",
   waitingLabel = "Waiting for CSM",
+  selection,
 }: OrdersTableProps) {
   const { sorted, sortKey, sortDir, toggleSort } = useSortableTable(
     orders,
@@ -73,7 +83,7 @@ export function OrdersTable({
       if (key === "order_no") return o.order_no;
       if (key === "client_name") return o.client_name;
       if (key === "store") return storeLabel(o);
-      if (key === "status") return o.status;
+      if (key === "status") return STAGE_ORDER.indexOf(orderStage(o));
       if (key === "creator_name") return o.creator_name ?? "";
       if (key === "items") return o.items.length;
       return "";
@@ -86,7 +96,28 @@ export function OrdersTable({
     return { ...handlers, className: cn(className, linkClass) };
   };
 
-  const colSpan = (showCreator ? 1 : 0) + (showAmount ? 1 : 0) + 6 + (action ? 1 : 0);
+  const colSpan = (showCreator ? 1 : 0) + (showAmount ? 1 : 0) + 6 + (action ? 1 : 0) + (selection ? 1 : 0);
+
+  const canTick = (o: Order) => !!selection && (selection.canSelect?.(o) ?? true);
+  const tickable = selection ? sorted.filter(canTick) : [];
+  const tickedCount = tickable.filter((o) => selection!.selected.has(o.id)).length;
+  const allTicked = tickable.length > 0 && tickedCount === tickable.length;
+  const toggle = (id: number) => {
+    if (!selection) return;
+    const next = new Set(selection.selected);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    selection.onChange(next);
+  };
+  const tickBox = (o: Order) =>
+    canTick(o) ? (
+      <Checkbox
+        checked={selection!.selected.has(o.id)}
+        onCheckedChange={() => toggle(o.id)}
+        aria-label={`Select ${o.order_no}`}
+        className="h-5 w-5 md:h-4 md:w-4"
+      />
+    ) : null;
   const failed = !loading && !!error && orders.length === 0;
   const empty = !loading && !failed && sorted.length === 0;
 
@@ -106,11 +137,12 @@ export function OrdersTable({
             {sorted.map((o) => (
               <li key={o.id} {...rowProps(o, "surface-panel grid gap-2 p-4")}>
                 <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
+                  {selection && <div className="w-5 shrink-0 pt-0.5">{tickBox(o)}</div>}
+                  <div className="min-w-0 flex-1">
                     <div className="font-mono text-sm font-semibold text-primary">{o.order_no}</div>
                     <div className="truncate font-medium">{o.client_name}</div>
                   </div>
-                  <StatusBadge status={o.status} />
+                  <OrderStageBadge order={o} />
                 </div>
                 <div className="text-sm text-muted-foreground">
                   {isWaitingForCsm(o) ? (
@@ -146,6 +178,17 @@ export function OrdersTable({
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/40 hover:bg-muted/40">
+                {selection && (
+                  <TableHead className="w-10">
+                    {tickable.length > 0 && (
+                      <Checkbox
+                        checked={allTicked ? true : tickedCount > 0 ? "indeterminate" : false}
+                        onCheckedChange={() => selection.onChange(allTicked ? new Set() : new Set(tickable.map((o) => o.id)))}
+                        aria-label="Select every order shown"
+                      />
+                    )}
+                  </TableHead>
+                )}
                 <TableHead className="w-[130px]">
                   <SortableHead label="Order #" column="order_no" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                 </TableHead>
@@ -169,7 +212,7 @@ export function OrdersTable({
                   </TableHead>
                 )}
                 <TableHead>
-                  <SortableHead label="Status" column="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                  <SortableHead label="Stage" column="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                 </TableHead>
                 <TableHead>
                   <SortableHead label="Created" column="created_at" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
@@ -190,7 +233,12 @@ export function OrdersTable({
               )}
               {!loading &&
                 sorted.map((o) => (
-                  <TableRow key={o.id} {...rowProps(o, "group")}>
+                  <TableRow
+                    key={o.id}
+                    data-state={selection?.selected.has(o.id) ? "selected" : undefined}
+                    {...rowProps(o, "group")}
+                  >
+                    {selection && <TableCell>{tickBox(o)}</TableCell>}
                     <TableCell className="whitespace-nowrap font-mono text-xs font-semibold text-primary">{o.order_no}</TableCell>
                     <TableCell className="font-medium">{o.client_name}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
@@ -210,7 +258,7 @@ export function OrdersTable({
                     {showAmount && (
                       <TableCell className="whitespace-nowrap text-right font-semibold tabular-nums">{inr(o.total_amount ?? 0)}</TableCell>
                     )}
-                    <TableCell><StatusBadge status={o.status} /></TableCell>
+                    <TableCell><OrderStageBadge order={o} /></TableCell>
                     <TableCell className="whitespace-nowrap text-xs text-muted-foreground">{created(o)}</TableCell>
                     {action ? (
                       <TableCell className="text-right">{action(o)}</TableCell>

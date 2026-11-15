@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, ChevronsUpDown, Flag, ListChecks, Sparkles, Users, X } from "lucide-react";
+import { CheckCheck, CheckCircle2, ChevronsUpDown, Flag, ListChecks, Sparkles, Undo2, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import {
   assignOrderItem,
@@ -19,8 +19,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { StatusBadge } from "@/components/orders/StatusBadge";
+import { OrderStageBadge } from "@/components/orders/StatusBadge";
 import { storeLabel, storeSubLabel } from "@/lib/stores";
+import { ProductionCompleteDialog, type CompleteRequest } from "./ProductionCompleteDialog";
 import type { Order, OrderItem } from "@sb-oms/shared-types";
 
 type Staff = { id: number; name: string };
@@ -36,6 +37,14 @@ const assignedCount = (i: OrderItem) => i.assignments?.length ?? 0;
 const NONE: ReadonlySet<number> = new Set();
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
+/** Which items an order shows: all, only those with a team, or only those without. */
+type ItemView = "all" | "assigned" | "unassigned";
+const ITEM_VIEWS: { key: ItemView; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "assigned", label: "Assigned" },
+  { key: "unassigned", label: "Unassigned" },
+];
+
 /**
  * One order on the Assign Work page. Teams can be set per item, or for many items at
  * once: tick items (shift-click ticks a range), pick teams in the bar, then Add or Replace.
@@ -46,24 +55,44 @@ export function AssignOrderSection({
   staff,
   active,
   onActivate,
+  picked,
+  onPick,
 }: {
   order: Order;
   staff: Staff[];
   /** Only one order holds a selection at a time, so only one action bar shows. */
   active: boolean;
   onActivate: () => void;
+  /** Ticked for "mark these orders complete" on the Assign Work page. */
+  picked?: boolean;
+  onPick?: (on: boolean) => void;
 }) {
   const queryClient = useQueryClient();
   const items = useMemo(() => order.items ?? [], [order.items]);
   const closed = isClosed(order);
+  const [view, setView] = useState<ItemView>("all");
+  const visibleItems = useMemo(
+    () =>
+      view === "assigned"
+        ? items.filter((i) => assignedCount(i) > 0)
+        : view === "unassigned"
+          ? items.filter((i) => assignedCount(i) === 0)
+          : items,
+    [items, view],
+  );
   /** Finished items stay out of bulk actions, so a bulk save never reopens work. */
+  const openItems = useMemo(() => (closed ? [] : items.filter((i) => !i.production_completed)), [closed, items]);
+  /** What ticking can reach: open items in the current view. */
   const selectable = useMemo(
-    () => (closed ? [] : items.filter((i) => !i.production_completed)),
-    [closed, items],
+    () => (closed ? [] : visibleItems.filter((i) => !i.production_completed)),
+    [closed, visibleItems],
   );
   const assigned = items.filter((i) => assignedCount(i) > 0);
   const done = assigned.filter((i) => i.production_completed).length;
-  const openUnassigned = selectable.filter((i) => assignedCount(i) === 0);
+  const openUnassigned = openItems.filter((i) => assignedCount(i) === 0);
+  /** Production is only marked while the order is Active, and flagged items wait for the admin. */
+  const canComplete = order.status === "Active" && openItems.some((i) => !i.is_flagged);
+  const [completing, setCompleting] = useState<{ request: CompleteRequest; what: string } | null>(null);
 
   const [ticked, setSelected] = useState<Set<number>>(new Set());
   const selected = active ? ticked : NONE;
@@ -166,7 +195,14 @@ export function AssignOrderSection({
     );
 
   const statusFor = (item: OrderItem) =>
-    item.is_flagged ? (
+    item.returned_reason && assignedCount(item) === 0 && !item.production_completed ? (
+      <span
+        className="inline-flex items-center gap-1 whitespace-nowrap rounded-md bg-orange-500/10 px-2 py-0.5 text-xs font-medium text-orange-700 dark:text-orange-300"
+        title={`Sent back${item.returner ? ` by ${item.returner.name}` : ""}: ${item.returned_reason}`}
+      >
+        <Undo2 className="h-3 w-3" aria-hidden /> Sent back
+      </span>
+    ) : item.is_flagged ? (
       <span className="inline-flex items-center gap-1 rounded-md bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive">
         <Flag className="h-3 w-3" /> Flagged
       </span>
@@ -228,6 +264,11 @@ export function AssignOrderSection({
           </div>
         </PopoverContent>
       </Popover>
+      {item.returned_reason && !item.production_completed && (
+        <p className="mt-1 text-[11px] leading-snug text-orange-700 dark:text-orange-300">
+          Sent back{item.returner ? ` by ${item.returner.name}` : ""}: {item.returned_reason}
+        </p>
+      )}
       {assignedCount(item) > 0 && (
         <div className="mt-1 flex flex-wrap gap-1">
           {item.assignments!.map((a) => (
@@ -249,8 +290,16 @@ export function AssignOrderSection({
       <div className="flex flex-wrap items-center justify-between gap-3 border-b p-4 sm:p-5">
         <div>
           <div className="flex items-center gap-2">
+            {onPick && canComplete && (
+              <Checkbox
+                checked={!!picked}
+                onCheckedChange={(v) => onPick(v === true)}
+                aria-label={`Pick ${order.order_no} to mark complete`}
+                className="h-5 w-5 md:h-4 md:w-4"
+              />
+            )}
             <h3 className="font-semibold">{order.order_no}</h3>
-            <StatusBadge status={order.status} />
+            <OrderStageBadge order={order} />
           </div>
           <p className="mt-0.5 text-sm text-muted-foreground">
             {order.client_name} · {storeLabel(order)}
@@ -258,6 +307,39 @@ export function AssignOrderSection({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {items.length > 0 && (
+            <div className="flex rounded-md border p-0.5" role="group" aria-label={`Show items of ${order.order_no}`}>
+              {ITEM_VIEWS.map((v) => (
+                <button
+                  key={v.key}
+                  type="button"
+                  aria-pressed={view === v.key}
+                  onClick={() => {
+                    setView(v.key);
+                    setSelected(new Set());
+                  }}
+                  className={
+                    view === v.key
+                      ? "h-7 rounded bg-primary/10 px-2.5 text-xs font-medium text-primary"
+                      : "h-7 rounded px-2.5 text-xs text-muted-foreground hover:bg-muted/60"
+                  }
+                >
+                  {v.label}
+                </button>
+              ))}
+            </div>
+          )}
+          {canComplete && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs"
+              disabled={busy}
+              onClick={() => setCompleting({ request: [{ order_id: order.id }], what: order.order_no })}
+            >
+              <CheckCheck className="mr-1 h-3.5 w-3.5" aria-hidden /> Mark order complete
+            </Button>
+          )}
           {selectable.length > 0 && (
             <SelectMenu
               all={selectable}
@@ -287,8 +369,13 @@ export function AssignOrderSection({
       </div>
 
       {/* Phones: one row per item instead of a seven-column table per order. */}
+      {visibleItems.length === 0 && (
+        <p className="p-6 text-center text-sm text-muted-foreground">
+          {view === "assigned" ? "No item on this order has a team yet." : "Every item on this order has a team."}
+        </p>
+      )}
       <ul className="divide-y md:hidden">
-        {items.map((item) => (
+        {visibleItems.map((item) => (
           <li key={item.id} className="grid grid-cols-[auto_1fr] gap-x-3 p-4 text-sm">
             <div className="w-5 pt-0.5">{rowCheckbox(item)}</div>
             <div className="grid min-w-0 gap-2">
@@ -308,7 +395,7 @@ export function AssignOrderSection({
           </li>
         ))}
       </ul>
-      <div className="hidden md:block">
+      <div className={visibleItems.length === 0 ? "hidden" : "hidden md:block"}>
         <Table>
           <TableHeader>
             <TableRow>
@@ -333,7 +420,7 @@ export function AssignOrderSection({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {items.map((item) => (
+            {visibleItems.map((item) => (
               <TableRow key={item.id} data-state={selected.has(item.id!) ? "selected" : undefined}>
                 <TableCell>{rowCheckbox(item)}</TableCell>
                 <TableCell className="text-center text-muted-foreground">{item.s_no}</TableCell>
@@ -394,6 +481,22 @@ export function AssignOrderSection({
             })}
           </div>
           <div className="ml-auto flex items-center gap-1.5">
+            {order.status === "Active" && (
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={busy}
+                onClick={() =>
+                  setCompleting({
+                    request: [{ order_id: order.id, item_ids: Array.from(selected) }],
+                    what: `${plural(selected.size, "item")} on ${order.order_no}`,
+                  })
+                }
+                title="Mark the selected items as produced"
+              >
+                <CheckCheck className="mr-1 h-3.5 w-3.5" aria-hidden /> Mark complete
+              </Button>
+            )}
             <Button
               size="sm"
               disabled={busy || teams.size === 0}
@@ -432,6 +535,15 @@ export function AssignOrderSection({
       )}
       {/* Room to scroll the last rows out from under the bar. */}
       {selected.size > 0 && <div className="h-28 md:h-20" aria-hidden />}
+      <ProductionCompleteDialog
+        request={completing?.request ?? null}
+        what={completing?.what ?? ""}
+        onClose={() => setCompleting(null)}
+        onDone={() => {
+          setSelected(new Set());
+          setTeams(new Set());
+        }}
+      />
     </section>
   );
 }

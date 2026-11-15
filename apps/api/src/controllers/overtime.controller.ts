@@ -280,6 +280,7 @@ export const decideOvertime = async (req: Request, res: Response) => {
           `${fmtDay(dayKey(o.work_date))}, ${o.start_time}–${o.end_time} (${formatMinutes(o.minutes)})${status === "REJECTED" ? `. Reason: ${reason}` : ""}`,
           status === "APPROVED" ? "success" : "warning",
           null,
+          "overtime",
         ).catch(() => {}),
       ),
     );

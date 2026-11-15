@@ -95,9 +95,11 @@ function AdminOrders() {
                 <Plus className="mr-2 h-4 w-4" /> Allot Order
               </Button>
             )}
-            <Button variant="outline" className="rounded-xl shadow-soft" onClick={() => exportOrders({ section })}>
-              <Download className="mr-2 h-4 w-4" /> Export {section === "active" ? "Active" : "Completed"}
-            </Button>
+            {section !== "all" && (
+              <Button variant="outline" className="rounded-xl shadow-soft" onClick={() => exportOrders({ section })}>
+                <Download className="mr-2 h-4 w-4" /> Export {section === "active" ? "Active" : "Completed"}
+              </Button>
+            )}
             <Button variant="secondary" className="rounded-xl shadow-soft" onClick={() => exportOrders({})}>
               <Download className="mr-2 h-4 w-4" /> Export All
             </Button>

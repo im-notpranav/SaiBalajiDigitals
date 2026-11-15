@@ -1,7 +1,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { Loader2 } from "lucide-react";
-import { FIELD_ROLES, roleHome, useAuth, type UserRole } from "@/lib/auth-store";
+import { useAuth } from "@/lib/auth-store";
+import { destinationFor } from "@/lib/use-order-nav";
 
 /**
  * Landing page for the "Open in app" button on WhatsApp messages: /go/pr/28, /go/job/12/30
@@ -13,40 +14,6 @@ export const Route = createFileRoute("/go/$")({
   head: () => ({ meta: [{ title: "Opening… — SB OMS" }] }),
   component: GoLink,
 });
-
-/** The order page each role can open, if any. */
-function orderPage(role: UserRole, orderId: string): string | null {
-  if (role === "CSM") return `/employee/orders/${orderId}`;
-  if (role === "ADMIN" || role === "OPERATION_MANAGER") return `/admin/orders/${orderId}`;
-  if (role === "PRODUCTION") return `/production/orders/${orderId}`;
-  return null;
-}
-
-/** Where a link leads for someone in this role; their home page when it means nothing to them. */
-export function destinationFor(role: UserRole, link: string): string {
-  const [kind, a, b] = link.split("/");
-  const id = (s?: string) => (s && /^\d+$/.test(s) ? s : null);
-  const isField = FIELD_ROLES.includes(role);
-
-  if (kind === "pr" && id(a)) {
-    const open = `?open=${a}`;
-    if (role === "CSM") return `/employee/payments${open}`;
-    if (isField) return `/field/payments${open}`;
-    if (role === "ADMIN") return `/admin/payments${open}`;
-    if (role === "COST_CONTROL_MANAGER") return `/cost-control/dashboard${open}`;
-  }
-  if (kind === "job" && id(a)) {
-    if (isField) return "/field/dashboard";
-    if (role === "ADMIN" || role === "OPERATION_MANAGER") return "/admin/jobs";
-    const page = id(b) && orderPage(role, b!);
-    if (page) return page;
-  }
-  if (kind === "order" && id(a)) {
-    const page = orderPage(role, a!);
-    if (page) return page;
-  }
-  return roleHome[role];
-}
 
 function GoLink() {
   const { _splat } = Route.useParams();

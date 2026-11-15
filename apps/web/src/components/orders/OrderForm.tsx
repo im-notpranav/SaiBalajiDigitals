@@ -253,7 +253,12 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
 
   /** Append, merging into a block for the same store and location — submit rejects duplicates. */
   const applyAppend = () => {
-    const parsedStores = pendingImport?.stores;
+    appendStores(pendingImport?.stores);
+    setPendingImport(null);
+  };
+
+  /** Adds a sheet's rows after what is already on the form; nothing typed or saved is touched. */
+  const appendStores = (parsedStores: SheetParseResult["stores"] | undefined) => {
     if (parsedStores) {
       setStores((ss) => {
         const next = [...ss];
@@ -272,7 +277,6 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
         return next;
       });
     }
-    setPendingImport(null);
   };
 
   const patchStore = (storeId: string, patch: Partial<StoreBlock>) =>
@@ -345,7 +349,7 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
 
         // This form is one order, and the template makes one order per client.
         if (result.clients.length > 1) {
-          alert(`This file has ${result.clients.length} clients, which makes ${result.clients.length} orders. Use Upload Orders for it.`);
+          alert(`This file has ${result.clients.length} clients, which makes ${result.clients.length} orders. Use Bulk Upload for it.`);
           return;
         }
         if (result.clients.length === 1 && !clientName.trim()) setClientName(result.clients[0]!);
@@ -363,6 +367,14 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
         // otherwise replace whatever is already typed in.
         if (isFormUntouched()) {
           setStores(result.stores.map(toStoreBlock));
+          return;
+        }
+        // Editing a saved order: the file's rows always go after the current line items.
+        if (defaultValues) {
+          appendStores(result.stores);
+          toast.success(`Added ${totalItems} line item${totalItems === 1 ? "" : "s"} from the file`, {
+            description: "Check them, then Save Changes.",
+          });
           return;
         }
         setPendingImport(result);
@@ -446,8 +458,9 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
         >
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h2 className={sectionTitle}>Order</h2>
-            {/* Order-level import: one sheet fills every store block at once. */}
-            {!defaultValues && (
+            {/* Bulk Upload: one sheet fills every store block at once. On a saved order its rows
+                are added after the current line items. */}
+            {!lineItemsLocked && (
               <div className="flex items-center gap-1">
                 <Button
                   type="button"
@@ -465,9 +478,9 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
                   variant="outline"
                   onClick={() => fileInputRef.current?.click()}
                   className="h-8 text-xs"
-                  title="Fill every store from an order sheet"
+                  title={defaultValues ? "Add line items from an order sheet" : "Fill every store from an order sheet"}
                 >
-                  <Upload className="mr-1 h-3.5 w-3.5" /> Import sheet
+                  <Upload className="mr-1 h-3.5 w-3.5" /> Bulk Upload
                 </Button>
               </div>
             )}

@@ -265,6 +265,30 @@ export const completeItemSchema = z.object({
   production_completed: z.boolean(),
 });
 
+/** Production Manager: mark whole orders, or chosen items on them, as produced. */
+export const completeProductionSchema = z.object({
+  orders: z
+    .array(
+      z.object({
+        order_id: z.number().int().positive(),
+        /** Left out: every open item on the order. */
+        item_ids: z.array(z.number().int().positive()).min(1).max(1000).optional(),
+      })
+    )
+    .min(1)
+    .max(200),
+});
+
+/** A production team member sends back an item given to them by mistake. */
+export const returnItemSchema = z.object({
+  reason: z.string().trim().min(3, "Say why in a few words.").max(500),
+});
+
+/** Accounts reminds CSMs to send invoice details for these orders. */
+export const invoiceReminderSchema = z.object({
+  order_ids: z.array(z.number().int().positive()).min(1).max(200),
+});
+
 export const markInstalledSchema = z.object({
   installed: z.boolean().optional().default(true),
 });

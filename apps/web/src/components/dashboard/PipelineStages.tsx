@@ -12,6 +12,7 @@ import {
   Receipt,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { STAGE_STYLES, type StageKey } from "@/lib/order-stage";
 import { cn } from "@/lib/utils";
 import type { CsmCompletedOrder, CsmDashboardData, CsmStageOrder } from "@/api/dashboard";
 import {
@@ -29,7 +30,7 @@ import {
  * A stage opens its orders underneath, and each order links to its own page.
  */
 
-export type StageKey = "unassigned" | "production" | "installation" | "billing" | "payment" | "completed";
+export type { StageKey };
 export type ViewMode = "amount" | "qty";
 
 /** Where this person opens an order, and where their full order list lives. */
@@ -41,22 +42,20 @@ export interface OrderRoutes {
   to: string;
 }
 
-const STAGES: {
-  key: StageKey;
-  label: string;
-  means: string;
-  icon: typeof Factory;
-  accent: string;
-  bg: string;
-  border: string;
-}[] = [
-  { key: "unassigned", label: "Not assigned", means: "No production work given out yet", icon: CircleDashed, accent: "text-slate-500", bg: "bg-slate-500/10", border: "border-slate-500/20" },
-  { key: "production", label: "Production", means: "Being made", icon: Factory, accent: "text-blue-500", bg: "bg-blue-500/10", border: "border-blue-500/20" },
-  { key: "installation", label: "Installation", means: "Made, waiting to be installed", icon: PackageCheck, accent: "text-amber-500", bg: "bg-amber-500/10", border: "border-amber-500/20" },
-  { key: "billing", label: "Billing", means: "Installed, waiting for an invoice", icon: Receipt, accent: "text-purple-500", bg: "bg-purple-500/10", border: "border-purple-500/20" },
-  { key: "payment", label: "Payment", means: "Invoiced, waiting for the client to pay", icon: CreditCard, accent: "text-orange-500", bg: "bg-orange-500/10", border: "border-orange-500/20" },
-  { key: "completed", label: "Completed", means: "Paid or closed", icon: CheckCircle2, accent: "text-emerald-500", bg: "bg-emerald-500/10", border: "border-emerald-500/20" },
+const STAGE_INFO: { key: StageKey; means: string; icon: typeof Factory }[] = [
+  { key: "unassigned", means: "No production work given out yet", icon: CircleDashed },
+  { key: "production", means: "Being made", icon: Factory },
+  { key: "installation", means: "Made, waiting to be installed", icon: PackageCheck },
+  { key: "billing", means: "Installed, waiting for an invoice", icon: Receipt },
+  { key: "payment", means: "Invoiced, waiting for the client to pay", icon: CreditCard },
+  { key: "completed", means: "Paid or closed", icon: CheckCircle2 },
 ];
+
+/** Each stage with its colours from the one shared palette (lib/order-stage). */
+const STAGES = STAGE_INFO.map((s) => {
+  const style = STAGE_STYLES[s.key];
+  return { ...s, label: style.label, accent: style.text, bg: style.bg, border: style.border };
+});
 
 const panelId = (key: StageKey) => `stage-${key}-orders`;
 
@@ -289,7 +288,7 @@ function CompletedOrders({
   const averages = [
     { label: "Production", val: avg(sorted.map((o) => o.production_days)) },
     { label: "Installation", val: avg(sorted.map((o) => o.installation_days)) },
-    { label: "Billing", val: avg(sorted.map((o) => o.billing_days)) },
+    { label: "Invoice", val: avg(sorted.map((o) => o.billing_days)) },
     { label: "Payment", val: avg(sorted.map((o) => o.payment_days)) },
     { label: "Total", val: avg(sorted.map((o) => o.total_days)) },
   ];
@@ -327,7 +326,7 @@ function CompletedOrders({
               </th>
               <th scope="col" className="px-4 py-2.5 text-right font-medium text-muted-foreground">Production</th>
               <th scope="col" className="px-4 py-2.5 text-right font-medium text-muted-foreground">Installation</th>
-              <th scope="col" className="px-4 py-2.5 text-right font-medium text-muted-foreground">Billing</th>
+              <th scope="col" className="px-4 py-2.5 text-right font-medium text-muted-foreground">Invoice</th>
               <th scope="col" className="px-4 py-2.5 text-right font-medium text-muted-foreground">Payment</th>
               <th scope="col" className="px-4 py-2.5 text-right font-medium text-muted-foreground">Total</th>
               <th scope="col" className="px-4 py-2.5"><span className="sr-only">Open</span></th>

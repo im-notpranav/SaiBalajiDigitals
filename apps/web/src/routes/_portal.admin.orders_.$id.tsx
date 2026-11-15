@@ -1,11 +1,11 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { OrderDetail } from "@/components/orders/OrderDetail";
 import { OrderLinkedWork } from "@/components/orders/OrderLinkedWork";
 import { fetchOrder, forceCloseOrder, closeOrder } from "@/api/orders";
-import { Loader2, AlertOctagon, Lock } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Loader2, AlertOctagon, Lock, Pencil } from "lucide-react";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { useState } from "react";
 import { REMARK_TYPES } from "@/lib/constants";
 import type { RemarkType } from "@sb-oms/shared-types";
@@ -143,6 +143,13 @@ function OrderDetailAdmin() {
         title={`Order ${data.order.order_no}`}
         description="Full order details."
         crumbs={[{ label: "Automated System" }, { label: "Orders", to: "/admin/orders" }, { label: "Details" }]}
+        actions={
+          !isReadOnlyRole(user?.role) && data.order.status !== "Completed" ? (
+            <Link to="/admin/edit-order/$id" params={{ id: String(data.order.id) }} className={buttonVariants({ variant: "outline" })}>
+              <Pencil className="mr-2 h-4 w-4" aria-hidden /> Edit order
+            </Link>
+          ) : undefined
+        }
       />
       <OrderDetail
         order={data.order}

@@ -9,7 +9,7 @@ import { addDays, dayKey, daysBetween, findLeaveClashes, isLeaveOverlapViolation
 
 /** Admin and the Operation Manager both decide leave, so both hear about requests (GAP-A07). */
 const notifyLeaveDeciders = (title: string, body: string) =>
-  Promise.all((["ADMIN", "OPERATION_MANAGER"] as const).map((role) => notifyRole(role, title, body, "info", null).catch(() => {})));
+  Promise.all((["ADMIN", "OPERATION_MANAGER"] as const).map((role) => notifyRole(role, title, body, "info", null, "leave").catch(() => {})));
 
 /**
  * Leave register for field staff (the old "Leave Details" sheet). Field staff request their
@@ -219,7 +219,7 @@ export const createLeave = async (req: Request, res: Response) => {
       });
     });
     const s = serializeLeave(leave);
-    await notifyUser(leave.user_id, "Leave recorded", `${fmtRange(s.from_date, s.to_date)}${s.reason ? ` · ${s.reason}` : ""}`, "info", null).catch(() => {});
+    await notifyUser(leave.user_id, "Leave recorded", `${fmtRange(s.from_date, s.to_date)}${s.reason ? ` · ${s.reason}` : ""}`, "info", null, "leave").catch(() => {});
     return res.status(201).json(s);
   } catch (err) {
     return sendError(res, err);
@@ -244,7 +244,7 @@ export const updateLeave = async (req: Request, res: Response) => {
       });
     });
     const s = serializeLeave(leave);
-    await notifyUser(leave.user_id, "Leave changed", `Now ${fmtRange(s.from_date, s.to_date)}${s.reason ? ` · ${s.reason}` : ""}`, "info", null).catch(() => {});
+    await notifyUser(leave.user_id, "Leave changed", `Now ${fmtRange(s.from_date, s.to_date)}${s.reason ? ` · ${s.reason}` : ""}`, "info", null, "leave").catch(() => {});
     return res.status(200).json(s);
   } catch (err) {
     return sendError(res, err);
@@ -277,8 +277,8 @@ export const decideLeave = async (req: Request, res: Response) => {
     const s = serializeLeave(leave);
     const range = fmtRange(s.from_date, s.to_date);
     await (status === "APPROVED"
-      ? notifyUser(leave.user_id, "Leave approved", `${range} is approved.`, "success", null)
-      : notifyUser(leave.user_id, "Leave not approved", `${range}. Reason: ${reason}`, "warning", null)
+      ? notifyUser(leave.user_id, "Leave approved", `${range} is approved.`, "success", null, "leave")
+      : notifyUser(leave.user_id, "Leave not approved", `${range}. Reason: ${reason}`, "warning", null, "leave")
     ).catch(() => {});
     return res.status(200).json(s);
   } catch (err) {
@@ -304,7 +304,7 @@ export const cancelLeave = async (req: Request, res: Response) => {
       });
     });
     const s = serializeLeave(leave);
-    await notifyUser(leave.user_id, "Leave cancelled", `${fmtRange(s.from_date, s.to_date)} is no longer leave. ${parsed.data.reason}`, "warning", null).catch(() => {});
+    await notifyUser(leave.user_id, "Leave cancelled", `${fmtRange(s.from_date, s.to_date)} is no longer leave. ${parsed.data.reason}`, "warning", null, "leave").catch(() => {});
     return res.status(200).json(s);
   } catch (err) {
     return sendError(res, err);

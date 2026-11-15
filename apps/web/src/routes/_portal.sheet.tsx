@@ -6,6 +6,6 @@ import { SheetView } from "@/components/allocation/SheetView";
  * Accountant and the other managers. Not under a role prefix, so any signed-in person may open it.
  */
 export const Route = createFileRoute("/_portal/sheet")({
-  head: () => ({ meta: [{ title: "Sheet View — SB OMS" }] }),
+  head: () => ({ meta: [{ title: "GS-WAS — SB OMS" }] }),
   component: SheetView,
 });

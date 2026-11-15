@@ -46,11 +46,14 @@ import { cn } from "@/lib/utils";
 import { BrandLockup } from "@/components/brand/Logo";
 import { fetchMyNotifications } from "@/api/notifications";
 import { AllocationSwitch } from "./AllocationSwitch";
+import { WasMark, type WasKind } from "@/components/brand/WasMark";
 
 interface NavItem {
   to: string;
   label: string;
   icon: LucideIcon;
+  /** Shown as the coloured OMS-WAS / GS-WAS mark instead of plain text. */
+  was?: WasKind;
   /** The module the item sits under (admin portal, and the CSM's Work Allocation); items
    *  without one are listed plainly. */
   group?: NavGroup;
@@ -81,7 +84,7 @@ const WORK_ALLOCATION: NavItem[] = (
     { to: "/admin/grid", label: "Weekly Grid", icon: CalendarRange },
     { to: "/admin/board", label: "Daily Board", icon: LayoutGrid },
     { to: "/admin/zones", label: "Zone Board", icon: MapIcon },
-    { to: "/admin/sheet", label: "Sheet View", icon: FileSpreadsheet },
+    { to: "/admin/sheet", label: "GS-WAS", icon: FileSpreadsheet, was: "GS" },
     { to: "/admin/jobs", label: "Field Jobs", icon: Truck },
     { to: "/admin/leave", label: "Leave", icon: CalendarOff },
     { to: "/admin/overtime", label: "Overtime", icon: Clock },
@@ -93,7 +96,7 @@ const WORK_ALLOCATION: NavItem[] = (
 const FIELD_NAV: NavItem[] = [
   { to: "/field/dashboard", label: "My Work", icon: ClipboardList },
   { to: "/field/grid", label: "Weekly Grid", icon: CalendarRange },
-  { to: "/sheet", label: "Sheet View", icon: FileSpreadsheet },
+  { to: "/sheet", label: "GS-WAS", icon: FileSpreadsheet, was: "GS" },
   { to: "/field/leave", label: "Leave & Overtime", icon: CalendarOff },
   { to: "/field/payments", label: "Payments", icon: Wallet },
   { to: "/field/notifications", label: "Notifications", icon: Bell },
@@ -102,7 +105,7 @@ const FIELD_NAV: NavItem[] = [
 
 /**
  * The phone tab bar's five items, with shorter labels to share one row. The Weekly Grid is not
- * one of them: it is in the menu, and the Live Grid shortcut at its top.
+ * one of them: it is in the menu, and the OMS-WAS shortcut at its top.
  */
 const FIELD_TAB_LABELS: Record<string, string> = {
   "/field/dashboard": "Work",
@@ -121,11 +124,11 @@ const NAV: Record<UserRole, NavItem[]> = {
   CSM: [
     { to: "/employee/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { to: "/employee/new-order", label: "New Order", icon: PlusCircle },
-    { to: "/employee/upload-orders", label: "Upload Orders", icon: Upload },
+    { to: "/employee/upload-orders", label: "Bulk Upload", icon: Upload },
     { to: "/employee/orders", label: "My Orders", icon: ClipboardList },
     { to: "/employee/grid", label: "Weekly Grid", icon: CalendarRange, group: "Work Allocation" },
     { to: "/employee/board", label: "Daily Board", icon: LayoutGrid, group: "Work Allocation" },
-    { to: "/employee/sheet", label: "Sheet View", icon: FileSpreadsheet, group: "Work Allocation" },
+    { to: "/employee/sheet", label: "GS-WAS", icon: FileSpreadsheet, was: "GS", group: "Work Allocation" },
     { to: "/employee/jobs", label: "Field Jobs", icon: Truck, group: "Work Allocation" },
     { to: "/employee/payments", label: "Payment Requests", icon: Wallet },
     { to: "/employee/notifications", label: "Notifications", icon: Bell },
@@ -134,7 +137,7 @@ const NAV: Record<UserRole, NavItem[]> = {
   PRODUCTION: [
     { to: "/production/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { to: "/production/queue", label: "Queue", icon: Workflow },
-    { to: "/sheet", label: "Sheet View", icon: FileSpreadsheet },
+    { to: "/sheet", label: "GS-WAS", icon: FileSpreadsheet, was: "GS" },
     { to: "/production/notifications", label: "Notifications", icon: Bell },
     { to: "/profile", label: "Profile", icon: UserCircle },
   ],
@@ -143,7 +146,7 @@ const NAV: Record<UserRole, NavItem[]> = {
     { to: "/accountant/billing", label: "Billing Queue", icon: Receipt },
     { to: "/accountant/orders", label: "All Orders", icon: Boxes },
     { to: "/accountant/reports", label: "Financial Reports", icon: FileBarChart2 },
-    { to: "/sheet", label: "Sheet View", icon: FileSpreadsheet },
+    { to: "/sheet", label: "GS-WAS", icon: FileSpreadsheet, was: "GS" },
     { to: "/accountant/notifications", label: "Notifications", icon: Bell },
     { to: "/profile", label: "Profile", icon: UserCircle },
   ],
@@ -151,14 +154,14 @@ const NAV: Record<UserRole, NavItem[]> = {
     { to: "/prod-manager/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { to: "/prod-manager/assign", label: "Assign Work", icon: Workflow },
     { to: "/prod-manager/reports", label: "Reports", icon: FileBarChart2 },
-    { to: "/sheet", label: "Sheet View", icon: FileSpreadsheet },
+    { to: "/sheet", label: "GS-WAS", icon: FileSpreadsheet, was: "GS" },
     { to: "/prod-manager/notifications", label: "Notifications", icon: Bell },
     { to: "/profile", label: "Profile", icon: UserCircle },
   ],
   COST_CONTROL_MANAGER: [
     { to: "/cost-control/dashboard", label: "Dashboard", icon: Wallet },
     { to: "/cost-control/reports", label: "Reports", icon: FileBarChart2 },
-    { to: "/sheet", label: "Sheet View", icon: FileSpreadsheet },
+    { to: "/sheet", label: "GS-WAS", icon: FileSpreadsheet, was: "GS" },
     { to: "/cost-control/notifications", label: "Notifications", icon: Bell },
     { to: "/profile", label: "Profile", icon: UserCircle },
   ],
@@ -313,7 +316,7 @@ function SidebarBody({
                   />
                 )}
                 <Icon className="h-[18px] w-[18px] shrink-0" />
-                <span className="truncate">{item.label}</span>
+                {item.was ? <WasMark kind={item.was} className="truncate" /> : <span className="truncate">{item.label}</span>}
               </Link>
             </motion.div>
           );

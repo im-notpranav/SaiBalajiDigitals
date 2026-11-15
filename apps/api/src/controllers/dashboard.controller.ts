@@ -475,6 +475,7 @@ export const getProdManagerDashboard = async (req: Request, res: Response) => {
 
         pendingItems.push({
           order_id: order.id,
+          item_id: item.id,
           order_no: order.order_no,
           client_name: order.client_name,
           item_s_no: item.s_no,

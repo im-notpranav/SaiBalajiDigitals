@@ -26,13 +26,14 @@ import { checkOrderNo, currentYearCode } from "@/lib/order-number";
 import { ClientCombobox } from "./AutocompleteComboboxes";
 
 /**
- * Allot Order: an admin opens an order for a CSM, who then adds its stores and items. The number
- * field starts on the next in the series and can be changed for this one order, within the
- * order-number rule (ORD + this year's code + 0001–9999).
+ * Allot Order: an admin opens an order for a CSM, who then adds its line items. The number field
+ * shows ORD and this financial year's code as a fixed start (ORD26 now, ORD27 from 1 Apr 2027),
+ * and takes only the last four digits: the next in the series is filled in and can be changed
+ * for this one order. Fewer than four digits are padded: 21 is ORD260021.
  */
 export function StartOrderDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const qc = useQueryClient();
-  const [orderNo, setOrderNo] = useState("");
+  const [digits, setDigits] = useState("");
   const [client, setClient] = useState("");
   const [csmId, setCsmId] = useState<number | null>(null);
 
@@ -61,15 +62,16 @@ export function StartOrderDialog({ open, onClose }: { open: boolean; onClose: ()
     if (!open) return;
     setClient("");
     setCsmId(null);
-    setOrderNo("");
+    setDigits("");
   }, [open]);
   useEffect(() => {
-    if (open && suggested) setOrderNo((n) => n || suggested);
+    if (open && suggested) setDigits((d) => d || suggested.slice(-4));
   }, [open, suggested]);
 
-  const check = checkOrderNo(orderNo, yy);
-  const typed = orderNo.trim() !== "";
-  const number = check.ok ? check.order_no : orderNo.trim().toUpperCase();
+  const prefix = `ORD${yy}`;
+  const typed = digits !== "";
+  const check = checkOrderNo(`${prefix}${digits.padStart(4, "0")}`, yy);
+  const number = check.ok ? check.order_no : `${prefix}${digits}`;
 
   const save = useMutation({
     mutationFn: () =>
@@ -82,7 +84,7 @@ export function StartOrderDialog({ open, onClose }: { open: boolean; onClose: ()
     onSuccess: (order) => {
       const csmName = csms.find((c) => c.id === csmId)?.name ?? "the CSM";
       toast.success(`Order ${order.order_no} allotted to ${csmName}`, {
-        description: "They have been told to add its stores and items.",
+        description: "They have been told to add its line items.",
       });
       qc.invalidateQueries({ queryKey: ["orders"] });
       qc.invalidateQueries({ queryKey: ["order-sequence"] });
@@ -100,23 +102,36 @@ export function StartOrderDialog({ open, onClose }: { open: boolean; onClose: ()
         <DialogHeader>
           <DialogTitle>Allot Order</DialogTitle>
           <DialogDescription>
-            Give it a number, a client and a CSM. The CSM adds the stores and items.
+            Give it a number, a client and a CSM. The CSM adds the line items.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4">
           <div className="grid gap-2">
             <Label htmlFor="start-order-no">Order number</Label>
-            <Input
-              id="start-order-no"
-              value={orderNo}
-              onChange={(e) => setOrderNo(e.target.value)}
-              placeholder={`ORD${yy}0123`}
-              maxLength={12}
-              autoCapitalize="characters"
-              className="font-mono"
-              aria-invalid={typed && !check.ok}
-              aria-describedby="start-order-no-hint"
-            />
+            <div className="relative">
+              <span
+                className="pointer-events-none absolute inset-y-0 left-3 flex items-center font-mono text-base text-primary md:text-sm"
+                aria-hidden
+              >
+                {prefix}
+              </span>
+              <Input
+                id="start-order-no"
+                value={digits}
+                // Digits only, four at most: anything else is not taken.
+                onChange={(e) => setDigits(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                placeholder="0123"
+                maxLength={4}
+                inputMode="numeric"
+                pattern="[0-9]*"
+                autoComplete="off"
+                className="font-mono"
+                style={{ paddingLeft: `calc(0.75rem + ${prefix.length}ch)` }}
+                aria-label={`Order number, the four digits after ${prefix}`}
+                aria-invalid={typed && !check.ok}
+                aria-describedby="start-order-no-hint"
+              />
+            </div>
             {/* One line of help or error, so the dialog doesn't jump as the number is typed. */}
             {typed && !check.ok ? (
               <p id="start-order-no-hint" className="text-xs text-destructive">
@@ -128,6 +143,7 @@ export function StartOrderDialog({ open, onClose }: { open: boolean; onClose: ()
               </p>
             ) : (
               <p id="start-order-no-hint" className="text-xs text-muted-foreground">
+                {typed && digits.length < 4 ? `Will be ${number}. ` : ""}
                 The next in the series is filled in. Change the series itself under Settings.
               </p>
             )}

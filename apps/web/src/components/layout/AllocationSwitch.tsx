@@ -5,10 +5,11 @@ import type { LucideIcon } from "lucide-react";
 import { CalendarRange, FileSpreadsheet } from "lucide-react";
 import { type UserRole, useAuth } from "@/lib/auth-store";
 import { cn } from "@/lib/utils";
+import { WasMark, type WasKind } from "@/components/brand/WasMark";
 
 /**
  * The switch at the top of the sidebar between the two ways of looking at work allocation:
- * the Live Grid (the app's own grid) and the Sheet View (the team's Google Sheet in the app).
+ * OMS-WAS (the app's own live grid) and GS-WAS (the team's Google Sheet in the app).
  * Field staff get both too (for now), the sheet at the shared /sheet page. Roles outside work
  * allocation get no switch; Sheet View is in their menu instead.
  */
@@ -24,9 +25,9 @@ const PATHS: Partial<Record<UserRole, { live: string; sheet?: string }>> = {
   DRIVER: { live: "/field/grid", sheet: "/sheet" },
 };
 
-const VIEWS: { view: View; label: string; icon: LucideIcon }[] = [
-  { view: "live", label: "Live Grid", icon: CalendarRange },
-  { view: "sheet", label: "Sheet View", icon: FileSpreadsheet },
+const VIEWS: { view: View; kind: WasKind; icon: LucideIcon }[] = [
+  { view: "live", kind: "OMS", icon: CalendarRange },
+  { view: "sheet", kind: "GS", icon: FileSpreadsheet },
 ];
 
 // Each person's last choice, per browser. Both sidebars (the rail and the phone drawer) read it
@@ -105,7 +106,7 @@ export function AllocationSwitch({
           )}
         >
           <CalendarRange className="h-4 w-4 shrink-0" aria-hidden />
-          Live Grid
+          <WasMark kind="OMS" />
         </Link>
       </div>
     );
@@ -117,7 +118,7 @@ export function AllocationSwitch({
   return (
     <nav aria-label="Work allocation view" className="shrink-0 px-3 pt-3">
       <div className="grid grid-cols-2 gap-1 rounded-xl border bg-muted/40 p-1 text-sm">
-        {VIEWS.map(({ view, label, icon: Icon }) => {
+        {VIEWS.map(({ view, kind, icon: Icon }) => {
           const isSelected = selected === view;
           return (
             <Link
@@ -145,7 +146,7 @@ export function AllocationSwitch({
                 />
               )}
               <Icon className="h-4 w-4 shrink-0" aria-hidden />
-              <span className="truncate">{label}</span>
+              <WasMark kind={kind} className="truncate" />
             </Link>
           );
         })}

@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Flag, MessageSquare, Ban, CheckCircle2, Factory, PackageCheck, Pencil } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { StatusBadge } from "./StatusBadge";
+import { OrderStageBadge } from "./StatusBadge";
 import { inr } from "@/lib/format";
 import { remarkLabel, LOSS_REMARK_TYPES, isLossRemark, isAmountRemark, remarkNeedsReason, lineBillable, NORMAL_REMARK_LABEL } from "@/lib/constants";
 import type { Order, OrderItem, RemarkType } from "@sb-oms/shared-types";
@@ -311,7 +311,7 @@ export function OrderDetail({ order, actions, related, userRole, currentUserId }
       >
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Order Details</h2>
-          <StatusBadge status={order.status} />
+          <OrderStageBadge order={order} />
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div>

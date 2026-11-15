@@ -6,6 +6,7 @@ import { ErrorState } from "@/components/layout/PageStates";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { fetchAllocationSheet } from "@/api/allocationSheet";
+import { WasMark } from "@/components/brand/WasMark";
 
 /** Shared with the Settings card, so saving a new link updates this page at once. */
 export const allocationSheetQuery = {
@@ -119,7 +120,7 @@ export function SheetView() {
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="mb-2 flex items-center gap-2 sm:mb-3">
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-lg font-bold tracking-tight sm:text-xl">Sheet View</h1>
+          <h1 className="truncate text-lg font-bold tracking-tight sm:text-xl"><WasMark kind="GS" className="font-bold" /></h1>
           <p className="hidden truncate text-xs text-muted-foreground sm:block">
             The team's Google Sheet, live. Sign in to Google in this browser to see and edit it.
           </p>
@@ -135,11 +136,11 @@ export function SheetView() {
         )}
         role={full ? "dialog" : undefined}
         aria-modal={full || undefined}
-        aria-label={full ? "Sheet View, full screen" : undefined}
+        aria-label={full ? "GS-WAS, full screen" : undefined}
       >
         {full && (
           <div className="flex shrink-0 items-center gap-2 border-b bg-card/90 px-2 py-1.5 pt-[max(0.375rem,env(safe-area-inset-top))] backdrop-blur">
-            <span className="min-w-0 flex-1 truncate px-1 text-sm font-semibold">Sheet View</span>
+            <WasMark kind="GS" className="min-w-0 flex-1 truncate px-1 text-sm" />
             {tools}
           </div>
         )}

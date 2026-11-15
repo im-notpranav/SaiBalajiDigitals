@@ -4,8 +4,19 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { EmptyState, ErrorState, LoadingState } from "@/components/layout/PageStates";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { fetchOrders, completeOrderItem } from "@/api/orders";
-import { CheckCircle2, Flag, Undo2 } from "lucide-react";
+import { fetchOrders, completeOrderItem, returnOrderItem } from "@/api/orders";
+import { CheckCircle2, CornerUpLeft, Flag, Loader2, Undo2 } from "lucide-react";
+import { useState } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import type { Order, OrderItem } from "@sb-oms/shared-types";
 import { storeLabel, storeSubLabel } from "@/lib/stores";
@@ -47,6 +58,9 @@ function ProductionQueue() {
     onError: (err: any) =>
       toast.error("Could not update item", { description: err?.response?.data?.message || err.message }),
   });
+
+  /** The item being sent back, while its reason is typed. */
+  const [returning, setReturning] = useState<{ order: Order; item: OrderItem } | null>(null);
 
   const orders: Order[] = data?.orders ?? [];
   const totalItems = orders.reduce((n, o) => n + (o.items?.length ?? 0), 0);
@@ -99,14 +113,27 @@ function ProductionQueue() {
           </Button>
         </div>
       ) : (
-        <Button
-          size="sm"
-          disabled={completeMutation.isPending || item.is_flagged}
-          title={item.is_flagged ? "Flagged items must be resolved by an admin first" : undefined}
-          onClick={() => completeMutation.mutate({ orderId: order.id, itemId: item.id!, done: true })}
-        >
-          Mark complete
-        </Button>
+        <div className="flex items-center justify-end gap-1.5">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="text-orange-700 hover:bg-orange-500/10 hover:text-orange-800 dark:text-orange-300"
+            disabled={completeMutation.isPending}
+            title="Not yours to do? Send it back to the Production Manager"
+            aria-label={`Send back item ${item.s_no}, ${item.media}`}
+            onClick={() => setReturning({ order, item })}
+          >
+            <CornerUpLeft className="mr-1 h-3.5 w-3.5" aria-hidden /> Send back
+          </Button>
+          <Button
+            size="sm"
+            disabled={completeMutation.isPending || item.is_flagged}
+            title={item.is_flagged ? "Flagged items must be resolved by an admin first" : undefined}
+            onClick={() => completeMutation.mutate({ orderId: order.id, itemId: item.id!, done: true })}
+          >
+            Mark complete
+          </Button>
+        </div>
       )}
     </>
   );
@@ -118,6 +145,7 @@ function ProductionQueue() {
         description="Your items. Mark each complete when done."
         crumbs={[{ label: "Production", to: "/production/dashboard" }, { label: "Queue" }]}
       />
+      <SendBackDialog target={returning} onClose={() => setReturning(null)} />
 
       {totalItems > 0 && (
         <div className="mb-4 inline-flex flex-wrap rounded-xl border p-1" role="group" aria-label="Show items">
@@ -232,5 +260,69 @@ function ProductionQueue() {
         </div>
       )}
     </>
+  );
+}
+
+/**
+ * Sending back an item given by mistake: the reason goes to every Production Manager, the item
+ * leaves this person's queue and shows as sent back on Assign Work until someone else gets it.
+ */
+function SendBackDialog({ target, onClose }: { target: { order: Order; item: OrderItem } | null; onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const [reason, setReason] = useState("");
+  const send = useMutation({
+    mutationFn: () => returnOrderItem(target!.order.id, target!.item.id!, reason.trim()),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      toast.success("Sent back to the Production Manager");
+      setReason("");
+      onClose();
+    },
+    onError: (err: any) =>
+      toast.error("Could not send it back", { description: err?.response?.data?.message || err.message }),
+  });
+  const ok = reason.trim().length >= 3;
+
+  return (
+    <Dialog open={target !== null} onOpenChange={(o) => !o && !send.isPending && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Send this item back?</DialogTitle>
+          <DialogDescription>
+            {target
+              ? `${target.order.order_no}, item ${target.item.s_no}: ${target.item.media}. It leaves your queue and the Production Manager is told why.`
+              : null}
+          </DialogDescription>
+        </DialogHeader>
+        <form
+          id="send-back-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (ok) send.mutate();
+          }}
+          className="grid gap-2"
+        >
+          <Label htmlFor="send-back-reason">Why can't you do it?</Label>
+          <Textarea
+            id="send-back-reason"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="e.g. Not our media, this is a vinyl job"
+            maxLength={500}
+            rows={3}
+            autoFocus
+          />
+        </form>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={send.isPending}>
+            Cancel
+          </Button>
+          <Button type="submit" form="send-back-form" disabled={!ok || send.isPending}>
+            {send.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />}
+            Send back
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -247,11 +247,11 @@ const kindFor: Partial<Record<WorkflowAction, string>> = {
   CANCEL: "warning",
 };
 
-async function notifyRole(tx: Prisma.TransactionClient, role: Role | undefined, title: string, body: string, kind = "info") {
+async function notifyRole(tx: Prisma.TransactionClient, role: Role | undefined, title: string, body: string, kind = "info", link: string | null = null) {
   if (!role) return;
   const users = await tx.user.findMany({ where: { role, is_active: true }, select: { id: true } });
   if (users.length === 0) return;
-  await tx.notification.createMany({ data: users.map((u) => ({ user_id: u.id, title, body, kind })) });
+  await tx.notification.createMany({ data: users.map((u) => ({ user_id: u.id, title, body, kind, link })) });
 }
 
 async function notifyAfter(
@@ -273,13 +273,13 @@ async function notifyAfter(
   // In-app and WhatsApp go out together, in this transaction: no change, no message.
   const toRequester = async (title: string, body: string, wa: [WaEvent, unknown[]]) => {
     if (r.requested_by === actor.id) return;
-    await tx.notification.create({ data: { user_id: r.requested_by, title, body, kind } });
+    await tx.notification.create({ data: { user_id: r.requested_by, title, body, kind, link: `pr/${r.id}` } });
     await queueWhatsApp(tx, wa[0], [r.requested_by], wa[1], ref);
   };
   // Reviewers are named by stage; Cost Control's stage goes to the Admin while none is active.
   const toReviewers = async (stage: PaymentRequestStatus | null | undefined, title: string, body: string, wa: [WaEvent, unknown[]], k = "info") => {
     const role = await reviewerRoleFor(tx, stage);
-    await notifyRole(tx, role, title, body, k);
+    await notifyRole(tx, role, title, body, k, `pr/${r.id}`);
     await queueWhatsAppRole(tx, wa[0], role, wa[1], ref, actor.id);
   };
   const who = [no, amount, r.requester.name];
@@ -465,6 +465,8 @@ export const createRequest = async (req: Request, res: Response) => {
         reviewerRole,
         "New payment request",
         `${order.order_no}: ${formatRupees(body.amount)} for ${row.requester.name}.`,
+        "info",
+        `pr/${row.id}`,
       );
       await queueWhatsAppRole(
         tx,

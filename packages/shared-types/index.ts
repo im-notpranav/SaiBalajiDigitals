@@ -72,6 +72,10 @@ export interface OrderItem {
   my_assignment_completed?: boolean;
   production_completed?: boolean;
   production_completed_at?: string | null;
+  /** Sent back by a production team member as wrongly given to them, until assigned again. */
+  returned_reason?: string | null;
+  returned_at?: string | null;
+  returner?: { id: number; name: string } | null;
 }
 
 /** One physical store within an order, with its own items, PO, installation and invoice. */
@@ -255,5 +259,7 @@ export interface Notification {
   kind: "info" | "success" | "warning" | string;
   read: boolean;
   order_id?: number | null;
+  /** Where clicking it goes, in the /go link form ("order/30", "pr/28", "leave"…). */
+  link?: string | null;
   created_at: string;
 }

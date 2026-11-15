@@ -15,7 +15,8 @@ import { cn } from "@/lib/utils";
  * them through the URL: the header's search, or a dashboard number that opens the matching list.
  */
 
-export type OrdersSection = "active" | "completed";
+/** "all" is both together: what a dashboard total counts. */
+export type OrdersSection = "active" | "completed" | "all";
 type SearchField = "any" | "client" | "store" | "order_no";
 
 export interface OrdersSearch {
@@ -42,7 +43,7 @@ export function parseOrdersSearch(search: Record<string, unknown>): OrdersSearch
   return {
     // A search for digits arrives as a number once the router has read the URL.
     q: typeof search.q === "number" ? String(search.q) : text(search.q),
-    section: search.section === "active" || search.section === "completed" ? search.section : undefined,
+    section: search.section === "active" || search.section === "completed" || search.section === "all" ? search.section : undefined,
     from: day(search.from),
     to: day(search.to),
     creator: text(search.creator),
@@ -143,16 +144,17 @@ export function OrdersFilterBar({
       replace: true,
     });
 
-  const other: OrdersSection = section === "active" ? "completed" : "active";
+  const other: OrdersSection | null = section === "all" ? null : section === "active" ? "completed" : "active";
   const hasDates = search.from || search.to;
 
   return (
     <div className="surface-panel mb-4 grid gap-3 p-3">
       <div className="flex flex-wrap items-center gap-3">
-        <Tabs value={section} onValueChange={(v) => setSection(v as OrdersSection)} className="w-full sm:w-[300px]">
-          <TabsList className="grid w-full grid-cols-2">
+        <Tabs value={section} onValueChange={(v) => setSection(v as OrdersSection)} className="w-full sm:w-[360px]">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="active">Active</TabsTrigger>
             <TabsTrigger value="completed">Completed</TabsTrigger>
+            <TabsTrigger value="all">All</TabsTrigger>
           </TabsList>
         </Tabs>
 
@@ -190,7 +192,7 @@ export function OrdersFilterBar({
               {" · "}showing {(page - 1) * ORDERS_PAGE_SIZE + 1}–{(page - 1) * ORDERS_PAGE_SIZE + shown}
             </>
           )}
-          {debouncedQ && (
+          {debouncedQ && other && (
             <>
               {" · "}
               <button

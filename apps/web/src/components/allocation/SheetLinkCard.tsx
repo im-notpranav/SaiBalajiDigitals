@@ -31,16 +31,16 @@ export function SheetLinkCard() {
     mutationFn: () => updateAllocationSheet(value),
     onSuccess: (next) => {
       queryClient.setQueryData(allocationSheetQuery.queryKey, next);
-      toast.success("Sheet View now shows this sheet");
+      toast.success("GS-WAS now shows this sheet");
     },
     onError: (err) => toast.error(apiErrorMessage(err, "Could not save the link")),
   });
 
   return (
     <div className="surface-panel p-6">
-      <h3 className="mb-1 text-sm font-semibold">Google Sheet (Sheet View)</h3>
+      <h3 className="mb-1 text-sm font-semibold">Google Sheet (GS-WAS)</h3>
       <p className="mb-4 text-xs text-muted-foreground">
-        The team's sheet that Work Allocation shows as Sheet View, for everyone in the app, field
+        The team's sheet that Work Allocation shows as GS-WAS, for everyone in the app, field
         staff included. Who can see or edit it is still set in Google Sheets, under Share.
       </p>
       <form

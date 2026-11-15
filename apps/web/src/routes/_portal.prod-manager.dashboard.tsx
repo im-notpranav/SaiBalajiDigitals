@@ -1,6 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ProductionCompleteDialog } from "@/components/orders/ProductionCompleteDialog";
 import { useMemo, useState } from "react";
-import { ArrowRight, CheckCircle2, Clock, Factory, Flag, Ruler, Users } from "lucide-react";
+import { ArrowRight, CheckCircle2, Clock, Factory, Flag, Ruler, Users, CheckCheck } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { KpiCard } from "@/components/kpi/KpiCard";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -37,6 +39,9 @@ function ProdManagerDashboard() {
     queryFn: fetchProdManagerDashboard,
   });
   const [person, setPerson] = useState<string | null>(null);
+  /** Pending items ticked to be marked complete together, by item id. */
+  const [ticked, setTicked] = useState<Set<number>>(new Set());
+  const [confirming, setConfirming] = useState(false);
 
   const pending = useMemo(() => {
     const items = dash?.pending_items ?? [];
@@ -44,6 +49,22 @@ function ProdManagerDashboard() {
     // Only what this person still owes: an item they've finished may still wait on someone else.
     return items.filter((i) => i.assigned_to.some((a) => a.name === person && !a.completed));
   }, [dash?.pending_items, person]);
+
+  // Flagged items wait for the admin, so they can't be ticked.
+  const tickable = pending.filter((i) => !i.is_flagged);
+  const tickedShown = tickable.filter((i) => ticked.has(i.item_id));
+  const allTicked = tickable.length > 0 && tickedShown.length === tickable.length;
+  const toggle = (id: number) =>
+    setTicked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  /** The ticked items, grouped into one request per order. */
+  const completeRequest = Array.from(
+    tickedShown.reduce((m, i) => m.set(i.order_id, [...(m.get(i.order_id) ?? []), i.item_id]), new Map<number, number[]>()),
+  ).map(([order_id, item_ids]) => ({ order_id, item_ids }));
 
   const showPerson = (name: string) => {
     const next = person === name ? null : name;
@@ -183,8 +204,25 @@ function ProdManagerDashboard() {
                     {pending.length} {pending.length === 1 ? "item" : "items"}
                   </Badge>
                   {person && <FilterChip label={`Still with ${person}`} onClear={() => setPerson(null)} />}
-                  <span className="ml-auto text-xs text-muted-foreground">Longest wait first</span>
+                  {tickedShown.length > 0 ? (
+                    <span className="ml-auto flex items-center gap-1.5">
+                      <Button size="sm" className="h-8" onClick={() => setConfirming(true)}>
+                        <CheckCheck className="mr-1.5 h-4 w-4" aria-hidden /> Mark {tickedShown.length} complete
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-8" onClick={() => setTicked(new Set())}>
+                        Clear
+                      </Button>
+                    </span>
+                  ) : (
+                    <span className="ml-auto text-xs text-muted-foreground">Longest wait first · tick items to mark them complete</span>
+                  )}
                 </div>
+                <ProductionCompleteDialog
+                  request={confirming ? completeRequest : null}
+                  what={tickedShown.length === 1 ? "this item" : `${tickedShown.length} items`}
+                  onClose={() => setConfirming(false)}
+                  onDone={() => setTicked(new Set())}
+                />
                 {pending.length === 0 ? (
                   <p className="p-6 text-center text-sm text-muted-foreground">
                     {person} has finished everything assigned to them.
@@ -194,6 +232,15 @@ function ProdManagerDashboard() {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b bg-muted/30">
+                          <th scope="col" className="w-10 py-2.5 pl-4">
+                            {tickable.length > 0 && (
+                              <Checkbox
+                                checked={allTicked ? true : tickedShown.length > 0 ? "indeterminate" : false}
+                                onCheckedChange={() => setTicked(allTicked ? new Set() : new Set(tickable.map((i) => i.item_id)))}
+                                aria-label="Tick every pending item"
+                              />
+                            )}
+                          </th>
                           <th scope="col" className="px-4 py-2.5 text-left font-medium text-muted-foreground">Order</th>
                           <th scope="col" className="px-4 py-2.5 text-left font-medium text-muted-foreground">Client</th>
                           <th scope="col" className="px-4 py-2.5 text-left font-medium text-muted-foreground">Media</th>
@@ -205,7 +252,20 @@ function ProdManagerDashboard() {
                       </thead>
                       <tbody>
                         {pending.map((item: ProdPendingItem) => (
-                          <tr key={`${item.order_id}-${item.item_s_no}`} className="border-b transition-colors last:border-0 hover:bg-muted/20">
+                          <tr
+                            key={item.item_id}
+                            data-state={ticked.has(item.item_id) ? "selected" : undefined}
+                            className="border-b transition-colors last:border-0 hover:bg-muted/20 data-[state=selected]:bg-primary/5"
+                          >
+                            <td className="py-2.5 pl-4">
+                              {!item.is_flagged && (
+                                <Checkbox
+                                  checked={ticked.has(item.item_id)}
+                                  onCheckedChange={() => toggle(item.item_id)}
+                                  aria-label={`Tick item ${item.item_s_no} of ${item.order_no}`}
+                                />
+                              )}
+                            </td>
                             <td className="whitespace-nowrap px-4 py-2.5">
                               <Link
                                 to="/prod-manager/assign"

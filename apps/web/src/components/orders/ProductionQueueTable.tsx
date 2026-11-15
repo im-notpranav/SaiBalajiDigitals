@@ -8,7 +8,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { StatusBadge } from "@/components/orders/StatusBadge";
+import { OrderStageBadge } from "@/components/orders/StatusBadge";
+import { STAGE_ORDER, orderStage } from "@/lib/order-stage";
 import type { Order } from "@sb-oms/shared-types";
 import { formatDistanceToNow } from "date-fns";
 import { SortableHead, useSortableTable } from "@/hooks/useSortableTable";
@@ -32,7 +33,7 @@ export function ProductionQueueTable({
       if (key === "client_name") return o.client_name;
       if (key === "store") return storeLabel(o);
       if (key === "location") return storeSubLabel(o);
-      if (key === "status") return o.status;
+      if (key === "status") return STAGE_ORDER.indexOf(orderStage(o));
       return "";
     },
   );
@@ -56,7 +57,7 @@ export function ProductionQueueTable({
                 <SortableHead label="Location" column="store" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
               </TableHead>
               <TableHead>
-                <SortableHead label="Status" column="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                <SortableHead label="Stage" column="status" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
               </TableHead>
               <TableHead>
                 <SortableHead label="Created" column="created_at" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
@@ -79,7 +80,7 @@ export function ProductionQueueTable({
                   <TableCell className="font-medium">{o.client_name}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{storeLabel(o)}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{storeSubLabel(o) || "—"}</TableCell>
-                  <TableCell><StatusBadge status={o.status} /></TableCell>
+                  <TableCell><OrderStageBadge order={o} /></TableCell>
                   <TableCell className="text-xs text-muted-foreground">
                     {o.created_at
                       ? formatDistanceToNow(new Date(o.created_at), { addSuffix: true })

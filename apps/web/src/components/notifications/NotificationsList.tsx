@@ -5,9 +5,9 @@ import { ErrorState, LoadingState } from "@/components/layout/PageStates";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
-import { fetchMyNotifications, markAllNotificationsRead, markNotificationRead } from "@/api/notifications";
+import { fetchMyNotifications, markAllNotificationsRead } from "@/api/notifications";
 import { useAuth } from "@/lib/auth-store";
-import { orderLinkLabel, useGoToOrder } from "@/lib/use-order-nav";
+import { notificationHref, notificationLinkLabel, useOpenNotification } from "@/lib/use-order-nav";
 
 function iconFor(kind: string) {
   if (kind === "success") return <CheckCircle2 className="h-4 w-4 text-success" />;
@@ -22,7 +22,7 @@ interface NotificationsListProps {
 
 export function NotificationsList({ title = "Notifications", crumbs = [{ label: "Notifications" }] }: NotificationsListProps) {
   const queryClient = useQueryClient();
-  const goToOrder = useGoToOrder();
+  const openNotification = useOpenNotification();
   const { user } = useAuth();
 
   const { data: notifications = [], isLoading, isError, error, refetch } = useQuery({
@@ -30,17 +30,6 @@ export function NotificationsList({ title = "Notifications", crumbs = [{ label: 
     queryFn: fetchMyNotifications,
   });
 
-  const handleOpen = async (n: (typeof notifications)[number]) => {
-    if (!n.read) {
-      try {
-        await markNotificationRead(n.id);
-        queryClient.invalidateQueries({ queryKey: ["notifications"] });
-      } catch {
-        /* non-blocking — still navigate */
-      }
-    }
-    if (n.order_id) goToOrder(n.order_id);
-  };
 
   const markReadMutation = useMutation({
     mutationFn: markAllNotificationsRead,
@@ -84,17 +73,20 @@ export function NotificationsList({ title = "Notifications", crumbs = [{ label: 
             <p>You're all caught up!</p>
           </div>
         ) : (
-          notifications.map((n) => (
+          notifications.map((n) => {
+            const href = notificationHref(user?.role, n);
+            const clickable = !!href || !n.read;
+            return (
             <div
               key={n.id}
-              role={n.order_id || !n.read ? "button" : undefined}
-              tabIndex={n.order_id || !n.read ? 0 : undefined}
-              onClick={() => handleOpen(n)}
-              onKeyDown={(e) => { if ((n.order_id || !n.read) && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); handleOpen(n); } }}
+              role={clickable ? "button" : undefined}
+              tabIndex={clickable ? 0 : undefined}
+              onClick={() => openNotification(n)}
+              onKeyDown={(e) => { if (clickable && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openNotification(n); } }}
               className={cn(
                 "flex items-start gap-3 p-4 transition",
                 !n.read && "bg-primary/5",
-                (n.order_id || !n.read) && "cursor-pointer hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                clickable && "cursor-pointer hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
               )}
             >
               <div className="mt-0.5 rounded-lg border bg-card p-2">{iconFor(n.kind)}</div>
@@ -111,14 +103,15 @@ export function NotificationsList({ title = "Notifications", crumbs = [{ label: 
                   </span>
                 </div>
                 <p className="mt-0.5 text-sm text-muted-foreground">{n.body}</p>
-                {n.order_id ? (
-                  <p className="mt-1 text-xs font-medium text-primary">{orderLinkLabel(user?.role)}</p>
+                {href ? (
+                  <p className="mt-1 text-xs font-medium text-primary">{notificationLinkLabel(n, href, user?.role)}</p>
                 ) : !n.read ? (
                   <p className="mt-1 text-xs text-muted-foreground">Click to mark as read</p>
                 ) : null}
               </div>
             </div>
-          ))
+            );
+          })
         )}
       </div>
     </>

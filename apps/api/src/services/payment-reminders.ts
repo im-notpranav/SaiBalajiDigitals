@@ -81,6 +81,7 @@ export async function sendOverdueDigests(now = new Date()): Promise<number> {
         title: DIGEST_TITLE,
         body: `${n} ${n === 1 ? "item has" : "items have"} waited more than ${threshold} working days: ${listed}${more}.`,
         kind: "warning",
+        link: "payments",
       };
     });
   if (notes.length) await prisma.notification.createMany({ data: notes });

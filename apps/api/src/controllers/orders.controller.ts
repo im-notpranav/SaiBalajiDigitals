@@ -19,6 +19,7 @@ import {
   sendItemFlagEmail,
   sendBillingEditEmail,
   sendStatusTransitionEmail,
+  sendInvoiceReminderEmail,
   sendExcelEmail,
   adminEmail,
   type OrderSummary,
@@ -160,10 +161,13 @@ export const getOrders = async (req: Request, res: Response) => {
           // jumped around the Assign Work page after every assignment.
           items: fullItems
             ? {
-                include: { assignments: { include: { user: { select: { id: true, name: true } } } } },
+                include: {
+                  assignments: { include: { user: { select: { id: true, name: true } } } },
+                  returner: { select: { id: true, name: true } },
+                },
                 orderBy: [{ order_store_id: "asc" }, { s_no: "asc" }, { id: "asc" }],
               }
-            : { select: { id: true, amount: true, remarks: true, remarks_confirmed: true, adjustment_amount: true, original_amount: true, assignments: { select: { id: true } } } },
+            : { select: { id: true, amount: true, remarks: true, remarks_confirmed: true, adjustment_amount: true, original_amount: true, production_completed: true, assignments: { select: { id: true } } } },
           stores: { select: { id: true, s_no: true, store_name: true, location: true, installed_at: true, invoice_id: true }, orderBy: { s_no: "asc" } },
           adjustments: { where: { status: "Approved" }, select: { type: true, amount: true, status: true } },
           _count: { select: { stores: true } },
@@ -213,7 +217,7 @@ export const getOrders = async (req: Request, res: Response) => {
       const { _count, items, adjustments, ...rest } = o;
       return {
         ...rest,
-        items: fullItems ? items : items.map((i: any) => ({ id: i.id, assignments: i.assignments })),
+        items: fullItems ? items : items.map((i: any) => ({ id: i.id, assignments: i.assignments, production_completed: i.production_completed })),
         store_count: _count.stores,
         total_amount,
         loss_amount,
@@ -358,7 +362,7 @@ export const startOrder = async (req: Request, res: Response) => {
       return created;
     });
 
-    await notifyUser(csm.id, `Order ${order.order_no} allotted to you`, `Client: ${client_name}. Add its stores and items.`, "info", order.id).catch(() => {});
+    await notifyUser(csm.id, `Order ${order.order_no} allotted to you`, `Client: ${client_name}. Add its line items.`, "info", order.id).catch(() => {});
     return res.status(201).json(serializeDecimals(order));
   } catch (err: any) {
     if (err?.code === "P2002") return res.status(409).json({ message: "That order number is already used. Pick another." });
@@ -1656,7 +1660,7 @@ export const forceCloseOrder = async (req: Request, res: Response) => {
   }
 };
 
-import { flagItemSchema, itemLossRemarkSchema, itemAdjustmentRequestSchema, orderAdjustmentSchema, decideAdjustmentSchema, assignItemSchema, bulkAssignSchema, completeItemSchema, editBillingSchema, editPaymentSchema, followUpSchema } from "../utils/validators";
+import { flagItemSchema, itemLossRemarkSchema, itemAdjustmentRequestSchema, orderAdjustmentSchema, decideAdjustmentSchema, assignItemSchema, bulkAssignSchema, completeItemSchema, completeProductionSchema, returnItemSchema, invoiceReminderSchema, editBillingSchema, editPaymentSchema, followUpSchema } from "../utils/validators";
 
 /** PATCH /api/orders/:orderId/invoices/:invoiceId/billing */
 export const editInvoiceBilling = async (req: Request, res: Response) => {
@@ -1911,6 +1915,47 @@ export const createFollowUp = async (req: Request, res: Response) => {
   }
 };
 
+/** Clears an item's "sent back by production" note. */
+const CLEAR_RETURN = { returned_reason: null, returned_at: null, returned_by: null };
+
+/**
+ * Once no assigned item on the order is left to make, the employee who raised it is asked to
+ * confirm installation (in-app, WhatsApp and email). Billing opens after that confirmation.
+ */
+async function tellCreatorIfProductionDone(
+  order: { id: number; order_no: string; client_name: string; created_by: number | null },
+  actorName: string,
+) {
+  const remaining = await prisma.orderItem.count({
+    where: { order_id: order.id, assignments: { some: {} }, production_completed: false },
+  });
+  if (remaining > 0 || !order.created_by) return;
+  await notifyUser(
+    order.created_by,
+    `Order ${order.order_no} is production complete`,
+    `All items are produced. Confirm installation to send it for billing.`,
+    "success",
+    order.id
+  );
+  await queueWhatsAppAfter(
+    "ORDER_UPDATE",
+    [order.created_by],
+    [order.order_no, order.client_name, "all items are produced, please confirm installation to send it for billing"],
+    { type: "order", id: order.id },
+  );
+  const creatorUser = await prisma.user.findUnique({ where: { id: order.created_by }, select: { email: true } });
+  if (creatorUser?.email) {
+    sendStatusTransitionEmail(
+      creatorUser.email,
+      order.order_no,
+      order.client_name,
+      "Production Complete",
+      "All assigned items have been produced. Please confirm installation to proceed with billing.",
+      actorName
+    );
+  }
+}
+
 const itemLabelOf = (i: any) =>
   `#${i.s_no} — ${i.media} (${Number(i.width_inches)}x${Number(i.height_inches)} in, qty ${Number(i.qty)})`;
 
@@ -1981,6 +2026,8 @@ export const assignOrderItem = async (req: Request, res: Response) => {
           data: { order_item_id: itemId, user_id: id, assigned_by: user.id },
         });
       }
+      // Given to a team again: the "sent back" note has been dealt with.
+      if (toAdd.length > 0) await tx.orderItem.update({ where: { id: itemId }, data: CLEAR_RETURN });
       await syncItemCompletion(tx, itemId);
     });
 
@@ -2071,6 +2118,7 @@ export const bulkAssignOrderItems = async (req: Request, res: Response) => {
               data: toAdd.map((id) => ({ order_item_id: item.id, user_id: id, assigned_by: user.id })),
               skipDuplicates: true,
             });
+            await tx.orderItem.update({ where: { id: item.id }, data: CLEAR_RETURN });
           }
           await syncItemCompletion(tx, item.id);
         }
@@ -2231,44 +2279,203 @@ export const completeOrderItem = async (req: Request, res: Response) => {
 
     // When every assigned item on the order is done, prompt the employee to confirm
     // installation. Billing only opens up after that confirmation.
-    if (nowComplete) {
-      const remaining = await prisma.orderItem.count({
-        where: { order_id: orderId, assignments: { some: {} }, production_completed: false },
-      });
-      if (remaining === 0 && order.created_by) {
-        await notifyUser(
-          order.created_by,
-          `Order ${order.order_no} is production complete`,
-          `All items are produced. Confirm installation to send it for billing.`,
-          "success",
-          order.id
-        );
-        await queueWhatsAppAfter(
-          "ORDER_UPDATE",
-          [order.created_by],
-          [order.order_no, order.client_name, "all items are produced, please confirm installation to send it for billing"],
-          { type: "order", id: order.id },
-        );
-
-        const creatorUser = await prisma.user.findUnique({ where: { id: order.created_by }, select: { email: true } });
-        if (creatorUser?.email) {
-          sendStatusTransitionEmail(
-            creatorUser.email,
-            order.order_no,
-            order.client_name,
-            "Production Complete",
-            "All assigned items have been produced. Please confirm installation to proceed with billing.",
-            user.name
-          );
-        }
-      }
-    }
+    if (nowComplete) await tellCreatorIfProductionDone(order, user.name);
 
     const fresh = await prisma.orderItem.findUnique({
       where: { id: itemId },
       include: { assignments: { include: { user: { select: { id: true, name: true } } } } },
     });
     return res.status(200).json(serializeDecimals(fresh));
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+/**
+ * The Production Manager marks work produced in bulk: whole orders, or chosen items on them.
+ * Every open item counts, assigned or not; an item nobody had is recorded as made by the
+ * Production Manager. Flagged items wait for the admin and are skipped, as are orders that
+ * are past production.
+ */
+export const completeProduction = async (req: Request, res: Response) => {
+  try {
+    const parsed = completeProductionSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parsed.error) });
+    const user = req.user!;
+    const result = { orders: 0, items: 0, skipped_flagged: 0, skipped_orders: 0 };
+
+    for (const entry of parsed.data.orders) {
+      const order = await prisma.order.findUnique({ where: { id: entry.order_id } });
+      // Production happens while an order is Active; anything later is already past it.
+      if (!order || order.status !== "Active") {
+        result.skipped_orders++;
+        continue;
+      }
+      const items = await prisma.orderItem.findMany({
+        where: {
+          order_id: order.id,
+          production_completed: false,
+          ...(entry.item_ids ? { id: { in: entry.item_ids } } : {}),
+        },
+        include: { assignments: true },
+      });
+      const todo = items.filter((i) => !i.is_flagged);
+      result.skipped_flagged += items.length - todo.length;
+      if (todo.length === 0) continue;
+
+      const now = new Date();
+      await prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT set_config('app.current_user_id', ${user.id.toString()}, true)`;
+        for (const item of todo) {
+          if (item.assignments.length === 0) {
+            await tx.orderItemAssignment.create({
+              data: { order_item_id: item.id, user_id: user.id, assigned_by: user.id, completed: true, completed_at: now },
+            });
+          } else {
+            await tx.orderItemAssignment.updateMany({
+              where: { order_item_id: item.id, completed: false },
+              data: { completed: true, completed_at: now },
+            });
+          }
+          await tx.orderItem.update({ where: { id: item.id }, data: CLEAR_RETURN });
+          await syncItemCompletion(tx, item.id);
+        }
+      });
+      result.orders++;
+      result.items += todo.length;
+
+      if (order.created_by) {
+        await notifyUser(
+          order.created_by,
+          `${todo.length === 1 ? "Item" : `${todo.length} items`} produced on ${order.order_no}`,
+          `${user.name} marked ${todo.length === 1 ? `item ${itemLabelOf(todo[0])}` : `${todo.length} items`} as produced.`,
+          "success",
+          order.id
+        ).catch(() => {});
+      }
+      await tellCreatorIfProductionDone(order, user.name).catch((e) => console.error("production-done notice failed", e));
+    }
+
+    return res.status(200).json(result);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+/**
+ * A production team member sends back an item they were given by mistake. They come off the
+ * item, the item keeps a note of who sent it back and why, and every Production Manager is told.
+ */
+export const returnOrderItem = async (req: Request, res: Response) => {
+  try {
+    const parsed = returnItemSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parsed.error) });
+    const reason = parsed.data.reason.trim();
+    const orderId = parseInt(req.params.orderId as string, 10);
+    const itemId = parseInt(req.params.itemId as string, 10);
+    const user = req.user!;
+
+    const item = await prisma.orderItem.findUnique({
+      where: { id: itemId },
+      include: { assignments: true, order: { select: { id: true, order_no: true } } },
+    });
+    if (!item || item.order_id !== orderId) return res.status(404).json({ message: "Line item not found" });
+    const mine = item.assignments.find((a) => a.user_id === user.id);
+    if (!mine) return res.status(403).json({ message: "This item is not assigned to you." });
+    if (mine.completed || item.production_completed) {
+      return res.status(400).json({ message: "You have already finished this item, so it can't be sent back." });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.current_user_id', ${user.id.toString()}, true)`;
+      await tx.orderItemAssignment.delete({ where: { id: mine.id } });
+      await tx.orderItem.update({
+        where: { id: itemId },
+        data: { returned_reason: reason, returned_at: new Date(), returned_by: user.id },
+      });
+      await syncItemCompletion(tx, itemId);
+    });
+
+    await notifyRole(
+      "PRODUCTION_MANAGER",
+      `Item sent back on ${item.order.order_no}`,
+      `${user.name} can't do item ${itemLabelOf(item)}: ${reason}. Assign it to the right team.`,
+      "warning",
+      item.order.id,
+    ).catch((e) => console.error("return notice failed", e));
+
+    return res.status(200).json({ success: true });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+/** How soon Accounts may remind a CSM again about the same order. */
+const INVOICE_REMINDER_GAP_MS = 60 * 60 * 1000;
+
+/**
+ * Accounts asks the CSM who raised each order to send its invoice details: an in-app
+ * notification per order (it opens the order) and one email per CSM listing their orders.
+ * An order reminded within the last hour is skipped, so a double click sends nothing twice.
+ */
+export const remindInvoiceDetails = async (req: Request, res: Response) => {
+  try {
+    const parsed = invoiceReminderSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parsed.error) });
+    const user = req.user!;
+    const ids = Array.from(new Set(parsed.data.order_ids));
+    const now = new Date();
+
+    const orders = await prisma.order.findMany({
+      where: { id: { in: ids }, status: { in: OPEN_STATUSES } },
+      select: { id: true, order_no: true, client_name: true, created_by: true, invoice_reminded_at: true },
+    });
+    const isRecent = (o: (typeof orders)[number]) =>
+      !!o.invoice_reminded_at && now.getTime() - o.invoice_reminded_at.getTime() < INVOICE_REMINDER_GAP_MS;
+    const recent = orders.filter(isRecent);
+    const noCsm = orders.filter((o) => !o.created_by);
+    const send = orders.filter((o) => o.created_by && !isRecent(o));
+    let emailed = 0;
+
+    if (send.length > 0) {
+      await prisma.order.updateMany({ where: { id: { in: send.map((o) => o.id) } }, data: { invoice_reminded_at: now } });
+      await prisma.notification.createMany({
+        data: send.map((o) => ({
+          user_id: o.created_by!,
+          title: `Invoice details needed for ${o.order_no}`,
+          body: `${user.name} (Accounts) is waiting for the invoice details of ${o.order_no} (${o.client_name}). Please send them.`,
+          kind: "warning",
+          order_id: o.id,
+          link: `order/${o.id}`,
+        })),
+      });
+
+      const byCsm = new Map<number, typeof send>();
+      for (const o of send) byCsm.set(o.created_by!, [...(byCsm.get(o.created_by!) ?? []), o]);
+      const csms = await prisma.user.findMany({
+        where: { id: { in: [...byCsm.keys()] }, is_active: true },
+        select: { id: true, name: true, email: true },
+      });
+      for (const csm of csms) {
+        if (!csm.email) continue;
+        emailed++;
+        // Not awaited: a slow mail server must not hold up the accountant's screen.
+        sendInvoiceReminderEmail(csm.email, csm.name, byCsm.get(csm.id)!, user.name);
+      }
+    }
+
+    return res.status(200).json({
+      reminded: send.length,
+      skipped_recent: recent.length,
+      skipped_no_csm: noCsm.length,
+      not_found: ids.length - orders.length,
+      csms: new Set(send.map((o) => o.created_by)).size,
+      /** CSMs with an email address on file, who were also emailed. */
+      emailed,
+    });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ message: "Internal server error" });

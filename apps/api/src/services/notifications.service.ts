@@ -1,6 +1,13 @@
 import { prisma } from "../utils/prisma";
 
-export const notifyUser = async (userId: number, title: string, body: string, kind: string = "info", orderId?: number | null) => {
+/**
+ * Where a notification leads, in the same form as the WhatsApp "Open in app" links (/go/...):
+ * "order/30", "pr/28", "job/12/30", "leave", "overtime", "library/requests". The web app works
+ * out the page from the reader's role. Left out, a notification about an order leads to it.
+ */
+const linkFor = (orderId?: number | null, link?: string | null) => link ?? (orderId ? `order/${orderId}` : null);
+
+export const notifyUser = async (userId: number, title: string, body: string, kind: string = "info", orderId?: number | null, link?: string | null) => {
   return prisma.notification.create({
     data: {
       user_id: userId,
@@ -8,11 +15,12 @@ export const notifyUser = async (userId: number, title: string, body: string, ki
       body,
       kind,
       order_id: orderId ?? null,
+      link: linkFor(orderId, link),
     },
   });
 };
 
-export const notifyRole = async (role: "ADMIN" | "CSM" | "ACCOUNTS" | "PRODUCTION" | "PRODUCTION_MANAGER" | "OPERATION_MANAGER", title: string, body: string, kind: string = "info", orderId?: number | null) => {
+export const notifyRole = async (role: "ADMIN" | "CSM" | "ACCOUNTS" | "PRODUCTION" | "PRODUCTION_MANAGER" | "OPERATION_MANAGER", title: string, body: string, kind: string = "info", orderId?: number | null, link?: string | null) => {
   const users = await prisma.user.findMany({ where: { role, is_active: true } });
 
   if (users.length === 0) return;
@@ -24,6 +32,7 @@ export const notifyRole = async (role: "ADMIN" | "CSM" | "ACCOUNTS" | "PRODUCTIO
       body,
       kind,
       order_id: orderId ?? null,
+      link: linkFor(orderId, link),
     })),
   });
 };
@@ -35,6 +44,8 @@ export const notifyNameRequested = (kindLabel: string, name: string, requesterNa
     "New name request",
     `${requesterName} asked to add the ${kindLabel} "${name}". Add or reject it in the Master Library.`,
     "info",
+    null,
+    "library/requests",
   );
 
 /** Master Library: tells the person who asked what the admin decided. */

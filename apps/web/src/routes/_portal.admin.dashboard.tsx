@@ -235,8 +235,9 @@ function AdminDashboard() {
               icon={Factory}
               accent="primary"
               hint="Dated in the range above"
-              cta="See by stage"
-              onClick={() => scrollToSection("pipeline")}
+              cta="Open the list"
+              to="/admin/orders"
+              search={{ section: "all", from, to }}
             />
             <KpiCard
               label={viewMode === "amount" ? "Total Amount" : "Total Quantity"}

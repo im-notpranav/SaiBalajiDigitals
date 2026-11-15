@@ -265,9 +265,12 @@ const orderVar = (job: JobBrief) => job.order?.order_no ?? "order to be confirme
 const workVar = (job: JobBrief) => job.work_details ?? "details to follow";
 const placeVar = (job: JobBrief) => jobPlace(job) ?? "location to be confirmed";
 
+/** Where a job notification leads: "job/12/30" (job 12 on order 30), the same form as /go links. */
+const jobLink = (job: Pick<JobBrief, "id" | "order">) => `job/${job.id}${job.order ? `/${job.order.id}` : ""}`;
+
 /** Tell field staff about their jobs (no order link: they have no order page to open). */
-async function notifyPeople(userIds: number[], title: string, body: string, kind = "info") {
-  await Promise.all(userIds.map((id) => notifyUser(id, title, body, kind, null).catch((e) => console.error("notify failed", e))));
+async function notifyPeople(userIds: number[], title: string, body: string, kind = "info", link: string | null = null) {
+  await Promise.all(userIds.map((id) => notifyUser(id, title, body, kind, null, link).catch((e) => console.error("notify failed", e))));
 }
 
 /** The CSM who should hear about a job: the one on the job, else the code's user, else whoever raised the order. */
@@ -362,7 +365,7 @@ export const createJob = async (req: Request, res: Response) => {
       });
     });
 
-    await notifyPeople(job.members.map((m) => m.user_id), `New job${onOrder(job)}`, jobSummary(job));
+    await notifyPeople(job.members.map((m) => m.user_id), `New job${onOrder(job)}`, jobSummary(job), "info", jobLink(job));
     await queueWhatsAppAfter("JOB_ASSIGNED", job.members.map((m) => m.user_id), jobVars(job), jobRef(job));
     const csm = csmUserOf(job);
     if (csm) {
@@ -424,11 +427,11 @@ export const updateJob = async (req: Request, res: Response) => {
     });
 
     if (added.length) {
-      await notifyPeople(added, `New job${onOrder(job)}`, jobSummary(job));
+      await notifyPeople(added, `New job${onOrder(job)}`, jobSummary(job), "info", jobLink(job));
       await queueWhatsAppAfter("JOB_ASSIGNED", added, jobVars(job), jobRef(job));
     }
     if (removed.length) {
-      await notifyPeople(removed, `Removed from the job${onOrder(job)}`, `You are no longer on ${jobSummary(job)}.`, "warning");
+      await notifyPeople(removed, `Removed from the job${onOrder(job)}`, `You are no longer on ${jobSummary(job)}.`, "warning", jobLink(job));
       await queueWhatsAppAfter("JOB_REMOVED", removed, jobVars(job), jobRef(job));
     }
     return res.status(200).json(serializeJob(job));
@@ -494,7 +497,7 @@ export const setJobStatus = async (req: Request, res: Response) => {
     });
 
     if (status === "CANCELLED") {
-      await notifyPeople(job.members.map((m) => m.user_id), `Job${onOrder(job)} cancelled`, `${jobSummary(job)}. Reason: ${reason}`, "warning");
+      await notifyPeople(job.members.map((m) => m.user_id), `Job${onOrder(job)} cancelled`, `${jobSummary(job)}. Reason: ${reason}`, "warning", jobLink(job));
       await queueWhatsAppAfter("JOB_CANCELLED", job.members.map((m) => m.user_id), [...jobVars(job), reason], jobRef(job));
     }
     const csm = csmUserOf(job);
@@ -1051,7 +1054,7 @@ export const updateCsmJob = async (req: Request, res: Response) => {
     });
 
     if (detailsChanged) {
-      await notifyPeople(job.members.map((m) => m.user_id), `Work details updated${onOrder(job)}`, jobSummary(job));
+      await notifyPeople(job.members.map((m) => m.user_id), `Work details updated${onOrder(job)}`, jobSummary(job), "info", jobLink(job));
     }
     return res.status(200).json(serializeJob(job));
   } catch (err) {

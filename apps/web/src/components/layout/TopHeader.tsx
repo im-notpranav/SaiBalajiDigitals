@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useQueryClient, useQuery } from "@tanstack/react-query";
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { flushSync } from "react-dom";
 import { Bell, LogOut, Search, User, Sun, Moon, ChevronDown, CalendarRange } from "lucide-react";
@@ -15,14 +15,13 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth-store";
-import { fetchMyNotifications, markNotificationRead } from "@/api/notifications";
+import { fetchMyNotifications, markAllNotificationsRead } from "@/api/notifications";
 import { photoSrc } from "@/api/users";
-import { notificationsPath, orderLinkLabel, useGoToOrder } from "@/lib/use-order-nav";
+import { notificationHref, notificationLinkLabel, notificationsPath, useOpenNotification } from "@/lib/use-order-nav";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
 import { roleLabel } from "@/lib/constants";
 import { isDarkTheme, setDarkTheme } from "@/lib/theme";
-import type { Notification } from "@sb-oms/shared-types";
 import { MobileNav } from "@/components/layout/Sidebar";
 import { BrandLockup, Logo } from "@/components/brand/Logo";
 
@@ -31,24 +30,17 @@ export function TopHeader() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [dark, setDark] = useState(isDarkTheme);
-  const goToOrder = useGoToOrder();
+  const openNotification = useOpenNotification();
   const { data: notifications = [] } = useQuery({
     queryKey: ["notifications"],
     queryFn: fetchMyNotifications,
   });
   const unread = notifications.filter((n) => !n.read).length;
 
-  const openNotification = async (n: Notification) => {
-    if (!n.read) {
-      try {
-        await markNotificationRead(n.id);
-        queryClient.invalidateQueries({ queryKey: ["notifications"] });
-      } catch {
-        /* non-blocking */
-      }
-    }
-    if (n.order_id) goToOrder(n.order_id);
-  };
+  const markAllRead = useMutation({
+    mutationFn: markAllNotificationsRead,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["notifications"] }),
+  });
 
   const toggleTheme = (e: React.MouseEvent<HTMLElement>) => {
     const box = e.currentTarget.getBoundingClientRect();
@@ -139,19 +131,37 @@ export function TopHeader() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-80">
-            <DropdownMenuLabel className="flex items-center justify-between">
-              Notifications
-              <Badge variant="secondary">{unread} new</Badge>
+            <DropdownMenuLabel className="flex items-center justify-between gap-2">
+              <span className="flex items-center gap-2">
+                Notifications
+                <Badge variant="secondary">{unread} new</Badge>
+              </span>
+              {unread > 0 && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    // Stays open: the list turns read in place.
+                    e.preventDefault();
+                    markAllRead.mutate();
+                  }}
+                  disabled={markAllRead.isPending}
+                  className="rounded-md px-1.5 py-0.5 text-xs font-medium text-primary hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                >
+                  Mark all read
+                </button>
+              )}
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             {notifications.length === 0 && (
               <div className="px-2 py-6 text-center text-xs text-muted-foreground">You're all caught up!</div>
             )}
-            {notifications.slice(0, 5).map((n) => (
+            {notifications.slice(0, 5).map((n) => {
+              const href = notificationHref(user?.role, n);
+              return (
               <DropdownMenuItem
                 key={n.id}
                 onSelect={() => openNotification(n)}
-                className={cn("flex-col items-start gap-1 py-3", n.order_id && "cursor-pointer", !n.read && "bg-primary/5")}
+                className={cn("flex-col items-start gap-1 py-3", href && "cursor-pointer", !n.read && "bg-primary/5")}
               >
                 <div className="flex w-full items-center gap-2">
                   <span
@@ -166,9 +176,10 @@ export function TopHeader() {
                   <span className="ml-auto text-[10px] text-muted-foreground">{formatDistanceToNow(new Date(n.created_at), { addSuffix: true })}</span>
                 </div>
                 <span className="line-clamp-2 text-xs text-muted-foreground">{n.body}</span>
-                {n.order_id ? <span className="text-[11px] font-medium text-primary">{orderLinkLabel(user?.role)}</span> : null}
+                {href ? <span className="text-[11px] font-medium text-primary">{notificationLinkLabel(n, href, user?.role)}</span> : null}
               </DropdownMenuItem>
-            ))}
+              );
+            })}
             {user && (
               <>
                 <DropdownMenuSeparator />

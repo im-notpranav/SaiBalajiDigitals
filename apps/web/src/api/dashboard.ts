@@ -101,6 +101,7 @@ export interface ProdTeamStat {
 
 export interface ProdPendingItem {
   order_id: number;
+  item_id: number;
   order_no: string;
   client_name: string;
   item_s_no: number;

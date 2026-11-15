@@ -28,6 +28,9 @@ import {
   bulkAssignOrderItems,
   getAssignSuggestions,
   completeOrderItem,
+  completeProduction,
+  returnOrderItem,
+  remindInvoiceDetails,
   markStoreInstalled,
   getFollowUps,
   createFollowUp,
@@ -87,6 +90,7 @@ router.put("/:orderId/invoices/:invoiceId/payment", authorize("ACCOUNTS", "ADMIN
 router.patch("/:orderId/invoices/:invoiceId/billing", authorize("ACCOUNTS", "ADMIN"), editInvoiceBilling);
 router.patch("/:orderId/invoices/:invoiceId/payment-edit", authorize("ACCOUNTS", "ADMIN"), editInvoicePayment);
 router.get("/:id/follow-ups", getFollowUps);
+router.post("/invoice-reminders", authorize("ACCOUNTS", "ADMIN"), remindInvoiceDetails);
 router.post("/:id/follow-ups", authorize("CSM", "ACCOUNTS", "ADMIN"), createFollowUp);
 router.put("/:id/close", authorize("ADMIN"), closeOrder);
 router.put("/:id/force-close", authorize("ADMIN"), forceCloseOrder);
@@ -100,5 +104,7 @@ router.patch("/:orderId/items/:itemId/assign", authorize("PRODUCTION_MANAGER", "
 router.patch("/:orderId/items/assign", authorize("PRODUCTION_MANAGER", "ADMIN"), bulkAssignOrderItems);
 router.get("/:orderId/assign-suggestions", authorize("PRODUCTION_MANAGER", "ADMIN"), getAssignSuggestions);
 router.patch("/:orderId/items/:itemId/complete", authorize("PRODUCTION", "PRODUCTION_MANAGER", "ADMIN"), completeOrderItem);
+router.post("/production/complete", authorize("PRODUCTION_MANAGER", "ADMIN"), completeProduction);
+router.post("/:orderId/items/:itemId/return", authorize("PRODUCTION"), returnOrderItem);
 
 export default router;

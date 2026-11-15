@@ -64,7 +64,7 @@ export interface OrdersQuery {
   client?: string;
   store?: string;
   status?: string;
-  section?: "active" | "completed";
+  section?: "active" | "completed" | "all";
   q?: string;
   /** "1": allotted and not filled — no stores and no items yet. */
   waiting?: "1";
@@ -367,6 +367,50 @@ export async function completeOrderItem(orderId: number, itemId: number, product
   return apiFetch<any>(`/orders/${orderId}/items/${itemId}/complete`, {
     method: "PATCH",
     data: { production_completed },
+  });
+}
+
+export interface CompleteProductionResult {
+  orders: number;
+  items: number;
+  skipped_flagged: number;
+  skipped_orders: number;
+}
+
+/**
+ * Production Manager: mark orders produced. Each entry is a whole order, or only the items
+ * listed for it. Unassigned items count too; flagged ones are skipped.
+ */
+export async function completeProduction(orders: { order_id: number; item_ids?: number[] }[]) {
+  return apiFetch<CompleteProductionResult>("/orders/production/complete", {
+    method: "POST",
+    data: { orders },
+  });
+}
+
+/** Production team: send back an item that was given to them by mistake. */
+export async function returnOrderItem(orderId: number, itemId: number, reason: string) {
+  return apiFetch<{ success: true }>(`/orders/${orderId}/items/${itemId}/return`, {
+    method: "POST",
+    data: { reason },
+  });
+}
+
+export interface InvoiceReminderResult {
+  reminded: number;
+  skipped_recent: number;
+  skipped_no_csm: number;
+  not_found: number;
+  csms: number;
+  /** How many of those CSMs have an email address and were emailed too. */
+  emailed: number;
+}
+
+/** Accounts: remind each order's CSM to send its invoice details (in-app and email). */
+export async function remindInvoiceDetails(orderIds: number[]) {
+  return apiFetch<InvoiceReminderResult>("/orders/invoice-reminders", {
+    method: "POST",
+    data: { order_ids: orderIds },
   });
 }
 

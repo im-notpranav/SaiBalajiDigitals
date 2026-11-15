@@ -342,6 +342,32 @@ export async function sendStatusTransitionEmail(
   await sendMail(recipientEmail, `[${transition}] ${orderNo} — ${clientName}`, wrap(transition, body));
 }
 
+const escapeHtml = (v: string) =>
+  v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+/** Accounts asks a CSM for the invoice details of one or more of their orders. */
+export async function sendInvoiceReminderEmail(
+  recipientEmail: string,
+  csmName: string,
+  orders: { order_no: string; client_name: string }[],
+  accountantName: string
+) {
+  const rows = orders.map((o) => infoRow(escapeHtml(o.order_no), escapeHtml(o.client_name))).join("");
+  const one = orders.length === 1;
+  const body = `
+    <p style="margin:0 0 16px;font-size:14px;color:#3d3830;line-height:1.6;">
+      Hello ${escapeHtml(csmName)}, <strong>${escapeHtml(accountantName)}</strong> from Accounts is waiting for the
+      invoice details of ${one ? "this order" : `these ${orders.length} orders`}. Please send them so
+      ${one ? "it" : "they"} can be invoiced.
+    </p>
+    ${table(rows)}
+  `;
+  const subject = one
+    ? `[Invoice details needed] ${orders[0]!.order_no} — ${orders[0]!.client_name}`
+    : `[Invoice details needed] ${orders.length} orders`;
+  await sendMail(recipientEmail, subject, wrap("Invoice details needed", body));
+}
+
 /**
  * Send an Excel export as an email attachment.
  */
