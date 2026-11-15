@@ -53,6 +53,11 @@ export function destinationFor(role: UserRole, link: string): string {
     if (page) return page;
     if (role === "CSM") return "/employee/jobs";
   }
+  if (kind === "jobs") {
+    if (isField) return "/field/dashboard";
+    if (isManager) return "/admin/jobs";
+    if (role === "CSM") return "/employee/jobs";
+  }
   if (kind === "order" && id(a)) {
     const page = orderPage(role, a!);
     if (page) return page;
@@ -69,23 +74,44 @@ export function destinationFor(role: UserRole, link: string): string {
   return roleHome[role];
 }
 
-/** The link a notification carries; older ones only name an order. */
-const linkOf = (n: Pick<Notification, "link" | "order_id">) => n.link ?? (n.order_id ? `order/${n.order_id}` : null);
+/**
+ * Where notifications sent before links were stored lead, by their title. Only for those: a
+ * notification with a link, or about an order, never gets here.
+ */
+const LEGACY_TITLES: [RegExp, string][] = [
+  [/^New name request/i, "library/requests"],
+  [/^Leave\b/i, "leave"],
+  [/^Overtime\b/i, "overtime"],
+  [/^(New )?payment request|^Overdue payment requests/i, "payments"],
+  [/\bjob\b|^Work details updated/i, "jobs"],
+];
+
+/** The link a notification carries; older ones name only an order, or nothing but a title. */
+const linkOf = (n: Pick<Notification, "link" | "order_id"> & { title?: string }) =>
+  n.link ??
+  (n.order_id ? `order/${n.order_id}` : (LEGACY_TITLES.find(([re]) => re.test(n.title ?? ""))?.[1] ?? null));
 
 /** Where clicking a notification goes for this person, or null when it leads nowhere. */
-export function notificationHref(role: UserRole | undefined, n: Pick<Notification, "link" | "order_id">): string | null {
+export function notificationHref(
+  role: UserRole | undefined,
+  n: Pick<Notification, "link" | "order_id" | "title">,
+): string | null {
   const link = linkOf(n);
   return role && link ? destinationFor(role, link) : null;
 }
 
 /** The words on a notification's link, by what it opens. */
-export function notificationLinkLabel(n: Pick<Notification, "link" | "order_id">, href: string, role?: UserRole): string {
+export function notificationLinkLabel(
+  n: Pick<Notification, "link" | "order_id" | "title">,
+  href: string,
+  role?: UserRole,
+): string {
   if (role && href === roleHome[role]) return "Open →";
   const kind = linkOf(n)?.split("/")[0];
   if (kind === "order") return "View order →";
   if (kind === "pr") return "Open request →";
   if (kind === "payments") return "Open payment requests →";
-  if (kind === "job") return href.includes("/orders") ? "View order →" : "Open jobs →";
+  if (kind === "job" || kind === "jobs") return href.includes("/orders") ? "View order →" : "Open jobs →";
   if (kind === "leave") return "Open leave →";
   if (kind === "overtime") return "Open overtime →";
   if (kind === "library") return "Open requests →";

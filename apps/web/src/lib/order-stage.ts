@@ -49,10 +49,10 @@ export const STAGE_STYLES: Record<StageKey, StageStyle> = {
   },
   payment: {
     label: "Payment",
-    text: "text-orange-500",
-    bg: "bg-orange-500/10",
-    border: "border-orange-500/25",
-    badge: "bg-orange-500/10 text-orange-800 border-orange-500/30 dark:text-orange-300",
+    text: "text-cyan-600",
+    bg: "bg-cyan-500/10",
+    border: "border-cyan-500/25",
+    badge: "bg-cyan-500/10 text-cyan-800 border-cyan-500/30 dark:text-cyan-300",
   },
   completed: {
     label: "Completed",

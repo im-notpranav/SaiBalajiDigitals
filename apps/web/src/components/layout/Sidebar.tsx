@@ -316,7 +316,7 @@ function SidebarBody({
                   />
                 )}
                 <Icon className="h-[18px] w-[18px] shrink-0" />
-                {item.was ? <WasMark kind={item.was} className="truncate" /> : <span className="truncate">{item.label}</span>}
+                {item.was ? <WasMark kind={item.was} muted={!active} /> : <span className="truncate">{item.label}</span>}
               </Link>
             </motion.div>
           );

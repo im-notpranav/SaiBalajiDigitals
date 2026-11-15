@@ -106,7 +106,7 @@ export function AllocationSwitch({
           )}
         >
           <CalendarRange className="h-4 w-4 shrink-0" aria-hidden />
-          <WasMark kind="OMS" />
+          <WasMark kind="OMS" muted={!here} />
         </Link>
       </div>
     );
@@ -146,7 +146,7 @@ export function AllocationSwitch({
                 />
               )}
               <Icon className="h-4 w-4 shrink-0" aria-hidden />
-              <WasMark kind={kind} className="truncate" />
+              <WasMark kind={kind} muted={!isSelected} />
             </Link>
           );
         })}

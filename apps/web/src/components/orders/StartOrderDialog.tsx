@@ -28,8 +28,8 @@ import { ClientCombobox } from "./AutocompleteComboboxes";
 /**
  * Allot Order: an admin opens an order for a CSM, who then adds its line items. The number field
  * shows ORD and this financial year's code as a fixed start (ORD26 now, ORD27 from 1 Apr 2027),
- * and takes only the last four digits: the next in the series is filled in and can be changed
- * for this one order. Fewer than four digits are padded: 21 is ORD260021.
+ * and takes only the last four digits, typed by the admin: nothing is filled in. The next free
+ * number is shown below as a hint. Fewer than four digits are padded: 21 is ORD260021.
  */
 export function StartOrderDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const qc = useQueryClient();
@@ -64,9 +64,6 @@ export function StartOrderDialog({ open, onClose }: { open: boolean; onClose: ()
     setCsmId(null);
     setDigits("");
   }, [open]);
-  useEffect(() => {
-    if (open && suggested) setDigits((d) => d || suggested.slice(-4));
-  }, [open, suggested]);
 
   const prefix = `ORD${yy}`;
   const typed = digits !== "";
@@ -120,7 +117,7 @@ export function StartOrderDialog({ open, onClose }: { open: boolean; onClose: ()
                 value={digits}
                 // Digits only, four at most: anything else is not taken.
                 onChange={(e) => setDigits(e.target.value.replace(/\D/g, "").slice(0, 4))}
-                placeholder="0123"
+                placeholder=""
                 maxLength={4}
                 inputMode="numeric"
                 pattern="[0-9]*"
@@ -143,8 +140,8 @@ export function StartOrderDialog({ open, onClose }: { open: boolean; onClose: ()
               </p>
             ) : (
               <p id="start-order-no-hint" className="text-xs text-muted-foreground">
-                {typed && digits.length < 4 ? `Will be ${number}. ` : ""}
-                The next in the series is filled in. Change the series itself under Settings.
+                {typed && digits.length < 4 ? `Will be ${number}. ` : `Type the 4 digits after ORD${yy}. `}
+                {suggested ? `Next free: ${suggested.slice(-4)}.` : ""}
               </p>
             )}
           </div>

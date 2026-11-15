@@ -120,7 +120,7 @@ export function SheetView() {
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="mb-2 flex items-center gap-2 sm:mb-3">
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-lg font-bold tracking-tight sm:text-xl"><WasMark kind="GS" className="font-bold" /></h1>
+          <h1 className="truncate text-lg font-bold tracking-tight sm:text-xl"><WasMark kind="GS" size="lg" /></h1>
           <p className="hidden truncate text-xs text-muted-foreground sm:block">
             The team's Google Sheet, live. Sign in to Google in this browser to see and edit it.
           </p>
@@ -140,7 +140,7 @@ export function SheetView() {
       >
         {full && (
           <div className="flex shrink-0 items-center gap-2 border-b bg-card/90 px-2 py-1.5 pt-[max(0.375rem,env(safe-area-inset-top))] backdrop-blur">
-            <WasMark kind="GS" className="min-w-0 flex-1 truncate px-1 text-sm" />
+            <span className="min-w-0 flex-1 px-1"><WasMark kind="GS" size="md" /></span>
             {tools}
           </div>
         )}
