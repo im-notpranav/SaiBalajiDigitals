@@ -150,12 +150,14 @@ const NAV: Record<UserRole, NavItem[]> = {
   PRODUCTION_MANAGER: [
     { to: "/prod-manager/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { to: "/prod-manager/assign", label: "Assign Work", icon: Workflow },
+    { to: "/prod-manager/reports", label: "Reports", icon: FileBarChart2 },
     { to: "/sheet", label: "Sheet View", icon: FileSpreadsheet },
     { to: "/prod-manager/notifications", label: "Notifications", icon: Bell },
     { to: "/profile", label: "Profile", icon: UserCircle },
   ],
   COST_CONTROL_MANAGER: [
     { to: "/cost-control/dashboard", label: "Dashboard", icon: Wallet },
+    { to: "/cost-control/reports", label: "Reports", icon: FileBarChart2 },
     { to: "/sheet", label: "Sheet View", icon: FileSpreadsheet },
     { to: "/cost-control/notifications", label: "Notifications", icon: Bell },
     { to: "/profile", label: "Profile", icon: UserCircle },

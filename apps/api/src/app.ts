@@ -44,6 +44,7 @@ app.use(cookieParser());
 // AskEva's delivery reports arrive in bursts from a few addresses, so the webhook sits ahead
 // of the per-IP limiter. It needs no login; a shared secret guards it instead.
 import whatsappRoutes, { webhookRouter } from "./routes/whatsapp.routes";
+import reportsRoutes from "./routes/reports.routes";
 app.use("/api/webhooks", webhookRouter);
 
 // Global rate limit: 300 requests per minute per signed-in person, and per address for everyone
@@ -101,5 +102,6 @@ app.use("/api/allocation-sheet", allocationSheetRoutes);
 app.use("/api/zone-board", zoneBoardRoutes);
 app.use("/api/my", myRoutes);
 app.use("/api/whatsapp", whatsappRoutes);
+app.use("/api/reports", reportsRoutes);
 
 export default app;
