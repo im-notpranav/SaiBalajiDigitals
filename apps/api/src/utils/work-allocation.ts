@@ -23,9 +23,18 @@ export const daysBetween = (from: string, to: string): number =>
 // Team and lifecycle
 // ---------------------------------------------------------------------------
 
-/** Most people of each role one job can take: the old Task Log had 2 / 2 / 1 columns. */
+/**
+ * The roles a job's team is made of. Since 2026-11-15 (Q17/Q18) any mix is valid: any number
+ * of each, or nobody at all, since work can be booked before the team is known.
+ */
+export const SLOT_ROLES = ["PASTER", "HELPER", "DRIVER"] as const;
+export type SlotRole = (typeof SLOT_ROLES)[number];
+
+/**
+ * @deprecated The old Task Log's 2 / 2 / 1 columns. No longer enforced (see SLOT_ROLES); kept
+ * only until tests/unit/helpers.test.ts drops its cases for teamLimitErrors.
+ */
 export const TEAM_LIMITS = { PASTER: 2, HELPER: 2, DRIVER: 1 } as const;
-export type SlotRole = keyof typeof TEAM_LIMITS;
 
 /** Longest a single job may run. Longer work is split into jobs, as in the old sheets. */
 export const MAX_JOB_DAYS = 62;
@@ -46,7 +55,10 @@ export const EDITABLE_STATUSES: WorkJobStatus[] = ["ASSIGNED", "STARTED", "HOLD"
 export const blocksCalendar = (job: { status: WorkJobStatus; allow_double_booking: boolean }) =>
   job.status !== "CANCELLED" && !job.allow_double_booking;
 
-/** Count each role in a team and report any role over its limit, or a missing Paster or Driver. */
+/**
+ * @deprecated The old team rules (role caps, a Paster and a Driver required). Nothing calls
+ * this any more: any team is valid. Remove together with its unit test.
+ */
 export function teamLimitErrors(roles: string[]): string[] {
   const errors: string[] = [];
   for (const [role, max] of Object.entries(TEAM_LIMITS)) {
@@ -56,6 +68,22 @@ export function teamLimitErrors(roles: string[]): string[] {
   if (!roles.includes("PASTER")) errors.push("Pick a Paster.");
   if (!roles.includes("DRIVER")) errors.push("Pick a Driver.");
   return errors;
+}
+
+/**
+ * A CSM's own job (Q10): he is the job's CSM, or the person behind its first or second CSM
+ * code. He may update such a job (work details, linking his order); every other job he can
+ * only read. csmJobsWhere in the jobs controller is the same rule as a database filter.
+ */
+export function isCsmsJob(
+  job: {
+    csm_user_id: number | null;
+    csmCode?: { user?: { id: number } | null } | null;
+    csm2Code?: { user?: { id: number } | null } | null;
+  },
+  userId: number,
+): boolean {
+  return job.csm_user_id === userId || job.csmCode?.user?.id === userId || job.csm2Code?.user?.id === userId;
 }
 
 /** " on ORD260123", or nothing for a job with no order yet: "New job on ORD260123". */

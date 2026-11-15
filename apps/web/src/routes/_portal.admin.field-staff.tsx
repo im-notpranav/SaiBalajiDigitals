@@ -12,14 +12,31 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { NewPasswordFields, passwordsReady } from "@/components/ui/password-input";
+import {
+  DeletePermanentlyDialog,
+  KEEP_PHOTO,
+  PhotoField,
+  QuickPhoto,
+  USERNAME_PREFIX,
+  UsernameField,
+  applyPhotoDraft,
+  usernameOk,
+  type PhotoDraft,
+} from "@/components/users/UserBits";
+import { photoSrc } from "@/api/users";
+import { useAuth } from "@/lib/auth-store";
 import {
   FIELD_ROLE_LABELS,
   apiErrorMessage,
   createFieldStaff,
+  deleteFieldStaff,
   fetchFieldStaff,
+  removeFieldStaffPhoto,
   resetFieldStaffPassword,
   setFieldStaffStatus,
   updateFieldStaff,
+  uploadFieldStaffPhoto,
   type FieldRole,
   type FieldStaff,
 } from "@/api/allocation";
@@ -29,61 +46,93 @@ export const Route = createFileRoute("/_portal/admin/field-staff")({
   component: FieldStaffPage,
 });
 
+/** Paster, Helper, Driver: the order the count cards use. */
 const ROLE_OPTIONS = Object.entries(FIELD_ROLE_LABELS) as [FieldRole, string][];
+/** The same roles A–Z, for every role picker. */
+const ROLE_PICKS = [...ROLE_OPTIONS].sort((a, b) => a[1].localeCompare(b[1]));
 
-/** "Mohd Moin" → "mohd_moin": a starting suggestion the manager can change. */
-const suggestUsername = (name: string) =>
-  name
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .slice(0, 50);
-
-const emptyForm = { name: "", username: "", password: "", role: "PASTER" as FieldRole, phone: "", email: "", emp_code: "" };
+const emptyForm = {
+  name: "",
+  username: USERNAME_PREFIX,
+  password: "",
+  confirm: "",
+  role: "PASTER" as FieldRole,
+  phone: "",
+  email: "",
+  emp_code: "",
+};
 
 function FieldStaffPage() {
   const queryClient = useQueryClient();
+  // Every change to an account is the super admin's (2026-11-15). Admins and the Operation
+  // Manager see the list read-only; the API refuses their writes too.
+  const isSuper = !!useAuth().user?.is_super_admin;
   const [q, setQ] = useState("");
   const [roleFilter, setRoleFilter] = useState<"ALL" | FieldRole>("ALL");
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
-  const [usernameTouched, setUsernameTouched] = useState(false);
+  const [newPhoto, setNewPhoto] = useState<PhotoDraft>(KEEP_PHOTO);
   const [editing, setEditing] = useState<FieldStaff | null>(null);
+  const [editPhoto, setEditPhoto] = useState<PhotoDraft>(KEEP_PHOTO);
   const [pwTarget, setPwTarget] = useState<FieldStaff | null>(null);
   const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<FieldStaff | null>(null);
 
   const { data, isLoading, error, refetch } = useQuery({ queryKey: ["field-staff"], queryFn: fetchFieldStaff });
   const staff = data?.staff ?? [];
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["field-staff"] });
 
+  const openCreate = (open: boolean) => {
+    setCreateOpen(open);
+    if (!open) setNewPhoto(KEEP_PHOTO);
+  };
+  const closeEdit = () => {
+    setEditing(null);
+    setEditPhoto(KEEP_PHOTO);
+  };
+
   const createMutation = useMutation({
-    mutationFn: () =>
-      createFieldStaff({
-        name: form.name,
-        username: form.username,
+    mutationFn: async () => {
+      const u = await createFieldStaff({
+        name: form.name.trim(),
+        username: form.username.trim().toUpperCase(),
         password: form.password,
         role: form.role,
         phone: form.phone,
         email: form.email,
         emp_code: form.emp_code || null,
-      }),
-    onSuccess: (u) => {
-      toast.success(`${u.name} added. Share the username and password with them.`);
-      setCreateOpen(false);
+      });
+      // The person exists first; the picture follows, so a failed upload never loses them.
+      const photoError = await applyPhotoDraft(newPhoto, (p) => uploadFieldStaffPhoto(u.id, p), () => removeFieldStaffPhoto(u.id));
+      return { u, photoError };
+    },
+    onSuccess: ({ u, photoError }) => {
+      if (photoError) toast.warning(`${u.name} added, but the picture didn't save: ${photoError}`);
+      else toast.success(`${u.name} added. Share the username and password with them.`);
+      openCreate(false);
       setForm(emptyForm);
-      setUsernameTouched(false);
       refresh();
     },
     onError: (err) => toast.error(apiErrorMessage(err, "Could not add the staff member")),
   });
 
   const updateMutation = useMutation({
-    mutationFn: (u: FieldStaff) =>
-      updateFieldStaff(u.id, { name: u.name, role: u.role, phone: u.phone ?? "", email: u.email ?? "", emp_code: u.emp_code || null }),
-    onSuccess: () => {
-      toast.success("Saved");
-      setEditing(null);
+    mutationFn: async (u: FieldStaff) => {
+      await updateFieldStaff(u.id, {
+        name: u.name,
+        username: u.username.trim().toUpperCase(),
+        role: u.role,
+        phone: u.phone ?? "",
+        email: u.email ?? "",
+        emp_code: u.emp_code || null,
+      });
+      return applyPhotoDraft(editPhoto, (p) => uploadFieldStaffPhoto(u.id, p), () => removeFieldStaffPhoto(u.id));
+    },
+    onSuccess: (photoError) => {
+      if (photoError) toast.warning(`Saved, but the picture didn't save: ${photoError}`);
+      else toast.success("Saved");
+      closeEdit();
       refresh();
     },
     onError: (err) => toast.error(apiErrorMessage(err, "Could not save changes")),
@@ -104,8 +153,22 @@ function FieldStaffPage() {
       toast.success(res.message);
       setPwTarget(null);
       setNewPassword("");
+      setConfirmPassword("");
     },
     onError: (err) => toast.error(apiErrorMessage(err, "Could not reset the password")),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (u: FieldStaff) => deleteFieldStaff(u.id),
+    onSuccess: (res, u) => {
+      toast.success(res.message);
+      setDeleteTarget(null);
+      // Off the list at once; the refetch confirms it.
+      queryClient.setQueryData<{ staff: FieldStaff[] }>(["field-staff"], (old) => old && { staff: old.staff.filter((s) => s.id !== u.id) });
+      refresh();
+    },
+    // Open jobs, payment requests or leave come back as a message saying what to do first.
+    onError: (err) => toast.error(apiErrorMessage(err, "Could not delete this person")),
   });
 
   const counts = ROLE_OPTIONS.map(([role, label]) => ({
@@ -120,16 +183,29 @@ function FieldStaffPage() {
       `${s.name} ${s.username} ${s.emp_code ?? ""} ${s.phone ?? ""}`.toLowerCase().includes(q.toLowerCase()),
   );
 
+  const canCreate =
+    !!form.name.trim() &&
+    !!form.phone.trim() &&
+    !!form.email.trim() &&
+    usernameOk(form.username) &&
+    passwordsReady(form.password, form.confirm);
+
   return (
     <>
       <PageHeader
         title="Field Staff"
-        description="Pasters, Helpers and Drivers. Deactivate people who leave."
+        description={
+          isSuper
+            ? "Pasters, Helpers and Drivers. Deactivate people who leave."
+            : "Pasters, Helpers and Drivers. View only: the super admin adds and changes accounts."
+        }
         crumbs={[{ label: "Work Allocation" }, { label: "Field Staff" }]}
         actions={
-          <Button className="rounded-xl" onClick={() => setCreateOpen(true)}>
-            <UserPlus className="mr-2 h-4 w-4" /> Add staff
-          </Button>
+          isSuper ? (
+            <Button className="rounded-xl" onClick={() => openCreate(true)}>
+              <UserPlus className="mr-2 h-4 w-4" /> Add staff
+            </Button>
+          ) : undefined
         }
       />
 
@@ -152,7 +228,7 @@ function FieldStaffPage() {
           <SelectTrigger className="sm:w-44"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="ALL">All roles</SelectItem>
-            {ROLE_OPTIONS.map(([v, l]) => (
+            {ROLE_PICKS.map(([v, l]) => (
               <SelectItem key={v} value={v}>{l}</SelectItem>
             ))}
           </SelectContent>
@@ -169,7 +245,7 @@ function FieldStaffPage() {
             bare
             icon={HardHat}
             title={staff.length === 0 ? "No field staff yet" : "No one matches these filters"}
-            description={staff.length === 0 ? "Add your first Paster, Helper or Driver." : undefined}
+            description={staff.length === 0 && isSuper ? "Add your first Paster, Helper or Driver." : undefined}
           />
         ) : (
           <Table>
@@ -180,15 +256,30 @@ function FieldStaffPage() {
                 <TableHead>Emp code</TableHead>
                 <TableHead>Phone</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                {isSuper && <TableHead className="text-right">Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {filtered.map((s) => (
                 <TableRow key={s.id} className={s.is_active ? "" : "opacity-60"}>
                   <TableCell>
-                    <div className="font-semibold">{s.name}</div>
-                    <div className="text-xs text-muted-foreground">@{s.username}</div>
+                    <div className="flex items-center gap-3">
+                      <QuickPhoto
+                        name={s.name}
+                        src={photoSrc(s.photo_url)}
+                        editable={isSuper}
+                        className="h-8 w-8"
+                        fallbackClassName="text-[11px]"
+                        onSave={async (picture) => {
+                          await uploadFieldStaffPhoto(s.id, picture);
+                          refresh();
+                        }}
+                      />
+                      <div>
+                        <div className="font-semibold">{s.name}</div>
+                        <div className="text-xs text-muted-foreground">@{s.username}</div>
+                      </div>
+                    </div>
                   </TableCell>
                   <TableCell><Badge variant="outline">{FIELD_ROLE_LABELS[s.role]}</Badge></TableCell>
                   <TableCell className="tabular-nums">{s.emp_code ?? "—"}</TableCell>
@@ -203,9 +294,9 @@ function FieldStaffPage() {
                       <Badge variant="secondary">Inactive</Badge>
                     )}
                   </TableCell>
-                  <TableCell className="whitespace-nowrap text-right">
-                    <Button variant="ghost" size="sm" onClick={() => setEditing({ ...s })}>Edit</Button>
-                    <Button variant="ghost" size="sm" onClick={() => { setPwTarget(s); setNewPassword(""); }}>Password</Button>
+                  {isSuper && <TableCell className="whitespace-nowrap text-right">
+                    <Button variant="ghost" size="sm" onClick={() => { setEditing({ ...s }); setEditPhoto(KEEP_PHOTO); }}>Edit</Button>
+                    <Button variant="ghost" size="sm" onClick={() => { setPwTarget(s); setNewPassword(""); setConfirmPassword(""); }}>Password</Button>
                     <Button
                       variant="ghost"
                       size="sm"
@@ -215,7 +306,10 @@ function FieldStaffPage() {
                     >
                       {s.is_active ? "Deactivate" : "Reactivate"}
                     </Button>
-                  </TableCell>
+                    <Button variant="ghost" size="sm" className="text-destructive" onClick={() => setDeleteTarget(s)}>
+                      Delete
+                    </Button>
+                  </TableCell>}
                 </TableRow>
               ))}
             </TableBody>
@@ -224,27 +318,22 @@ function FieldStaffPage() {
       </div>
 
       {/* Add */}
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+      <Dialog open={createOpen} onOpenChange={openCreate}>
         <DialogContent>
           <DialogHeader><DialogTitle>Add field staff</DialogTitle></DialogHeader>
           <div className="grid gap-4 py-2">
+            <PhotoField name={form.name} draft={newPhoto} onChange={setNewPhoto} disabled={createMutation.isPending} />
             <div className="grid gap-2">
               <Label htmlFor="fs-name">Name (as used daily)</Label>
-              <Input
-                id="fs-name"
-                value={form.name}
-                onChange={(e) =>
-                  setForm({ ...form, name: e.target.value, username: usernameTouched ? form.username : suggestUsername(e.target.value) })
-                }
-              />
+              <Input id="fs-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="grid gap-2">
                 <Label>Role</Label>
                 <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v as FieldRole })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger aria-label="Role"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {ROLE_OPTIONS.map(([v, l]) => (
+                    {ROLE_PICKS.map(([v, l]) => (
                       <SelectItem key={v} value={v}>{l}</SelectItem>
                     ))}
                   </SelectContent>
@@ -264,27 +353,18 @@ function FieldStaffPage() {
               <Label htmlFor="fs-email">Email</Label>
               <Input id="fs-email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="grid gap-2">
-                <Label htmlFor="fs-user">Username</Label>
-                <Input
-                  id="fs-user"
-                  value={form.username}
-                  onChange={(e) => { setUsernameTouched(true); setForm({ ...form, username: e.target.value.toLowerCase() }); }}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="fs-pw">Password</Label>
-                <Input id="fs-pw" type="text" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="At least 8 characters" />
-              </div>
-            </div>
+            <UsernameField id="fs-user" value={form.username} onChange={(v) => setForm({ ...form, username: v })} />
+            <NewPasswordFields
+              idPrefix="fs"
+              password={form.password}
+              confirm={form.confirm}
+              onPasswordChange={(v) => setForm({ ...form, password: v })}
+              onConfirmChange={(v) => setForm({ ...form, confirm: v })}
+            />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
-            <Button
-              onClick={() => createMutation.mutate()}
-              disabled={createMutation.isPending || !form.name || !form.phone.trim() || !form.email.trim() || form.username.length < 3 || form.password.length < 8}
-            >
+            <Button variant="outline" onClick={() => openCreate(false)}>Cancel</Button>
+            <Button onClick={() => createMutation.mutate()} disabled={createMutation.isPending || !canCreate}>
               {createMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Add
             </Button>
@@ -293,22 +373,30 @@ function FieldStaffPage() {
       </Dialog>
 
       {/* Edit */}
-      <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
+      <Dialog open={!!editing} onOpenChange={(o) => !o && closeEdit()}>
         <DialogContent>
           <DialogHeader><DialogTitle>Edit {editing?.name}</DialogTitle></DialogHeader>
           {editing && (
             <div className="grid gap-4 py-2">
+              <PhotoField
+                name={editing.name}
+                currentSrc={photoSrc(editing.photo_url)}
+                draft={editPhoto}
+                onChange={setEditPhoto}
+                disabled={updateMutation.isPending}
+              />
               <div className="grid gap-2">
                 <Label htmlFor="fe-name">Name</Label>
                 <Input id="fe-name" value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} />
               </div>
+              <UsernameField id="fe-user" value={editing.username} onChange={(v) => setEditing({ ...editing, username: v })} />
               <div className="grid grid-cols-2 gap-3">
                 <div className="grid gap-2">
                   <Label>Role</Label>
                   <Select value={editing.role} onValueChange={(v) => setEditing({ ...editing, role: v as FieldRole })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger aria-label="Role"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {ROLE_OPTIONS.map(([v, l]) => (
+                      {ROLE_PICKS.map(([v, l]) => (
                         <SelectItem key={v} value={v}>{l}</SelectItem>
                       ))}
                     </SelectContent>
@@ -330,8 +418,8 @@ function FieldStaffPage() {
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditing(null)}>Cancel</Button>
-            <Button onClick={() => editing && updateMutation.mutate(editing)} disabled={updateMutation.isPending || !editing?.name || !editing?.phone?.trim() || !editing?.email?.trim()}>
+            <Button variant="outline" onClick={closeEdit}>Cancel</Button>
+            <Button onClick={() => editing && updateMutation.mutate(editing)} disabled={updateMutation.isPending || !editing?.name || !editing || !usernameOk(editing.username) || !editing?.phone?.trim() || !editing?.email?.trim()}>
               {updateMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Save
             </Button>
@@ -347,17 +435,30 @@ function FieldStaffPage() {
             <p className="text-sm text-muted-foreground">
               Sets a new password for <strong>@{pwTarget?.username}</strong> immediately. Share it with them directly.
             </p>
-            <Input type="text" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="At least 8 characters" />
+            <NewPasswordFields
+              idPrefix="fs-reset"
+              password={newPassword}
+              confirm={confirmPassword}
+              onPasswordChange={setNewPassword}
+              onConfirmChange={setConfirmPassword}
+            />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPwTarget(null)}>Cancel</Button>
-            <Button onClick={() => passwordMutation.mutate()} disabled={passwordMutation.isPending || newPassword.length < 8}>
+            <Button onClick={() => passwordMutation.mutate()} disabled={passwordMutation.isPending || !passwordsReady(newPassword, confirmPassword)}>
               {passwordMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Reset password
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <DeletePermanentlyDialog
+        target={deleteTarget}
+        pending={deleteMutation.isPending}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget)}
+      />
     </>
   );
 }

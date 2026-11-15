@@ -99,7 +99,10 @@ export function StaffSelect({
               </CommandGroup>
             )}
             {ROLES.map((role) => {
-              const people = staff.filter((s) => s.role === role);
+              // Alphabetical within each role, whatever order the list arrived in.
+              const people = staff
+                .filter((s) => s.role === role)
+                .sort((a, b) => a.name.localeCompare(b.name));
               if (!people.length) return null;
               return (
                 <CommandGroup key={role} heading={`${FIELD_ROLE_LABELS[role]}s`}>

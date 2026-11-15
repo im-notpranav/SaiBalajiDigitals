@@ -6,7 +6,7 @@ import { OrdersFilterBar, OrdersPager, parseOrdersSearch, useOrdersFilters } fro
 import { OrdersTable } from "@/components/orders/OrdersTable";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
-import { fetchOrders, closeOrder, exportOrders } from "@/api/orders";
+import { fetchOrders, fetchWaitingOrderCount, closeOrder, exportOrders } from "@/api/orders";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -58,6 +58,11 @@ function AdminOrders() {
     queryFn: () => fetchOrders(params),
     placeholderData: keepPreviousData,
   });
+  // Every open allotted order still waiting on its CSM, whatever the search: the chip's count.
+  const { data: waitingCount } = useQuery({
+    queryKey: ["orders", "waiting-count"],
+    queryFn: fetchWaitingOrderCount,
+  });
 
   const handleClose = async () => {
     if (!closingOrder) return;
@@ -87,7 +92,7 @@ function AdminOrders() {
           <div className="flex flex-wrap gap-2">
             {!readOnly && (
               <Button className="rounded-xl shadow-soft" onClick={() => setStarting(true)}>
-                <Plus className="mr-2 h-4 w-4" /> New order
+                <Plus className="mr-2 h-4 w-4" /> Allot Order
               </Button>
             )}
             <Button variant="outline" className="rounded-xl shadow-soft" onClick={() => exportOrders({ section })}>
@@ -112,13 +117,15 @@ function AdminOrders() {
         filters={filters}
         total={data?.pagination?.total || data?.orders?.length || 0}
         shown={data?.orders?.length || 0}
+        waiting={{ label: "Allotted, waiting for CSM", count: waitingCount }}
       />
       <OrdersTable
         loading={isLoading}
         error={error}
         onRetry={() => refetch()}
-        orders={data?.orders || []} 
-        showCreator 
+        orders={data?.orders || []}
+        showCreator
+        emptyText={filters.search.waiting ? "No allotted order is waiting for its CSM." : undefined}
         action={(o) => (
           <div className="flex justify-end gap-2">
             <Link to="/admin/orders/$id" params={{ id: String(o.id) }} className={buttonVariants({ size: "sm", variant: "ghost" })}>

@@ -11,6 +11,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { fetchCsmDashboard } from "@/api/dashboard";
 import { addDays, fetchCsmJobs, todayIST } from "@/api/allocation";
 import { OPEN_PAYMENT_STATUSES, fetchPaymentRequests } from "@/api/payments";
+import { fetchWaitingOrderCount } from "@/api/orders";
 import {
   AgingLegend,
   AttentionList,
@@ -62,10 +63,11 @@ function EmployeeDashboard() {
   const openRequests = requests.filter((r) => OPEN_PAYMENT_STATUSES.includes(r.status)).length;
   const returnedRequests = requests.filter((r) => r.status === "INFO_REQUESTED").length;
 
-  // An order an admin started has a number and a client, and waits for this person's stores.
-  const needStores = [...(dash?.stage_orders.unassigned ?? []), ...(dash?.stage_orders.production ?? [])].filter(
-    (o) => o.store_count === 0,
-  ).length;
+  // An order the Admin allotted has a number and a client, and waits for this person's stores
+  // and items. Counted over every open order, not just those dated in the range above, so an
+  // allotment can't hide behind the date filter.
+  const { data: waitingCount } = useQuery({ queryKey: ["orders", "waiting-count"], queryFn: fetchWaitingOrderCount });
+  const needStores = waitingCount ?? 0;
 
   const attention: AttentionItem[] = [];
   if (returnedRequests > 0) {
@@ -82,11 +84,11 @@ function EmployeeDashboard() {
     attention.push({
       key: "stores",
       tone: "warning",
-      title: `${needStores} ${plural(needStores, "order needs", "orders need")} stores added`,
-      detail: "The Admin started these orders for you. Production can't begin until they have stores and items.",
+      title: `${needStores} ${plural(needStores, "order is", "orders are")} allotted to you — add stores and items`,
+      detail: "The Admin allotted these orders to you. Production can't begin until they have stores and items.",
       cta: "Add stores",
       to: "/employee/orders",
-      search: { section: "active" },
+      search: { section: "active", waiting: true },
     });
   }
   if (jobsNeedingDetails > 0) {

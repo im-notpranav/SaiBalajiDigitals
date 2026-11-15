@@ -110,7 +110,7 @@ async function seed(url: string) {
         // The first twenty carry the real hashing cost, for the login burst.
         await db.query(
           `INSERT INTO "User" (name, username, password, role, phone, is_super_admin, updated_at) VALUES ($1,$2,$3,$4::"Role",$5,$6,now())`,
-          [`${role} ${i}`, `u${n}`, n <= 20 ? real : fast, role, `90000${String(n).padStart(5, "0")}`, role === "ADMIN"],
+          [`${role} ${i}`, `U${n}`, n <= 20 ? real : fast, role, `90000${String(n).padStart(5, "0")}`, role === "ADMIN"],
         );
       }
     }
@@ -305,7 +305,7 @@ async function main() {
     }
 
     let n = 0;
-    const accounts = STAFF.flatMap(([role, count]) => Array.from({ length: count }, () => ({ role, username: `u${++n}` })));
+    const accounts = STAFF.flatMap(([role, count]) => Array.from({ length: count }, () => ({ role, username: `U${++n}` })));
 
     // The morning rush: twenty people signing in together, with the real hashing cost.
     const burstCpu = processStats(api.pid!).cpu;

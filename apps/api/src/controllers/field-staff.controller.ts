@@ -5,6 +5,7 @@ import { prisma } from "../utils/prisma";
 import { createFieldStaffSchema, updateFieldStaffSchema, resetPasswordSchema } from "../utils/validators";
 import { sanitizeZodErrors } from "../utils/sanitize-errors";
 import { FIELD_ROLES, isFieldRole } from "../utils/roles";
+import { deleteUserPermanently, sendUserPhotoRemoval, sendUserPhotoUpload } from "./users.controller";
 
 /**
  * Field staff (Pasters, Helpers, Drivers) are ordinary users with a field role. This
@@ -21,6 +22,7 @@ const staffSelect = {
   phone: true,
   email: true,
   emp_code: true,
+  photo_url: true,
   is_active: true,
   last_login_at: true,
   created_at: true,
@@ -42,8 +44,9 @@ async function loadFieldStaff(req: Request, res: Response) {
     res.status(400).json({ message: "Invalid id" });
     return null;
   }
-  const target = await prisma.user.findUnique({ where: { id }, select: { id: true, role: true, username: true } });
-  if (!target) {
+  const target = await prisma.user.findUnique({ where: { id }, select: { id: true, role: true, username: true, deleted_at: true } });
+  // A permanently deleted person is gone as far as this page is concerned.
+  if (!target || target.deleted_at) {
     res.status(404).json({ message: "User not found" });
     return null;
   }
@@ -57,7 +60,7 @@ async function loadFieldStaff(req: Request, res: Response) {
 export const listFieldStaff = async (_req: Request, res: Response) => {
   try {
     const staff = await prisma.user.findMany({
-      where: { role: { in: [...FIELD_ROLES] } },
+      where: { role: { in: [...FIELD_ROLES] }, deleted_at: null },
       select: staffSelect,
       orderBy: [{ is_active: "desc" }, { name: "asc" }],
     });
@@ -138,7 +141,7 @@ export const setFieldStaffStatus = async (req: Request, res: Response) => {
   }
 };
 
-/** Field staff forget passwords; the Operation Manager can reset theirs, and only theirs. */
+/** Field staff forget passwords; the super admin resets theirs here (field staff only). */
 export const resetFieldStaffPassword = async (req: Request, res: Response) => {
   try {
     const target = await loadFieldStaff(req, res);
@@ -154,6 +157,45 @@ export const resetFieldStaffPassword = async (req: Request, res: Response) => {
       data: { password: await bcrypt.hash(parsed.data.new_password, PASSWORD_HASH_ROUNDS), password_changed_at: new Date() },
     });
     return res.status(200).json({ message: `Password reset for ${target.username}.` });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+/** The manager sets the person's picture; field staff do not upload their own. */
+export const uploadFieldStaffPhoto = async (req: Request, res: Response) => {
+  try {
+    const target = await loadFieldStaff(req, res);
+    if (!target) return;
+    return sendUserPhotoUpload(req, res, target.id);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+export const removeFieldStaffPhoto = async (req: Request, res: Response) => {
+  try {
+    const target = await loadFieldStaff(req, res);
+    if (!target) return;
+    return sendUserPhotoRemoval(res, target.id);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+/**
+ * Delete permanently, keeping history: the same tombstone as the Users page (see
+ * deleteUserPermanently), confined to field staff like every other write here.
+ */
+export const deleteFieldStaff = async (req: Request, res: Response) => {
+  try {
+    const target = await loadFieldStaff(req, res);
+    if (!target) return;
+    const result = await deleteUserPermanently(req.user!.id, target.id);
+    return res.status(result.status).json({ message: result.message });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ message: "Internal server error" });

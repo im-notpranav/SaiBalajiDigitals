@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import * as xlsx from "xlsx";
-import { as, makeUser, prisma, uniq } from "./helpers";
+import { addMasters, as, makeUser, prisma, uniq } from "./helpers";
 import { ORDER_EXPORT_HEADER, ORDER_TEMPLATE_HEADER, buildOrderTemplate, parseOrderTemplate } from "../../src/utils/order-template";
 
 /** A sheet shaped like the company's file, whose Amount heading is padded with spaces. */
@@ -92,17 +92,24 @@ describe("uploading orders", () => {
   let admin: any;
   let plainAdmin: any;
   let csm: any;
+  /** A client the admin has put in the Master Library. */
+  const newClient = async (prefix: string) => {
+    const name = uniq(prefix);
+    await addMasters({ clients: [name] });
+    return name;
+  };
 
   beforeAll(async () => {
     admin = await makeUser("ADMIN", { is_super_admin: true });
     plainAdmin = await makeUser("ADMIN");
     csm = await makeUser("CSM");
     await prisma.orderSequence.upsert({ where: { id: 1 }, update: {}, create: { id: 1, year_code: "26", last_number: 12 } });
+    await addMasters({ locations: ["Bajaj"], media: ["Vinly"] });
   });
 
   it("previews without saving", async () => {
     const before = await prisma.order.count();
-    const client = uniq("Preview");
+    const client = await newClient("Preview");
     const res = await as(csm)
       .post("/api/orders/bulk/preview")
       .set("Content-Type", "application/octet-stream")
@@ -114,7 +121,7 @@ describe("uploading orders", () => {
   });
 
   it("a CSM's upload is their own, dated from the sheet, with figures worked out here", async () => {
-    const client = uniq("Own");
+    const client = await newClient("Own");
     const res = await as(csm).post("/api/orders/bulk").send({ orders: [{ ...order(client), csm_user_id: admin.id }] });
     expect(res.status).toBe(201);
     const saved = await prisma.order.findUnique({ where: { order_no: res.body.orders[0].order_no }, include: { items: true, stores: true } });
@@ -123,7 +130,44 @@ describe("uploading orders", () => {
     expect(saved!.stores[0]).toMatchObject({ store_name: "Malakpet", location: "Bajaj" });
     expect(Number(saved!.items[0]!.total_sft)).toBe(12.4);
     expect(Number(saved!.items[0]!.amount)).toBe(620);
-    expect(await prisma.media.findFirst({ where: { name: "Vinly" } })).toBeTruthy();
+  });
+
+  it("leaves out rows naming what is not in the Master Library, listing each by row and by name", async () => {
+    const known = await newClient("Known");
+    const stranger = uniq("Stranger");
+    const board = uniq("Board");
+    const res = await as(csm)
+      .post("/api/orders/bulk/preview")
+      .set("Content-Type", "application/octet-stream")
+      .send(sheetOf([
+        row(SERIAL_1_APR_2026, known.toLowerCase(), "bajaj", "Malakpet"),
+        row(SERIAL_1_APR_2026, stranger, "Bajaj", "Malakpet"),
+        row(SERIAL_1_APR_2026, stranger, "Bajaj", "Ameerpet", board),
+      ]));
+    expect(res.status).toBe(200);
+    expect(res.body.error_count).toBe(0);
+    expect(res.body.orders.map((o: any) => o.client_name)).toEqual([known]);
+    expect(res.body.orders[0].stores[0].location).toBe("Bajaj");
+    expect(res.body.rejected_count).toBe(2);
+    expect(res.body.rejected_rows[1]).toEqual({ row: 4, missing: [{ kind: "CLIENT", name: stranger }, { kind: "MEDIA", name: board }] });
+    expect(res.body.missing_names).toEqual([
+      { kind: "CLIENT", name: stranger, rows: [3, 4] },
+      { kind: "MEDIA", name: board, rows: [4] },
+    ]);
+  });
+
+  it("will not save a name that is not in the Master Library, and saves the master's spelling", async () => {
+    const refused = await as(csm).post("/api/orders/bulk").send({ orders: [order(uniq("Stranger"))] });
+    expect(refused.status).toBe(400);
+    expect(refused.body.message).toContain("is not in Master Library");
+    expect(await prisma.client.count({ where: { name: { startsWith: "Stranger" } } })).toBe(0);
+
+    const client = await newClient("Case");
+    const ok = await as(csm).post("/api/orders/bulk").send({ orders: [{ ...order(client.toUpperCase()), stores: [{ ...order(client).stores[0]!, location: "BAJAJ" }] }] });
+    expect(ok.status).toBe(201);
+    const saved = await prisma.order.findUnique({ where: { order_no: ok.body.orders[0].order_no }, include: { stores: true } });
+    expect(saved).toMatchObject({ client_name: client });
+    expect(saved!.stores[0]!.location).toBe("Bajaj");
   });
 
   it("an admin must pick an active CSM for every order", async () => {
@@ -132,7 +176,7 @@ describe("uploading orders", () => {
     const notCsm = await as(admin).post("/api/orders/bulk").send({ orders: [order(uniq("NotCsm"), admin.id)] });
     expect(notCsm.status).toBe(400);
 
-    const client = uniq("ForCsm");
+    const client = await newClient("ForCsm");
     const ok = await as(admin).post("/api/orders/bulk").send({ orders: [order(client, csm.id)] });
     expect(ok.status).toBe(201);
     const saved = await prisma.order.findUnique({ where: { order_no: ok.body.orders[0].order_no } });
@@ -147,7 +191,7 @@ describe("uploading orders", () => {
   });
 
   it("exports the template's columns, then the line remark columns", async () => {
-    const client = uniq("Export");
+    const client = await newClient("Export");
     await as(csm).post("/api/orders/bulk").send({ orders: [order(client)] });
     const res = await as(csm).get("/api/orders/export").buffer(true).parse((r, done) => {
       const chunks: Buffer[] = [];

@@ -14,6 +14,7 @@ export interface FieldStaff {
   phone: string | null;
   email: string | null;
   emp_code: string | null;
+  photo_url?: string | null;
   is_active: boolean;
   last_login_at: string | null;
   created_at: string;
@@ -82,7 +83,7 @@ export const createFieldStaff = (data: {
 
 export const updateFieldStaff = (
   id: number,
-  data: { name?: string; role?: FieldRole; phone: string; email: string; emp_code?: string | null },
+  data: { name?: string; username?: string; role?: FieldRole; phone: string; email: string; emp_code?: string | null },
 ) => apiFetch<FieldStaff>(`/field-staff/${id}`, { method: "PATCH", data });
 
 export const setFieldStaffStatus = (id: number, is_active: boolean) =>
@@ -93,6 +94,21 @@ export const resetFieldStaffPassword = (id: number, new_password: string) =>
     method: "PUT",
     data: { new_password },
   });
+
+/** The manager sets a field-staff member's picture, already shrunk by the browser. */
+export const uploadFieldStaffPhoto = (id: number, picture: Blob) =>
+  apiFetch<{ id: number; photo_url: string | null }>(`/field-staff/${id}/photo`, {
+    method: "POST",
+    data: picture,
+    headers: { "Content-Type": "application/octet-stream" },
+  });
+
+export const removeFieldStaffPhoto = (id: number) =>
+  apiFetch<{ id: number; photo_url: string | null }>(`/field-staff/${id}/photo`, { method: "DELETE" });
+
+/** Delete permanently, keeping history. Refused while they still have open work. */
+export const deleteFieldStaff = (id: number) =>
+  apiFetch<{ message: string }>(`/field-staff/${id}`, { method: "DELETE" });
 
 // --- Masters ---------------------------------------------------------------
 
@@ -187,6 +203,8 @@ export interface WorkJob {
   creator: { id: number; name: string } | null;
   members: { user_id: number; name: string; phone: string | null; slot_role: FieldRole }[];
   stores: JobStore[];
+  /** Sent only to a CSM: the job is his (Q10), so he may update its work details and order. */
+  mine?: boolean;
   started_at: string | null;
   started_by: { id: number; name: string } | null;
   completed_at: string | null;
@@ -218,7 +236,7 @@ export interface WorkJobInput {
   csm2_code_id?: number | null;
   work_details: string | null;
   locality: AreaLocality | null;
-  /** Typed or picked; a new name joins the area list. */
+  /** Picked from the active areas; the API refuses a name not in the Master Library. */
   area_name: string | null;
   route?: string | null;
   extra_tag?: string | null;
@@ -271,7 +289,9 @@ export interface WeeklyGrid {
   from: string;
   to: string;
   dates: string[];
+  /** Field staff get only their own row. */
   rows: (StaffBrief & { days: (JobRef & { status: WorkJobStatus })[][]; leave: boolean[] })[];
+  /** Free people per day by role; empty for field staff. */
   free: Record<FieldRole, number>[];
   /** What a cell's box shows, by job id. */
   jobs: Record<number, GridJob>;
@@ -279,10 +299,21 @@ export interface WeeklyGrid {
 
 export interface GridJob {
   order_no: string | null;
+  client_name: string | null;
   csm: string | null;
+  /** The team by role, any number of each. Empty for field staff, who see only their own work. */
   pasters: string[];
   helpers: string[];
   drivers: string[];
+  place: string | null;
+  locality: AreaLocality | null;
+  work_details: string | null;
+  start_date: string;
+  end_date: string;
+  days: number;
+  status: WorkJobStatus;
+  /** CSM grid only: the job is his. */
+  mine?: boolean;
 }
 
 export interface MyJob extends Omit<WorkJob, "order" | "csm"> {
@@ -364,6 +395,13 @@ export const fetchJobOverview = (filters: { from: string; to: string; area?: str
 export const fetchJobDetails = (id: number) => apiFetch<JobDetails>(`/work-jobs/${id}/details`);
 /** A CSM's own jobs: the ones they are the CSM for. */
 export const fetchCsmJobs = () => apiFetch<{ jobs: WorkJob[] }>("/csm-jobs");
+/** A CSM reads every job on the grid and board; `mine` marks the ones he may update. */
+export const fetchCsmWeeklyGrid = (from?: string, days = 7) =>
+  apiFetch<WeeklyGrid>(`/csm-jobs/grid${qs({ from, days: String(days) })}`);
+export const fetchCsmDailyBoard = (date?: string) =>
+  apiFetch<DailyBoard>(`/csm-jobs/board${qs({ date })}`);
+export const fetchCsmJobDetails = (id: number) =>
+  apiFetch<JobDetails>(`/csm-jobs/${id}/details`);
 export const fetchCsmOrderOptions = (q: string) =>
   apiFetch<{ orders: { id: number; order_no: string; client_name: string }[] }>(
     `/csm-jobs/order-options${qs({ q })}`,
@@ -371,6 +409,9 @@ export const fetchCsmOrderOptions = (q: string) =>
 export const updateCsmJob = (id: number, data: { work_details?: string | null; order_id?: number }) =>
   apiFetch<WorkJob>(`/csm-jobs/${id}`, { method: "PATCH", data });
 export const fetchMyJobs = () => apiFetch<{ today: string; jobs: MyJob[] }>("/my/work-jobs");
+/** Field staff: their own row of the Weekly Grid, with no one else's name. */
+export const fetchMyWeeklyGrid = (from?: string, days = 7) =>
+  apiFetch<WeeklyGrid>(`/my/work-jobs/grid${qs({ from, days: String(days) })}`);
 /** Field staff: mark their own job started, or completed with an optional note. */
 export const setMyJobStatus = (id: number, status: "STARTED" | "COMPLETED", note?: string) =>
   apiFetch<WorkJob>(`/my/work-jobs/${id}/status`, { method: "PUT", data: { status, note } });

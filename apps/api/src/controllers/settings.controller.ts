@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { prisma } from "../utils/prisma";
-import { deriveYY, firstFreeNumber, RESERVED_NUMBERS } from "../utils/order-sequence";
+import { deriveYY, firstFreeNumber, isOrderNumbersUsedUp, RESERVED_NUMBERS, validateCustomOrderNo } from "../utils/order-sequence";
 import { SETTINGS, getSetting, setSetting } from "../utils/app-settings";
 
 // GET /admin/settings/order-sequence
@@ -28,7 +28,13 @@ export const getOrderSequence = async (req: Request, res: Response) => {
       display_last_number = RESERVED_NUMBERS;
     }
     
-    const { order_no: next_order_number } = await firstFreeNumber(prisma, display_year_code, display_last_number);
+    // Null once the year's numbers are used up: the screens say so instead of failing to load.
+    let next_order_number: string | null = null;
+    try {
+      next_order_number = (await firstFreeNumber(prisma, display_year_code, display_last_number)).order_no;
+    } catch (err) {
+      if (!isOrderNumbersUsedUp(err)) throw err;
+    }
 
     res.json({
       seq: {
@@ -79,19 +85,13 @@ export const updateOrderSequence = async (req: Request, res: Response) => {
         return res.status(400).json({ message: "Sequence is locked. Unlock it first to make adjustments." });
       }
 
-      const match = next_order_number.match(/^ORD(\d{2})(\d{4,})$/);
-      if (!match) {
-        return res.status(400).json({ message: "Invalid order number format. Must be like ORD260576" });
+      // The same rule a typed order number follows: ORD + this year's code + 0001–9999.
+      const check = validateCustomOrderNo(String(next_order_number));
+      if (!check.ok) {
+        return res.status(400).json({ message: check.error });
       }
 
-      const inputYY = match[1];
-      const inputNumber = parseInt(match[2], 10);
-
-      if (inputYY !== current_year_code) {
-        return res.status(400).json({ message: `Cannot set order number for a different financial year. Expected ORD${current_year_code}...` });
-      }
-
-      const new_last_number = inputNumber - 1;
+      const new_last_number = check.number - 1;
 
       if (new_last_number < RESERVED_NUMBERS) {
         return res.status(400).json({
@@ -114,7 +114,7 @@ export const updateOrderSequence = async (req: Request, res: Response) => {
             changed_by: (req as any).user?.id,
             user_name: (req as any).user?.username,
             old_data: { last_number: current_last_number },
-            new_data: { last_number: updated_last_number, intended_next_order: next_order_number },
+            new_data: { last_number: updated_last_number, intended_next_order: check.order_no },
           }
         });
       }

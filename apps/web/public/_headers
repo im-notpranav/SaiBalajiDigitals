@@ -8,10 +8,12 @@
 # it cannot break the app: watch the browser console for violations, then rename the header to
 # `Content-Security-Policy` to enforce it. The script hash is of the inline dark-mode script in
 # index.html — recompute it if that script changes (see docs/security/assessment-2026-11-08.md).
+# frame-src lets Work Allocation's Sheet View show the team's Google Sheet in a frame; it is about
+# what this app frames, while X-Frame-Options and frame-ancestors stop others framing this app.
 /*
   X-Frame-Options: DENY
   X-Content-Type-Options: nosniff
   Referrer-Policy: no-referrer
   Strict-Transport-Security: max-age=31536000; includeSubDomains
   Permissions-Policy: geolocation=(), microphone=(), camera=()
-  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self' 'sha256-h0JFJaY0/VmF5hOqYCsuJbyHHtMXm1Ku+hBVTPmIkxo='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'
+  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self' 'sha256-h0JFJaY0/VmF5hOqYCsuJbyHHtMXm1Ku+hBVTPmIkxo='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self'; frame-src https://docs.google.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'

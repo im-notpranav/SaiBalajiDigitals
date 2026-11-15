@@ -14,13 +14,14 @@ import { ErrorState, LoadingState } from "@/components/layout/PageStates";
 import {
   FIELD_ROLE_LABELS,
   JOB_EDITABLE,
+  fetchCsmJobDetails,
   fetchJobDetails,
   formatJobDates,
   jobPlace,
   type FieldRole,
   type WorkJob,
 } from "@/api/allocation";
-import { JobStatusMenu, LocalityTag } from "./JobBits";
+import { JobStatusBadge, JobStatusMenu, LocalityTag, MineTag, jobOwnerName } from "./JobBits";
 
 const ROLES: FieldRole[] = ["PASTER", "HELPER", "DRIVER"];
 
@@ -34,25 +35,33 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 }
 
 /**
- * A job and what its order asks for, opened from the grid or the dashboard. Rates and amounts
- * are not shown here, and the API does not send them.
+ * A job and what its order asks for, opened from the grid, the board or the dashboard. Rates
+ * and amounts are not shown here, and the API does not send them.
+ *
+ * In "csm" mode a CSM reads any job; on his own (`mine`) the edit button lets him update the
+ * work details or link his order, and on anyone else's it says whose job it is.
  */
 export function JobDetailDialog({
   jobId,
   onClose,
   onEdit,
+  mode = "manage",
 }: {
   jobId: number | null;
   onClose: () => void;
-  onEdit: (job: WorkJob) => void;
+  /** Without it there is no edit button. */
+  onEdit?: (job: WorkJob) => void;
+  mode?: "manage" | "csm";
 }) {
+  const csm = mode === "csm";
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ["work-jobs", "details", jobId],
-    queryFn: () => fetchJobDetails(jobId!),
+    queryKey: csm ? ["csm-jobs", "details", jobId] : ["work-jobs", "details", jobId],
+    queryFn: () => (csm ? fetchCsmJobDetails(jobId!) : fetchJobDetails(jobId!)),
     enabled: jobId !== null,
   });
   const job = data?.job;
   const covered = new Set(job?.stores.map((s) => s.id));
+  const editable = !!job && JOB_EDITABLE.includes(job.status) && (!csm || !!job.mine);
 
   return (
     <Dialog open={jobId !== null} onOpenChange={(o) => !o && onClose()}>
@@ -74,8 +83,9 @@ export function JobDetailDialog({
           <ErrorState bare title="Couldn't load this job" error={error} onRetry={() => refetch()} />
         ) : (
           <div className="grid gap-4">
-            <div>
-              <JobStatusMenu job={job} />
+            <div className="flex flex-wrap items-center gap-2">
+              {csm ? <JobStatusBadge status={job.status} /> : <JobStatusMenu job={job} />}
+              {csm && job.mine && <MineTag />}
             </div>
             <dl className="grid gap-1.5 rounded-xl border p-3">
               <Row label="Dates">
@@ -88,14 +98,19 @@ export function JobDetailDialog({
                   {jobPlace(job) ?? "Not set"} <LocalityTag locality={job.locality} />
                 </span>
               </Row>
-              {ROLES.map((r) => {
-                const names = job.members.filter((m) => m.slot_role === r).map((m) => m.name);
-                return (
-                  <Row key={r} label={`${FIELD_ROLE_LABELS[r]}${names.length > 1 ? "s" : ""}`}>
-                    {names.length ? names.join(", ") : "None"}
-                  </Row>
-                );
-              })}
+              {/* Any number of each role, or nobody yet: only the roles on the job are listed. */}
+              {job.members.length === 0 ? (
+                <Row label="Team">No team yet</Row>
+              ) : (
+                ROLES.map((r) => {
+                  const names = job.members.filter((m) => m.slot_role === r).map((m) => m.name);
+                  return names.length ? (
+                    <Row key={r} label={`${FIELD_ROLE_LABELS[r]}${names.length > 1 ? "s" : ""}`}>
+                      {names.join(", ")}
+                    </Row>
+                  ) : null;
+                })
+              )}
               <Row label="Work details">{job.work_details ?? "To follow"}</Row>
               {job.route && <Row label="Route">{job.route}</Row>}
               {job.instructions && <Row label="Instructions">{job.instructions}</Row>}
@@ -155,19 +170,29 @@ export function JobDetailDialog({
         )}
 
         <DialogFooter className="items-center gap-2 sm:gap-2">
-          {job && !JOB_EDITABLE.includes(job.status) && (
+          {job && csm && !job.mine ? (
             <p className="mr-auto text-xs text-muted-foreground">
-              {job.status === "COMPLETED"
-                ? "Reopen this job to change it."
-                : "A cancelled job cannot be changed."}
+              This job belongs to {jobOwnerName(job)}.
             </p>
+          ) : (
+            job &&
+            !JOB_EDITABLE.includes(job.status) && (
+              <p className="mr-auto text-xs text-muted-foreground">
+                {job.status === "CANCELLED"
+                  ? "A cancelled job cannot be changed."
+                  : csm
+                    ? "A completed job cannot be changed."
+                    : "Reopen this job to change it."}
+              </p>
+            )
           )}
           <Button variant="outline" onClick={onClose}>
             Close
           </Button>
-          {job && JOB_EDITABLE.includes(job.status) && (
+          {job && editable && onEdit && (
             <Button onClick={() => onEdit(job)}>
-              <Pencil className="mr-2 h-4 w-4" /> Edit team and work details
+              <Pencil className="mr-2 h-4 w-4" />
+              {csm ? "Update job" : "Edit team and work details"}
             </Button>
           )}
         </DialogFooter>

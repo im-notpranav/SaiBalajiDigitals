@@ -234,7 +234,11 @@ function JobsPage() {
                     </div>
                   </TableCell>
                   <TableCell className="max-w-[14rem] text-sm">
-                    <div className="line-clamp-2">{teamLine(j.members)}</div>
+                    <div
+                      className={cn("line-clamp-2", j.members.length === 0 && "text-muted-foreground")}
+                    >
+                      {teamLine(j.members)}
+                    </div>
                   </TableCell>
                   <TableCell>
                     <JobStatusMenu job={j} />

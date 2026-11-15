@@ -14,6 +14,8 @@ import { apiClient } from "@/api/client";
 import { apiErrorMessage } from "@/api/allocation";
 import { fetchPaymentSettings, updatePaymentSettings } from "@/api/payments";
 import { useAuth } from "@/lib/auth-store";
+import { RESERVED_NUMBERS, checkOrderNo } from "@/lib/order-number";
+import { SheetLinkCard } from "@/components/allocation/SheetLinkCard";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/_portal/admin/settings")({
@@ -55,7 +57,17 @@ function SettingsPage() {
     return <ErrorState title="Couldn't load settings" error={error} onRetry={() => refetch()} />;
 
   const seq = data?.seq;
-  const nextOrderNumber = data?.next_order_number;
+  // Null once this year's numbers are used up (past ORD{YY}9999).
+  const nextOrderNumber: string | null | undefined = data?.next_order_number;
+  // The server's rule for a typed number, plus the series floor of 0013.
+  const seriesCheck = checkOrderNo(newOrderNo, seq?.year_code);
+  const seriesError = !newOrderNo.trim()
+    ? null
+    : !seriesCheck.ok
+      ? seriesCheck.error
+      : seriesCheck.number <= RESERVED_NUMBERS
+        ? `0001–${String(RESERVED_NUMBERS).padStart(4, "0")} are kept for typing by hand. The earliest you can set is ORD${seq?.year_code}${String(RESERVED_NUMBERS + 1).padStart(4, "0")}.`
+        : null;
 
   return (
     <>
@@ -66,7 +78,7 @@ function SettingsPage() {
           <h3 className="mb-4 text-sm font-semibold">Order Number Sequence</h3>
           <div className="grid gap-3">
             <div><Label htmlFor="seq-prefix">Current prefix</Label><Input id="seq-prefix" readOnly value={seq ? `ORD${seq.year_code}` : ""} className="mt-1.5 font-mono" /></div>
-            <div><Label htmlFor="seq-next">Next number</Label><Input id="seq-next" readOnly value={nextOrderNumber || ""} className="mt-1.5 font-mono" /></div>
+            <div><Label htmlFor="seq-next">Next number</Label><Input id="seq-next" readOnly value={nextOrderNumber || (seq ? "Used up for this year" : "")} className="mt-1.5 font-mono" /></div>
             <div className="flex items-center justify-between rounded-lg border bg-background p-3">
               <div>
                 <div className="text-sm font-semibold">Lock sequence adjustments</div>
@@ -91,7 +103,7 @@ function SettingsPage() {
                   <DialogTitle>Adjust Next Order Number</DialogTitle>
                   <DialogDescription>
                     Warning: Changing the sequence can cause duplicate order numbers if set lower than the current value.
-                    Current next number is <strong>{nextOrderNumber}</strong>.
+                    Current next number is <strong>{nextOrderNumber ?? "none, this year's numbers are used up"}</strong>.
                   </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
@@ -100,18 +112,24 @@ function SettingsPage() {
                     <Input 
                       id="next_no" 
                       value={newOrderNo} 
-                      onChange={e => setNewOrderNo(e.target.value)} 
-                      placeholder={nextOrderNumber} 
+                      onChange={e => setNewOrderNo(e.target.value)}
+                      placeholder={nextOrderNumber ?? undefined}
+                      maxLength={12}
                       className="font-mono"
+                      aria-invalid={!!seriesError}
+                      aria-describedby="next_no_hint"
                     />
+                    <p id="next_no_hint" className={seriesError ? "text-xs text-destructive" : "text-xs text-muted-foreground"}>
+                      {seriesError ?? `ORD${seq?.year_code ?? ""} and 4 digits, from 0013 to 9999.`}
+                    </p>
                   </div>
                 </div>
                 <DialogFooter>
                   <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
                   <Button 
                     variant="destructive" 
-                    onClick={() => mutation.mutate({ next_order_number: newOrderNo })}
-                    disabled={mutation.isPending || !newOrderNo.trim()}
+                    onClick={() => seriesCheck.ok && mutation.mutate({ next_order_number: seriesCheck.order_no })}
+                    disabled={mutation.isPending || !seriesCheck.ok || !!seriesError}
                   >
                     Confirm Override
                   </Button>
@@ -139,6 +157,7 @@ function SettingsPage() {
 
         <PaymentOverdueCard />
         <PaymentThresholdCard />
+        <SheetLinkCard />
       </div>
     </>
   );

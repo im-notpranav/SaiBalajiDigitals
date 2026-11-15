@@ -4,7 +4,9 @@ import { areaSchema, vehicleSchema, csmCodeSchema } from "../utils/validators";
 import { sanitizeZodErrors } from "../utils/sanitize-errors";
 
 /**
- * Masters for the work-allocation portal: CSM codes, areas and vehicles.
+ * Masters for the work-allocation portal: CSM codes, areas and vehicles. Areas double as the
+ * Master Library's Locations (store locations on orders), so only the admin adds or edits
+ * them; the Operation Manager reads them.
  *
  * Every update runs in a transaction that sets app.current_user_id first, so the audit
  * trigger on each table attributes the change (see migration 20261020000000).
@@ -52,6 +54,25 @@ export const listAreas = async (req: Request, res: Response) => {
   try {
     const areas = await prisma.area.findMany({ where: activeFilter(req), orderBy: { name: "asc" } });
     return res.status(200).json({ areas });
+  } catch (err) {
+    return handleError(res, err, "");
+  }
+};
+
+/**
+ * GET /api/masters/locations?q= — the store-location pick-list on orders. Areas are the
+ * Master Library's Locations: only the admin adds them, so archived ones are left out.
+ */
+export const searchLocations = async (req: Request, res: Response) => {
+  try {
+    const q = String(req.query.q || "").trim().slice(0, 100);
+    const locations = await prisma.area.findMany({
+      where: { is_active: true, ...(q ? { name: { contains: q, mode: "insensitive" as const } } : {}) },
+      orderBy: { name: "asc" },
+      select: { name: true, locality: true },
+      take: 50,
+    });
+    return res.status(200).json({ locations });
   } catch (err) {
     return handleError(res, err, "");
   }

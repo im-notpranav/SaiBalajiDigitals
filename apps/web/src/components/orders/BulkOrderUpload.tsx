@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, CheckCircle2, Download, Loader2, Upload } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Download, ExternalLink, Loader2, Send, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,14 +18,25 @@ import {
   downloadOrderTemplate,
   previewBulkOrders,
   type BulkOrder,
-  type BulkPreview,
 } from "@/api/orders";
+import {
+  MASTER_KIND_LABELS,
+  requestNames,
+  toastMissingNames,
+  type CheckedBulkPreview,
+  type MissingName,
+} from "@/api/nameRequests";
+import { useAuth } from "@/lib/auth-store";
 import { inr } from "@/lib/format";
+import { RequestNameDialog } from "./AutocompleteComboboxes";
 
 const dayLabel = (d: string) => {
   const [y, m, day] = d.split("-");
   return `${day}/${m}/${y}`;
 };
+
+const nameId = (m: MissingName) => `${m.kind}:${m.name.trim().toLowerCase()}`;
+const rowList = (rows: number[]) => (rows.length === 1 ? `Row ${rows[0]}` : `Rows ${rows.join(", ")}`);
 
 const totalsOf = (o: BulkOrder) => {
   const items = o.stores.flatMap((s) => s.items);
@@ -43,7 +54,13 @@ const totalsOf = (o: BulkOrder) => {
 export function BulkOrderUpload({ pickCsm, ordersLink }: { pickCsm: boolean; ordersLink: "/employee/orders" | "/admin/orders" }) {
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
-  const [preview, setPreview] = useState<BulkPreview | null>(null);
+  const { user } = useAuth();
+  const isAdmin = user?.role === "ADMIN";
+  const [preview, setPreview] = useState<CheckedBulkPreview | null>(null);
+  /** Missing names already asked for from this screen. */
+  const [asked, setAsked] = useState<Set<string>>(new Set());
+  const [askFor, setAskFor] = useState<MissingName | null>(null);
+  const [askingAll, setAskingAll] = useState(false);
   const [csmFor, setCsmFor] = useState<Record<string, number>>({});
   const [created, setCreated] = useState<{ order_no: string; client_name: string }[] | null>(null);
 
@@ -56,6 +73,7 @@ export function BulkOrderUpload({ pickCsm, ordersLink }: { pickCsm: boolean; ord
   const clear = () => {
     setPreview(null);
     setCsmFor({});
+    setAsked(new Set());
     if (fileRef.current) fileRef.current.value = "";
   };
 
@@ -65,6 +83,7 @@ export function BulkOrderUpload({ pickCsm, ordersLink }: { pickCsm: boolean; ord
       setPreview(null);
       setCreated(null);
       setCsmFor({});
+      setAsked(new Set());
     },
     onSuccess: setPreview,
     onError: (err) => toast.error("Could not read the file", { description: apiErrorMessage(err, "Please try again.") }),
@@ -80,7 +99,9 @@ export function BulkOrderUpload({ pickCsm, ordersLink }: { pickCsm: boolean; ord
       qc.invalidateQueries({ queryKey: ["order-sequence"] });
       clear();
     },
-    onError: (err) => toast.error("Nothing was saved", { description: apiErrorMessage(err, "Please try again.") }),
+    onError: (err) => {
+      if (!toastMissingNames(err, { isAdmin })) toast.error("Nothing was saved", { description: apiErrorMessage(err, "Please try again.") });
+    },
   });
 
   const handleTemplate = async () => {
@@ -95,6 +116,21 @@ export function BulkOrderUpload({ pickCsm, ordersLink }: { pickCsm: boolean; ord
   const hasErrors = (preview?.error_count ?? 0) > 0;
   const everyCsmPicked = !pickCsm || orders.every((o) => csmFor[o.client_name]);
   const canSave = orders.length > 0 && !hasErrors && everyCsmPicked && !save.isPending;
+  // Rows naming something not in Master Library are left out; the rest can still be created.
+  const missingNames = preview?.missing_names ?? [];
+  const rejectedRows = preview?.rejected_rows ?? [];
+  const rejectedCount = preview?.rejected_count ?? rejectedRows.length;
+  const notAsked = missingNames.filter((m) => !asked.has(nameId(m)));
+  const markAsked = (names: MissingName[]) => setAsked((prev) => new Set([...prev, ...names.map(nameId)]));
+  const askAll = async () => {
+    setAskingAll(true);
+    try {
+      await requestNames(notAsked);
+      markAsked(notAsked);
+    } finally {
+      setAskingAll(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -166,6 +202,95 @@ export function BulkOrderUpload({ pickCsm, ordersLink }: { pickCsm: boolean; ord
             </TableBody>
           </Table>
         </section>
+      )}
+
+      {rejectedCount > 0 && (
+        <section className="overflow-hidden rounded-xl border border-warning/30 bg-warning/5">
+          <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div className="flex items-center gap-2 font-semibold">
+                <AlertTriangle className="h-5 w-5 text-warning" /> {rejectedCount} row(s) left out: names not in Master Library
+              </div>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {orders.length > 0 ? "The other rows can still be created. " : ""}
+                {isAdmin
+                  ? "Add these names in Master Library, then upload the left-out rows again."
+                  : "Ask the admin to add these names, then upload the left-out rows again."}
+              </p>
+            </div>
+            {isAdmin ? (
+              <Button asChild variant="outline" size="sm" className="shrink-0">
+                <a href="/admin/master-library" target="_blank" rel="noopener">
+                  <ExternalLink className="mr-2 h-4 w-4" /> Open Master Library
+                </a>
+              </Button>
+            ) : (
+              notAsked.length > 1 && (
+                <Button variant="outline" size="sm" className="shrink-0" onClick={askAll} disabled={askingAll}>
+                  {askingAll ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                  Request all {notAsked.length}
+                </Button>
+              )
+            )}
+          </div>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-24">Type</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Sheet rows</TableHead>
+                  {!isAdmin && <TableHead className="w-32 text-right">Ask the admin</TableHead>}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {missingNames.map((m) => (
+                  <TableRow key={nameId(m)}>
+                    <TableCell className="text-muted-foreground">{MASTER_KIND_LABELS[m.kind]}</TableCell>
+                    <TableCell className="font-medium">{m.name}</TableCell>
+                    <TableCell className="text-sm">{rowList(m.rows)}</TableCell>
+                    {!isAdmin && (
+                      <TableCell className="text-right">
+                        {asked.has(nameId(m)) ? (
+                          <span className="text-xs text-muted-foreground">Requested</span>
+                        ) : (
+                          <Button variant="ghost" size="sm" className="h-8 text-primary" onClick={() => setAskFor(m)}>
+                            Request it
+                          </Button>
+                        )}
+                      </TableCell>
+                    )}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          {rejectedRows.length > 0 && (
+            <details className="border-t border-warning/20 px-4 py-3">
+              <summary className="cursor-pointer text-xs font-medium text-muted-foreground">Show each left-out row</summary>
+              <ul className="mt-2 space-y-0.5 text-sm">
+                {rejectedRows.map((r) => (
+                  <li key={r.row}>
+                    <span className="font-medium">Row {r.row}</span>
+                    <span className="text-muted-foreground">
+                      {" "}· {r.missing.map((m) => `${MASTER_KIND_LABELS[m.kind]} '${m.name}'`).join(", ")}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </section>
+      )}
+
+      {askFor && (
+        <RequestNameDialog
+          kind={askFor.kind}
+          open
+          initialName={askFor.name}
+          onOpenChange={(o) => !o && setAskFor(null)}
+          onSent={() => markAsked([askFor])}
+        />
       )}
 
       {orders.length > 0 && (
@@ -253,6 +378,9 @@ export function BulkOrderUpload({ pickCsm, ordersLink }: { pickCsm: boolean; ord
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
             {!hasErrors && !everyCsmPicked && (
               <span className="text-xs text-muted-foreground">Pick a CSM for every order first.</span>
+            )}
+            {!hasErrors && everyCsmPicked && rejectedCount > 0 && (
+              <span className="text-xs text-muted-foreground">The {rejectedCount} row(s) left out are not created.</span>
             )}
             <Button variant="outline" onClick={clear} disabled={save.isPending}>Cancel</Button>
             <Button onClick={() => save.mutate()} disabled={!canSave}>

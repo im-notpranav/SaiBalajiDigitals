@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { fetchOrder, updateOrder, updateOrderDetails, updateStore, addStore } from "@/api/orders";
 import { OrderForm } from "@/components/orders/OrderForm";
+import { toastMissingNames } from "@/api/nameRequests";
 import type { CreateOrderInput } from "@sb-oms/shared-types";
 import { useAuth } from "@/lib/auth-store";
 import { Loader2 } from "lucide-react";
@@ -86,6 +87,8 @@ function EditOrderEmployee() {
       toast.success(`Order ${order.order_no} updated`, { description: "Changes saved successfully." });
       navigate({ to: "/employee/orders" });
     } catch (err: any) {
+      // A name not in Master Library: say which, and offer to ask the admin for it.
+      if (toastMissingNames(err, { isAdmin })) return;
       const data = err?.response?.data;
       if (data?.errors && Array.isArray(data.errors)) {
         toast.error(`Validation Error: ${data.errors.join(", ")}`);

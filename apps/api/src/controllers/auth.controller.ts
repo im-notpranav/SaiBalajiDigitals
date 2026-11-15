@@ -20,8 +20,12 @@ export const login = async (req: Request, res: Response) => {
     if (!parseResult.success) {
       return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parseResult.error) });
     }
-    const { username, password } = parseResult.data;
+    const { password } = parseResult.data;
+    // Usernames are stored in capitals, so "sbd300", "Sbd300" and "SBD300" all sign in.
+    const username = parseResult.data.username.trim().toUpperCase();
 
+    // A permanently deleted account has a random password and is switched off, so it fails
+    // below like any wrong password or inactive account.
     const user = await prisma.user.findUnique({ where: { username } });
     if (!user) {
       // Spend the same bcrypt time as a real check so unknown usernames can't be timed apart (F9).

@@ -5,7 +5,9 @@ import { as, makeOrder, makeUser, prisma, uniq } from "./helpers";
 let dayNo = 0;
 const nextDay = () => {
   dayNo += 1;
-  return `2033-03-${String(dayNo).padStart(2, "0")}`;
+  // Real calendar days from 1 March 2033, so a file with more than 31 tests rolls into April
+  // instead of asking for 2033-03-32.
+  return new Date(Date.UTC(2033, 2, dayNo)).toISOString().slice(0, 10);
 };
 const idOf = (p: { id: number }) => p.id;
 
@@ -37,11 +39,15 @@ const body = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 const assign = (over: Record<string, unknown> = {}) => as(om).post("/api/work-jobs").send(body(over));
+/** Area names come from the Master Library; jobs can only pick them. */
+const makeArea = (locality: "LOCAL" | "NON_LOCAL", over: { is_active?: boolean } = {}) =>
+  prisma.area.create({ data: { name: uniq("Area "), locality, ...over } });
 
 describe("assigning a job", () => {
-  it("needs only dates, a CSM, a Paster and a Driver", async () => {
-    const res = await assign();
+  it("needs only dates and a CSM: the team may come later", async () => {
+    const res = await assign({ member_ids: [] });
     expect(res.status).toBe(201);
+    expect(res.body.members).toEqual([]);
     expect(res.body.order).toBeNull();
     expect(res.body.area).toBeNull();
     expect(res.body.locality).toBeNull();
@@ -49,10 +55,23 @@ describe("assigning a job", () => {
     expect(res.body.csm.id).toBe(csm.id);
   });
 
-  it("refuses a job missing the CSM, the Paster or the Driver", async () => {
+  it("refuses a job with no CSM", async () => {
     expect((await assign({ csm_user_id: null })).status).toBe(400);
-    expect((await assign({ member_ids: [driver.id] })).status).toBe(400);
-    expect((await assign({ member_ids: [paster.id] })).status).toBe(400);
+  });
+
+  it("takes any mix of roles, with no limit on each", async () => {
+    expect((await assign({ member_ids: [driver.id] })).status).toBe(201);
+    day = nextDay();
+    expect((await assign({ member_ids: [paster.id] })).status).toBe(201);
+    day = nextDay();
+    const more = await Promise.all([makeUser("PASTER"), makeUser("PASTER"), makeUser("DRIVER"), makeUser("HELPER"), makeUser("HELPER")]);
+    const res = await assign({ member_ids: [paster.id, helper.id, driver.id, ...more.map(idOf)] });
+    expect(res.status).toBe(201);
+    expect(res.body.members).toHaveLength(8);
+  });
+
+  it("still refuses the same person twice", async () => {
+    expect((await assign({ member_ids: [paster.id, paster.id] })).status).toBe(400);
   });
 
   it("takes the CSM from an order they raised when none is picked", async () => {
@@ -68,19 +87,33 @@ describe("assigning a job", () => {
     expect(res.body.members).toHaveLength(3);
   });
 
-  it("adds a new area name to the list once, whatever its case", async () => {
-    const name = uniq("Kurnool ");
-    const first = await assign({ locality: "NON_LOCAL", area_name: name });
-    expect(first.status).toBe(201);
-    expect(first.body.area.name).toBe(name);
-    expect(first.body.locality).toBe("NON_LOCAL");
+  it("picks an area from the list whatever its case, and never adds one", async () => {
+    const area = await makeArea("NON_LOCAL");
+    const res = await assign({ locality: "NON_LOCAL", area_name: area.name.toLowerCase() });
+    expect(res.status).toBe(201);
+    expect(res.body.area.id).toBe(area.id);
+    expect(res.body.locality).toBe("NON_LOCAL");
 
     day = nextDay();
-    const second = await assign({ locality: "NON_LOCAL", area_name: name.toLowerCase() });
-    expect(second.status).toBe(201);
-    expect(second.body.area.id).toBe(first.body.area.id);
-    const row = await prisma.area.findUniqueOrThrow({ where: { id: first.body.area.id } });
-    expect(row.locality).toBe("NON_LOCAL");
+    const name = uniq("Nowhere ");
+    const refused = await assign({ locality: "NON_LOCAL", area_name: name });
+    expect(refused.status).toBe(400);
+    expect(refused.body.message).toMatch(/Master Library/);
+    expect(await prisma.area.count({ where: { name } })).toBe(0);
+  });
+
+  it("refuses an archived area, unless the job is already in it", async () => {
+    const area = await makeArea("LOCAL");
+    const { body: job } = await assign({ locality: "LOCAL", area_name: area.name });
+    await prisma.area.update({ where: { id: area.id }, data: { is_active: false } });
+
+    day = nextDay();
+    expect((await assign({ locality: "LOCAL", area_name: area.name })).status).toBe(400);
+    const kept = await as(om)
+      .put(`/api/work-jobs/${job.id}`)
+      .send(body({ start_date: job.start_date, locality: "LOCAL", area_name: area.name, work_details: "Still there" }));
+    expect(kept.status).toBe(200);
+    expect(kept.body.area.id).toBe(area.id);
   });
 
   it("refuses an area name with no location", async () => {
@@ -143,7 +176,7 @@ describe("assigning a job", () => {
 
 describe("the Operation Manager's overview", () => {
   it("counts jobs by location and lists who is free", async () => {
-    const area = uniq("Ameerpet ");
+    const area = (await makeArea("LOCAL")).name;
     await assign({ locality: "LOCAL", area_name: area });
     const free = await makeUser("PASTER");
 
@@ -157,7 +190,7 @@ describe("the Operation Manager's overview", () => {
   });
 
   it("filters jobs by area, but anyone on any job stays busy", async () => {
-    await assign({ locality: "LOCAL", area_name: uniq("Ameerpet ") });
+    await assign({ locality: "LOCAL", area_name: (await makeArea("LOCAL")).name });
     const res = await as(om).get(`/api/work-jobs/overview?from=${day}&to=${day}&area=${uniq("Nowhere")}`);
     expect(res.body.jobs.LOCAL).toBe(0);
     expect(res.body.free.PASTER.map(idOf)).not.toContain(paster.id);
@@ -193,13 +226,17 @@ describe("the grid", () => {
     const job = await assign({ member_ids: [paster.id, helper.id, driver.id] });
     const res = await as(om).get(`/api/work-jobs/grid?from=${day}&days=1`);
     expect(res.status).toBe(200);
-    expect(res.body.jobs[job.body.id]).toEqual({
+    expect(res.body.jobs[job.body.id]).toMatchObject({
       order_no: null,
       csm: csm.name,
       pasters: [paster.name],
       helpers: [helper.name],
       drivers: [driver.name],
+      start_date: day,
+      end_date: day,
+      status: "ASSIGNED",
     });
+    expect(res.body.jobs[job.body.id].mine).toBeUndefined();
   });
 
   it("opens a job's order details without rates or amounts", async () => {
@@ -257,5 +294,70 @@ describe("the CSM's own jobs", () => {
     await as(om).put(`/api/work-jobs/${job.id}/status`).send({ status: "STARTED" });
     await as(om).put(`/api/work-jobs/${job.id}/status`).send({ status: "COMPLETED" });
     expect((await as(csm).patch(`/api/csm-jobs/${job.id}`).send({ work_details: "Late" })).status).toBe(400);
+  });
+});
+
+describe("who sees which grid and board", () => {
+  it("shows a CSM every job, read-only, his own marked", async () => {
+    const { body: own } = await assign();
+    const { body: theirs } = await assign({ csm_user_id: otherCsm.id, member_ids: [helper.id] });
+
+    const grid = await as(csm).get(`/api/csm-jobs/grid?from=${day}&days=1`);
+    expect(grid.status).toBe(200);
+    expect(grid.body.jobs[own.id]).toMatchObject({ mine: true, pasters: [paster.name] });
+    expect(grid.body.jobs[theirs.id]).toMatchObject({ mine: false, helpers: [helper.name] });
+    expect(grid.body.free).toHaveLength(1);
+
+    const board = await as(csm).get(`/api/csm-jobs/board?date=${day}`);
+    expect(board.status).toBe(200);
+    const mine = Object.fromEntries(board.body.jobs.map((j: { id: number; mine: boolean }) => [j.id, j.mine]));
+    expect(mine).toMatchObject({ [own.id]: true, [theirs.id]: false });
+
+    const details = await as(csm).get(`/api/csm-jobs/${theirs.id}/details`);
+    expect(details.status).toBe(200);
+    expect(details.body.job.mine).toBe(false);
+    expect(JSON.stringify(details.body)).not.toMatch(/"rate"|"amount"/);
+    expect((await as(csm).patch(`/api/csm-jobs/${theirs.id}`).send({ work_details: "Not mine" })).status).toBe(404);
+  });
+
+  it("does not tell a CSM why someone is on leave", async () => {
+    const date = new Date(`${day}T00:00:00Z`);
+    await prisma.leaveRecord.create({ data: { user_id: helper.id, from_date: date, to_date: date, status: "APPROVED", reason: "Family function" } });
+    const asCsm = await as(csm).get(`/api/csm-jobs/board?date=${day}`);
+    expect(asCsm.body.on_leave.find((p: { id: number }) => p.id === helper.id).leave.reason).toBeNull();
+    const asOm = await as(om).get(`/api/work-jobs/board?date=${day}`);
+    expect(asOm.body.on_leave.find((p: { id: number }) => p.id === helper.id).leave.reason).toBe("Family function");
+  });
+
+  it("counts a job as the CSM's through his CSM code", async () => {
+    const code = await prisma.csmCode.create({ data: { code: uniq("C"), kind: "CSM", user_id: csm.id } });
+    const { body: job } = await assign({ csm_user_id: otherCsm.id, csm2_code_id: code.id });
+    expect((await as(csm).get("/api/csm-jobs")).body.jobs.map(idOf)).toContain(job.id);
+    expect((await as(csm).patch(`/api/csm-jobs/${job.id}`).send({ work_details: "Shared job" })).status).toBe(200);
+    expect((await as(csm).get(`/api/csm-jobs/${job.id}/details`)).body.job.mine).toBe(true);
+    await prisma.csmCode.update({ where: { id: code.id }, data: { is_active: false } });
+  });
+
+  it("shows field staff only their own row and jobs, with nobody else's name", async () => {
+    const { body: job } = await assign({ member_ids: [paster.id, helper.id, driver.id] });
+    const { body: other } = await assign({ member_ids: [(await makeUser("PASTER")).id] });
+
+    const res = await as(paster).get(`/api/my/work-jobs/grid?from=${day}&days=1`);
+    expect(res.status).toBe(200);
+    expect(res.body.rows.map(idOf)).toEqual([paster.id]);
+    expect(res.body.rows[0].days[0].map((c: { job_id: number }) => c.job_id)).toEqual([job.id]);
+    expect(res.body.jobs[other.id]).toBeUndefined();
+    expect(res.body.jobs[job.id]).toMatchObject({ pasters: [], helpers: [], drivers: [], csm: csm.name });
+    expect(res.body.free).toEqual([]);
+    expect(JSON.stringify(res.body)).not.toContain(helper.name);
+    expect(JSON.stringify(res.body)).not.toContain(driver.name);
+  });
+
+  it("keeps each view to its own role", async () => {
+    expect((await as(csm).get(`/api/work-jobs/grid?from=${day}`)).status).toBe(403);
+    expect((await as(paster).get(`/api/csm-jobs/grid?from=${day}`)).status).toBe(403);
+    expect((await as(paster).get(`/api/csm-jobs/board?date=${day}`)).status).toBe(403);
+    expect((await as(om).get(`/api/my/work-jobs/grid?from=${day}`)).status).toBe(403);
+    expect((await as(csm).get(`/api/my/work-jobs/grid?from=${day}`)).status).toBe(403);
   });
 });

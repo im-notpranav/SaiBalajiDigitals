@@ -28,7 +28,7 @@ function ImportPage() {
     <>
       <PageHeader
         title="Bulk Import"
-        description="Create orders from a sheet and pick each CSM."
+        description="Create orders from a sheet and pick each CSM. Rows with names not in Master Library are left out."
         crumbs={[{ label: "Automated System" }, { label: "Bulk Import" }]}
       />
       <BulkOrderUpload pickCsm ordersLink="/admin/orders" />

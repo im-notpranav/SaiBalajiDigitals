@@ -4,8 +4,9 @@ import { isCsmEditable, isHeaderEditable, isBillingStarted, OPEN_STATUSES, CLOSE
 import { Request, Response } from "express";
 import { EXPORT_EMAIL_ALLOWED_DOMAINS } from "../utils/config";
 import { prisma } from "../utils/prisma";
-import { generateOrderId } from "../utils/order-sequence";
+import { generateOrderId, isOrderNumbersUsedUp } from "../utils/order-sequence";
 import { buildOrdersExport } from "../utils/order-template";
+import { checkMasterNames, missingNamesBody, namesOfOrder, spellOrder } from "../utils/lookups";
 import { recomputeOrderStatus, rollupOrder, storeLabelOf, storeLocationOf } from "../utils/order-derive";
 
 import { notifyRole, notifyUser } from "../services/notifications.service";
@@ -75,7 +76,7 @@ const notifyAdminsOfAdjustmentRequest = async (
 
 export const getOrders = async (req: Request, res: Response) => {
   try {
-    const { section, order_no, client, store, status, q, creator, from, to, page = "1", limit = "50" } = req.query;
+    const { section, order_no, client, store, status, q, creator, from, to, waiting, page = "1", limit = "50" } = req.query;
     const user = req.user!;
 
     const where: any = {};
@@ -92,6 +93,12 @@ export const getOrders = async (req: Request, res: Response) => {
     if (client) where.client_name = { contains: String(client), mode: "insensitive" };
     if (status) where.status = status;
     if (creator) where.creator_name = String(creator);
+    // ?waiting=1 — allotted and not filled yet: an order an admin opened that its CSM hasn't
+    // added a store or an item to. Production roles override `items` below and never see these.
+    if (waiting === "1") {
+      where.stores = { none: {} };
+      where.items = { none: {} };
+    }
 
     // The same order-date window the dashboards count over, so a number on a dashboard and the
     // list it links to agree. A date that doesn't parse is ignored rather than failing the list.
@@ -311,8 +318,9 @@ export const getOrder = async (req: Request, res: Response) => {
 import { startOrderSchema, createOrderSchema, updateOrderSchema, updateOrderDetailsSchema, updateStoreSchema, addStoreSchema, invoiceSchema, closeOrderSchema, forceCloseOrderSchema, paymentSchema } from "../utils/validators";
 
 /**
- * POST /api/orders/start — an admin opens an order with its number, client and CSM. It belongs
- * to the CSM from then on, and has no stores until they add them; the audit log keeps the admin.
+ * POST /api/orders/start — Allot Order: an admin opens an order with its number, client and CSM.
+ * It belongs to the CSM from then on, and has no stores until they add them ("waiting for CSM"
+ * in the lists); the audit log keeps the admin.
  */
 export const startOrder = async (req: Request, res: Response) => {
   try {
@@ -320,14 +328,17 @@ export const startOrder = async (req: Request, res: Response) => {
     if (!parseResult.success) {
       return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parseResult.error) });
     }
+    // Only the admin adds clients, in Master Library: the name must be an active one, and the
+    // order takes its spelling.
+    const clientCheck = await checkMasterNames(prisma, [{ kind: "CLIENT", name: parseResult.data.client_name }]);
+    if (clientCheck.missing.length) return res.status(400).json(missingNamesBody(clientCheck.missing));
+    parseResult.data.client_name = clientCheck.spell("CLIENT", parseResult.data.client_name);
+
     const { client_name, csm_user_id, order_no: typedNo } = parseResult.data;
     const user = req.user!;
 
     const csm = await prisma.user.findUnique({ where: { id: csm_user_id }, select: { id: true, name: true, role: true, is_active: true } });
     if (csm?.role !== "CSM" || !csm.is_active) return res.status(400).json({ message: "Pick an active CSM." });
-
-    const existingClient = await prisma.client.findFirst({ where: { name: { equals: client_name, mode: "insensitive" } } });
-    if (!existingClient) await prisma.client.create({ data: { name: client_name } });
 
     const order_no = typedNo ?? (await generateOrderId());
     const order = await prisma.$transaction(async (tx) => {
@@ -347,10 +358,11 @@ export const startOrder = async (req: Request, res: Response) => {
       return created;
     });
 
-    await notifyUser(csm.id, `New order ${order.order_no} for you`, `Client: ${client_name}. Add its stores and items.`, "info", order.id).catch(() => {});
+    await notifyUser(csm.id, `Order ${order.order_no} allotted to you`, `Client: ${client_name}. Add its stores and items.`, "info", order.id).catch(() => {});
     return res.status(201).json(serializeDecimals(order));
   } catch (err: any) {
     if (err?.code === "P2002") return res.status(409).json({ message: "That order number is already used. Pick another." });
+    if (isOrderNumbersUsedUp(err)) return res.status(409).json({ message: err.message });
     console.error(err);
     return res.status(500).json({ message: "Internal server error" });
   }
@@ -370,17 +382,6 @@ export const createOrder = async (req: Request, res: Response) => {
       return res.status(403).json({ message: "Only an administrator can set order remarks." });
     }
 
-    const ensureLookupValue = async (model: "client" | "media", name: string) => {
-      try {
-        const trimmed = name.trim();
-        if (!trimmed) return;
-        const existing = await (prisma as any)[model].findFirst({ where: { name: { equals: trimmed, mode: "insensitive" } } });
-        if (!existing) await (prisma as any)[model].create({ data: { name: trimmed } });
-      } catch (e) {
-        console.error(`Lookup upsert failed for ${model}:`, e);
-      }
-    };
-
     // Every line is new here, so Revised is refused; Less Amount cannot exceed its line.
     for (const st of stores) {
       for (const item of st.items as any[]) {
@@ -390,8 +391,11 @@ export const createOrder = async (req: Request, res: Response) => {
       }
     }
 
-    ensureLookupValue("client", client_name);
-    stores.forEach((s) => s.items.forEach((item: any) => ensureLookupValue("media", item.media)));
+    // Only the admin adds names, in Master Library: the client, each store's location and each
+    // line's media must be active ones, and the order takes their spelling.
+    const names = await checkMasterNames(prisma, namesOfOrder(parseResult.data));
+    if (names.missing.length) return res.status(400).json(missingNamesBody(names.missing));
+    const clientName = spellOrder(parseResult.data, names.spell).client_name;
 
     // Items are processed per store; s_no restarts at 1 inside each store.
     const processedByStore = stores.map((store) =>
@@ -441,7 +445,7 @@ export const createOrder = async (req: Request, res: Response) => {
       const created = await tx.order.create({
         data: {
           order_no,
-          client_name,
+          client_name: clientName,
           po_number,
           created_by: user.id,
           creator_name: user.name,
@@ -530,6 +534,8 @@ export const createOrder = async (req: Request, res: Response) => {
     return res.status(201).json(serializeDecimals({ ...order, total_amount, loss_amount }));
 
   } catch (err: any) {
+    // ORD{YY}9999 reached: say so instead of a bare server error.
+    if (isOrderNumbersUsedUp(err)) return res.status(409).json({ message: err.message });
     console.error(err);
     if (err.message.includes("Item dimensions")) {
       return res.status(400).json({ message: err.message });
@@ -550,23 +556,6 @@ export const updateOrder = async (req: Request, res: Response) => {
     const { client_name, store_name, location, po_number, items, remarks, remarks_other_text } = parseResult.data;
     const user = req.user!;
     const isAdmin = user.role === "ADMIN";
-
-    const ensureLookupValue = async (model: "client" | "media", name: string) => {
-      try {
-        const trimmed = name.trim();
-        if (!trimmed) return;
-        const existing = await (prisma as any)[model].findFirst({ where: { name: { equals: trimmed, mode: "insensitive" } } });
-        if (!existing) await (prisma as any)[model].create({ data: { name: trimmed } });
-      } catch (e) {
-        console.error(`Lookup upsert failed for ${model}:`, e);
-      }
-    };
-
-    if (items) {
-      items.forEach((item: any) => {
-        if (item.media) ensureLookupValue("media", item.media);
-      });
-    }
 
     const existingOrder = await prisma.order.findUnique({
       where: { id },
@@ -670,6 +659,16 @@ export const updateOrder = async (req: Request, res: Response) => {
         const problem = lineRemarkProblem(newItem, lineAmount, isNew);
         if (problem) return res.status(400).json({ message: problem });
       }
+    }
+
+    // A new line, or a changed media, must name an active Media in Master Library. A saved line
+    // keeps its media as it is, even if the admin has archived it since.
+    if (items) {
+      const savedMedia = new Map(existingOrder.items.map((i) => [i.id, i.media]));
+      const fresh = (items as any[]).filter((it) => !(it.id && savedMedia.get(it.id) === it.media));
+      const names = await checkMasterNames(prisma, fresh.map((it) => ({ kind: "MEDIA" as const, name: it.media })));
+      if (names.missing.length) return res.status(400).json(missingNamesBody(names.missing));
+      for (const it of fresh) it.media = names.spell("MEDIA", it.media);
     }
 
     const changes: any[] = [];
@@ -905,18 +904,17 @@ export const updateOrderDetails = async (req: Request, res: Response) => {
       return res.status(403).json({ message: "Only an administrator can set order remarks." });
     }
 
-    if (client_name) {
-      try {
-        const trimmed = client_name.trim();
-        const existing = await prisma.client.findFirst({ where: { name: { equals: trimmed, mode: "insensitive" } } });
-        if (!existing && trimmed) await prisma.client.create({ data: { name: trimmed } });
-      } catch (e) {
-        console.error("Lookup upsert failed for client:", e);
-      }
+    // A changed client must be an active one in Master Library, saved in its spelling. The
+    // name already on the order may stay, even if the admin has archived it since.
+    let clientName = client_name;
+    if (client_name !== undefined && client_name !== order.client_name) {
+      const names = await checkMasterNames(prisma, [{ kind: "CLIENT", name: client_name }]);
+      if (names.missing.length) return res.status(400).json(missingNamesBody(names.missing));
+      clientName = names.spell("CLIENT", client_name);
     }
 
     const { changes, log } = collectChanges();
-    if (client_name !== undefined) log("Client Name", order.client_name, client_name);
+    if (clientName !== undefined) log("Client Name", order.client_name, clientName);
     // undefined leaves the PO alone; an explicit null clears it.
     if (po_number !== undefined) log("PO Number", order.po_number || "", po_number || "");
 
@@ -925,7 +923,7 @@ export const updateOrderDetails = async (req: Request, res: Response) => {
       const o = await tx.order.update({
         where: { id },
         data: {
-          client_name: client_name !== undefined ? client_name : undefined,
+          client_name: clientName !== undefined ? clientName : undefined,
           po_number: po_number !== undefined ? po_number : undefined,
           remarks: remarks !== undefined ? remarks : undefined,
           remarks_other_text: remarks_other_text !== undefined ? remarks_other_text : undefined,
@@ -963,7 +961,8 @@ export const updateStore = async (req: Request, res: Response) => {
     if (!parseResult.success) {
       return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parseResult.error) });
     }
-    const { store_name, location, po_number } = parseResult.data;
+    const { store_name, po_number } = parseResult.data;
+    let { location } = parseResult.data;
     const user = req.user!;
     const isAdmin = user.role === "ADMIN";
 
@@ -988,6 +987,14 @@ export const updateStore = async (req: Request, res: Response) => {
       return res.status(403).json({
         message: "This store has already been invoiced. Ask an administrator to change its name or location.",
       });
+    }
+
+    // A changed location must be an active one in Master Library, saved in its spelling; the
+    // location already on the store may stay even if archived since.
+    if (location !== undefined && location !== store.location) {
+      const names = await checkMasterNames(prisma, [{ kind: "LOCATION", name: location }]);
+      if (names.missing.length) return res.status(400).json(missingNamesBody(names.missing));
+      location = names.spell("LOCATION", location);
     }
 
     // A store is identified by name and location together, so the clash test has to see
@@ -1040,7 +1047,8 @@ export const addStore = async (req: Request, res: Response) => {
     if (!parseResult.success) {
       return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parseResult.error) });
     }
-    const { store_name, location, po_number } = parseResult.data;
+    const { store_name, po_number } = parseResult.data;
+    let { location } = parseResult.data;
     const user = req.user!;
     const isAdmin = user.role === "ADMIN";
 
@@ -1057,6 +1065,10 @@ export const addStore = async (req: Request, res: Response) => {
     if (order.stores.length >= 50) {
       return res.status(409).json({ message: "An order can hold at most 50 stores." });
     }
+    // Only the admin adds locations, in Master Library; the store takes its spelling.
+    const names = await checkMasterNames(prisma, [{ kind: "LOCATION", name: location }]);
+    if (names.missing.length) return res.status(400).json(missingNamesBody(names.missing));
+    location = names.spell("LOCATION", location);
     if (order.stores.some((s) => sameStore(s, store_name, location))) {
       return res.status(409).json({ message: "This order already has that store at that location." });
     }

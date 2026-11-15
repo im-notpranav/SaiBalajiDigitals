@@ -1,8 +1,8 @@
 import { Request, Response } from "express";
 import { prisma } from "../utils/prisma";
-import { ensureLookupValue } from "../utils/lookups";
+import { checkMasterNames, groupMissingNames, loadAllMasterNames, missingNamesBody, namesOfOrder, spellOrder } from "../utils/lookups";
 import { notifyRole, notifyUser } from "../services/notifications.service";
-import { generateOrderId, previewOrderNumbers } from "../utils/order-sequence";
+import { generateOrderId, isOrderNumbersUsedUp, previewOrderNumbers } from "../utils/order-sequence";
 import { amountOf, buildOrderTemplate, parseOrderTemplate, sftOf } from "../utils/order-template";
 import { bulkOrdersSchema } from "../utils/validators";
 import { sanitizeZodErrors } from "../utils/sanitize-errors";
@@ -22,6 +22,10 @@ export const orderTemplate = async (_req: Request, res: Response) => {
 /**
  * POST /api/orders/bulk/preview — reads an uploaded sheet and saves nothing, so the person can
  * see each client's order first. The numbers shown are what the sequence would give right now.
+ *
+ * Rows naming a client, location or media missing from the Master Library are left out of the
+ * orders (Q24) and listed twice: per row, and per missing name with its rows, so the CSM can
+ * ask the admin for each name once.
  */
 export const previewBulkOrders = async (req: Request, res: Response) => {
   try {
@@ -29,13 +33,16 @@ export const previewBulkOrders = async (req: Request, res: Response) => {
     if (!buf || !Buffer.isBuffer(buf) || buf.length === 0) {
       return res.status(400).json({ message: "No file received. Upload the .xlsx file as the request body." });
     }
-    const { orders, errors, fileError } = parseOrderTemplate(buf);
+    const { orders, errors, rejected, fileError } = parseOrderTemplate(buf, await loadAllMasterNames(prisma));
     if (fileError) return res.status(400).json({ message: fileError });
     const numbers = await previewOrderNumbers(orders.length);
     return res.status(200).json({
       orders: orders.map((o, i) => ({ ...o, expected_order_no: numbers[i] ?? null })),
       errors: errors.slice(0, 200),
       error_count: errors.length,
+      rejected_rows: rejected,
+      rejected_count: rejected.length,
+      missing_names: groupMissingNames(rejected),
     });
   } catch (err) {
     console.error("Bulk preview error:", err);
@@ -46,7 +53,8 @@ export const previewBulkOrders = async (req: Request, res: Response) => {
 /**
  * POST /api/orders/bulk — saves the orders from the review screen, all or none. A CSM's orders
  * are their own; an admin picks a CSM for each. Figures are worked out again here rather than
- * trusted from the browser.
+ * trusted from the browser, and so are the names: each must still be an active one in the
+ * Master Library, and is saved in its spelling.
  */
 export const createBulkOrders = async (req: Request, res: Response) => {
   try {
@@ -68,6 +76,11 @@ export const createBulkOrders = async (req: Request, res: Response) => {
       owners.set(user.id, me?.name ?? user.username);
     }
 
+    // The admin may have archived a name between the preview and this save.
+    const names = await checkMasterNames(prisma, parsed.data.orders.flatMap(namesOfOrder));
+    if (names.missing.length) return res.status(400).json(missingNamesBody(names.missing));
+    parsed.data.orders.forEach((o) => spellOrder(o, names.spell));
+
     // Numbers are taken first, as the sequence runs its own transaction. A failure below leaves a gap.
     const numbers: string[] = [];
     for (let i = 0; i < parsed.data.orders.length; i++) numbers.push(await generateOrderId());
@@ -78,9 +91,6 @@ export const createBulkOrders = async (req: Request, res: Response) => {
       for (const [i, o] of parsed.data.orders.entries()) {
         const ownerId = isAdmin ? o.csm_user_id! : user.id;
         const date = new Date(`${o.date}T00:00:00.000Z`);
-        await ensureLookupValue(tx, "client", o.client_name);
-        for (const s of o.stores) for (const it of s.items) await ensureLookupValue(tx, "media", it.media);
-
         const order = await tx.order.create({
           data: {
             order_no: numbers[i]!,
@@ -137,6 +147,8 @@ export const createBulkOrders = async (req: Request, res: Response) => {
     }
     return res.status(201).json({ orders: created.map(({ id, order_no, client_name }) => ({ id, order_no, client_name })) });
   } catch (err) {
+    // ORD{YY}9999 reached: say so instead of a bare server error.
+    if (isOrderNumbersUsedUp(err)) return res.status(409).json({ message: (err as Error).message });
     console.error("Bulk upload error:", err);
     return res.status(500).json({ message: "Internal server error" });
   }

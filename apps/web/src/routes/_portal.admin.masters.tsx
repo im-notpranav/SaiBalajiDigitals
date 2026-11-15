@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Plus, Search } from "lucide-react";
+import { ExternalLink, Info, Loader2, Plus, Search } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -14,21 +14,19 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { fetchUsers } from "@/api/users";
+import { useAuth } from "@/lib/auth-store";
 import {
   CSM_CODE_KIND_LABELS,
   LOCALITY_LABELS,
   apiErrorMessage,
-  createArea,
   createCsmCode,
   createVehicle,
   fetchAreas,
   fetchCsmCodes,
   fetchFieldStaff,
   fetchVehicles,
-  updateArea,
   updateCsmCode,
   updateVehicle,
-  type Area,
   type AreaLocality,
   type CsmCode,
   type CsmCodeKind,
@@ -75,8 +73,9 @@ function Toolbar({ q, setQ, placeholder, onAdd, addLabel, children }: {
   q: string;
   setQ: (v: string) => void;
   placeholder: string;
-  onAdd: () => void;
-  addLabel: string;
+  /** Left out for a read-only list. */
+  onAdd?: () => void;
+  addLabel?: string;
   children?: ReactNode;
 }) {
   return (
@@ -86,9 +85,11 @@ function Toolbar({ q, setQ, placeholder, onAdd, addLabel, children }: {
         <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={placeholder} aria-label={placeholder} className="pl-9" />
       </div>
       {children}
-      <Button className="rounded-xl sm:ml-auto" onClick={onAdd}>
-        <Plus className="mr-2 h-4 w-4" /> {addLabel}
-      </Button>
+      {onAdd && (
+        <Button className="rounded-xl sm:ml-auto" onClick={onAdd}>
+          <Plus className="mr-2 h-4 w-4" /> {addLabel}
+        </Button>
+      )}
     </div>
   );
 }
@@ -270,27 +271,17 @@ function CsmCodesTab() {
 // Areas
 // ---------------------------------------------------------------------------
 
-type AreaForm = { id?: number; name: string; locality: AreaLocality; district: string; needs_confirmation: boolean; is_active: boolean };
-
+/**
+ * Areas are the Master Library's Locations: the same list gives field-job areas and store
+ * locations on orders. Only the admin adds or changes them, in Master Library, so this tab
+ * only shows them.
+ */
 function AreasTab() {
-  const qc = useQueryClient();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "ADMIN";
   const [q, setQ] = useState("");
   const [locality, setLocality] = useState<"ALL" | AreaLocality>("ALL");
-  const [form, setForm] = useState<AreaForm | null>(null);
   const { data, isLoading } = useQuery({ queryKey: ["masters", "areas"], queryFn: fetchAreas });
-
-  const save = useMutation({
-    mutationFn: (f: AreaForm) => {
-      const body = { name: f.name, locality: f.locality, district: f.district || null, needs_confirmation: f.needs_confirmation, is_active: f.is_active };
-      return f.id ? updateArea(f.id, body) : createArea(body);
-    },
-    onSuccess: () => {
-      toast.success("Saved");
-      setForm(null);
-      qc.invalidateQueries({ queryKey: ["masters", "areas"] });
-    },
-    onError: (err) => toast.error(apiErrorMessage(err, "Could not save the area")),
-  });
 
   const all = data?.areas ?? [];
   const areas = all.filter(
@@ -300,13 +291,26 @@ function AreasTab() {
 
   return (
     <>
+      <div className="mb-4 flex flex-col gap-2 rounded-xl border bg-muted/30 p-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+        <span className="flex items-center gap-2">
+          <Info className="h-4 w-4 shrink-0 text-muted-foreground" />
+          Locations are managed in Master Library.
+        </span>
+        {isAdmin && (
+          <Button asChild size="sm" variant="outline" className="shrink-0">
+            <a href="/admin/master-library">
+              <ExternalLink className="mr-2 h-4 w-4" /> Open Master Library
+            </a>
+          </Button>
+        )}
+      </div>
       {toConfirm > 0 && (
         <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
-          {toConfirm} area{toConfirm === 1 ? "" : "s"} still need{toConfirm === 1 ? "s" : ""} Local / Non-local confirmed. Open each one, check it, and turn off “Needs confirmation”.
+          {toConfirm} area{toConfirm === 1 ? "" : "s"} still need{toConfirm === 1 ? "s" : ""} Local / Non-local confirmed.{" "}
+          {isAdmin ? "Confirm them in Master Library." : "The admin confirms them in Master Library."}
         </div>
       )}
-      <Toolbar q={q} setQ={setQ} placeholder="Search areas" addLabel="Add area"
-        onAdd={() => setForm({ name: "", locality: "LOCAL", district: "", needs_confirmation: false, is_active: true })}>
+      <Toolbar q={q} setQ={setQ} placeholder="Search areas">
         <Select value={locality} onValueChange={(v) => setLocality(v as typeof locality)}>
           <SelectTrigger className="sm:w-40"><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -324,11 +328,10 @@ function AreasTab() {
               <TableHead>Locality</TableHead>
               <TableHead>District / notes</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {isLoading ? <EmptyRow cols={5} text="Loading…" /> : areas.length === 0 ? <EmptyRow cols={5} text="No areas match." /> : areas.map((a) => (
+            {isLoading ? <EmptyRow cols={4} text="Loading…" /> : areas.length === 0 ? <EmptyRow cols={4} text="No areas match." /> : areas.map((a) => (
               <TableRow key={a.id} className={a.is_active ? "" : "opacity-60"}>
                 <TableCell className="font-semibold">
                   {a.name}
@@ -341,49 +344,11 @@ function AreasTab() {
                 </TableCell>
                 <TableCell className="text-muted-foreground">{a.district ?? "—"}</TableCell>
                 <TableCell><ActiveBadge active={a.is_active} /></TableCell>
-                <TableCell className="text-right">
-                  <Button variant="ghost" size="sm" onClick={() => setForm({ id: a.id, name: a.name, locality: a.locality, district: a.district ?? "", needs_confirmation: a.needs_confirmation, is_active: a.is_active })}>
-                    Edit
-                  </Button>
-                </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
       </div>
-
-      <EditDialog open={!!form} title={form?.id ? `Edit ${form.name}` : "Add area"} onClose={() => setForm(null)}
-        onSave={() => form && save.mutate(form)} saving={save.isPending} canSave={!!form?.name.trim()}>
-        {form && (
-          <>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="grid gap-2">
-                <Label htmlFor="ar-name">Area name</Label>
-                <Input id="ar-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-              </div>
-              <div className="grid gap-2">
-                <Label>Locality</Label>
-                <Select value={form.locality} onValueChange={(v) => setForm({ ...form, locality: v as AreaLocality })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="LOCAL">Local (Hyderabad city)</SelectItem>
-                    <SelectItem value="NON_LOCAL">Non-local</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="ar-district">District / notes</Label>
-              <Input id="ar-district" value={form.district} onChange={(e) => setForm({ ...form, district: e.target.value })} placeholder="Optional" />
-            </div>
-            <div className="flex items-center justify-between rounded-xl border p-3">
-              <div className="text-sm font-medium">Needs confirmation</div>
-              <Switch checked={form.needs_confirmation} onCheckedChange={(v) => setForm({ ...form, needs_confirmation: v })} aria-label="Needs confirmation" />
-            </div>
-            {form.id && <ActiveSwitch checked={form.is_active} onChange={(v) => setForm({ ...form, is_active: v })} />}
-          </>
-        )}
-      </EditDialog>
     </>
   );
 }

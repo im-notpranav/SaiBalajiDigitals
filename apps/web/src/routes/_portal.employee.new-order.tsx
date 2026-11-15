@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { createOrder } from "@/api/orders";
 import { OrderForm } from "@/components/orders/OrderForm";
+import { toastMissingNames } from "@/api/nameRequests";
 import type { CreateOrderInput } from "@sb-oms/shared-types";
 
 export const Route = createFileRoute("/_portal/employee/new-order")({
@@ -24,11 +25,13 @@ function NewOrder() {
       toast.success(`Order ${res.order.order_no} created`, { description: "Order was saved successfully." });
       navigate({ to: "/employee/orders" });
     } catch (err: any) {
+      // A name not in Master Library: say which, and offer to ask the admin for it.
+      if (toastMissingNames(err)) return;
       const data = err?.response?.data;
       if (data?.errors && Array.isArray(data.errors)) {
         toast.error(`Validation Error: ${data.errors.map((e: any) => `${e.path.join(".")}: ${e.message}`).join(", ")}`);
       } else {
-        toast.error("Failed to create order", { description: err.message });
+        toast.error("Failed to create order", { description: data?.message || err.message });
       }
     } finally {
       setSaving(false);

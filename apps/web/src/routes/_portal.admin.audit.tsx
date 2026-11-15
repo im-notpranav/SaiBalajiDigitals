@@ -41,8 +41,10 @@ function AuditPage() {
   });
 
   const logs = auditData?.logs || [];
-  const actions = useMemo(() => Array.from(new Set(logs.map((a: any) => a.action))).filter(Boolean) as string[], [logs]);
-  const users = useMemo(() => Array.from(new Set(logs.map((a: any) => a.user_name || String(a.changed_by)))).filter(Boolean) as string[], [logs]);
+  // Filter dropdowns list their choices A–Z, like every other name list in the app.
+  const byName = (a: string, b: string) => a.localeCompare(b, "en", { sensitivity: "base" });
+  const actions = useMemo(() => (Array.from(new Set(logs.map((a: any) => a.action))).filter(Boolean) as string[]).sort(byName), [logs]);
+  const users = useMemo(() => (Array.from(new Set(logs.map((a: any) => a.user_name || String(a.changed_by)))).filter(Boolean) as string[]).sort(byName), [logs]);
 
   const filtered = logs.filter((a: any) => {
     // Action filter

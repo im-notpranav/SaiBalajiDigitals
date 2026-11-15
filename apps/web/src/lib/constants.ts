@@ -63,20 +63,20 @@ export function lineBillable(amount: number, remarks: string | null | undefined,
 export const ORDER_STATUSES = ["Active", "Installed", "Pending", "BillingCompleted", "PaymentReceived", "Completed"] as const;
 
 /**
- * Assignable roles — single source of truth for every role picker.
- * Must stay in sync with the Prisma `Role` enum and `roleEnum` in the API validators.
+ * Assignable roles — single source of truth for every role picker, so kept in A–Z order of
+ * label. Must stay in sync with the Prisma `Role` enum and `roleEnum` in the API validators.
  */
 export const ROLES: { value: string; label: string; description: string }[] = [
+  { value: "ACCOUNTS", label: "Accountant", description: "Billing and payments" },
   { value: "ADMIN", label: "Administrator", description: "Full access" },
-  { value: "OPERATION_MANAGER", label: "Operation Manager", description: "Views the admin portal; manages field staff and allocation masters" },
   { value: "CSM", label: "Client Service Manager", description: "Creates and manages their own orders" },
+  { value: "COST_CONTROL_MANAGER", label: "Cost Control Manager", description: "Reviews, pays and closes payment requests" },
+  { value: "DRIVER", label: "Driver", description: "Field staff: sees own jobs and vehicle trips" },
+  { value: "HELPER", label: "Helper", description: "Field staff (Sub-Paster / Ast. Paster): sees own jobs" },
+  { value: "OPERATION_MANAGER", label: "Operation Manager", description: "Views the admin portal; manages field staff and allocation masters" },
+  { value: "PASTER", label: "Paster", description: "Field staff: sees own jobs" },
   { value: "PRODUCTION_MANAGER", label: "Production Manager", description: "Assigns line items to production teams" },
   { value: "PRODUCTION", label: "Production Team", description: "Completes work assigned to them" },
-  { value: "ACCOUNTS", label: "Accountant", description: "Billing and payments" },
-  { value: "COST_CONTROL_MANAGER", label: "Cost Control Manager", description: "Reviews, pays and closes payment requests" },
-  { value: "PASTER", label: "Paster", description: "Field staff: sees own jobs" },
-  { value: "HELPER", label: "Helper", description: "Field staff (Sub-Paster / Ast. Paster): sees own jobs" },
-  { value: "DRIVER", label: "Driver", description: "Field staff: sees own jobs and vehicle trips" },
 ];
 
 export const roleLabel = (value?: string | null) =>

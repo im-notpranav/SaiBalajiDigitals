@@ -29,7 +29,7 @@ import {
   type WorkJobStatus,
 } from "@/api/allocation";
 
-/** Shared pieces of the work-allocation pages: status badge, status menu, locality tag. */
+/** Shared pieces of the work-allocation pages: status badge, status menu, locality tag, team words. */
 
 const statusStyles: Record<WorkJobStatus, string> = {
   ASSIGNED: "bg-info/15 text-info border-info/30",
@@ -183,7 +183,38 @@ export function JobStatusMenu({ job }: { job: WorkJob }) {
   );
 }
 
-/** "Abdul (P), Afzal (H), Umar (D)" — compact team line for tables. */
+/** "Abdul (P), Afzal (H), Umar (D)" — compact team line for tables. A job may have no team yet. */
 export function teamLine(members: WorkJob["members"]): string {
+  if (members.length === 0) return "No team yet";
   return members.map((m) => `${m.name} (${m.slot_role[0]})`).join(", ");
+}
+
+/** "Ravi", "Ravi +2", or "" — any number of people in the space of one name, for grid boxes. */
+export function compactNames(names: string[]): string {
+  return names.length > 1 ? `${names[0]} +${names.length - 1}` : (names[0] ?? "");
+}
+
+/** Whose job this is, in words: its CSM, else the person or team behind its CSM code. */
+export function jobOwnerName(job: Pick<WorkJob, "csm" | "csm_code">): string {
+  return (
+    job.csm?.name ??
+    job.csm_code?.user?.name ??
+    job.csm_code?.label ??
+    job.csm_code?.code ??
+    "another CSM"
+  );
+}
+
+/** Marks a CSM's own job on the pages where he also sees every other CSM's. */
+export function MineTag({ className }: { className?: string }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center whitespace-nowrap rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-semibold text-primary",
+        className,
+      )}
+    >
+      Your job
+    </span>
+  );
 }

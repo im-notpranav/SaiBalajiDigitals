@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useDebounce } from "@/hooks/use-debounce";
+import { cn } from "@/lib/utils";
 
 /**
  * The filters shared by the Admin's, the CSM's and the Accountant's order lists. A link can set
@@ -25,6 +26,8 @@ export interface OrdersSearch {
   to?: string;
   /** The exact name of the person who created the order. */
   creator?: string;
+  /** Only orders allotted and not filled yet: no stores and no items. */
+  waiting?: boolean;
   /** Which page of results, from 2 up; page 1 leaves it out. */
   page?: number;
 }
@@ -43,6 +46,8 @@ export function parseOrdersSearch(search: Record<string, unknown>): OrdersSearch
     from: day(search.from),
     to: day(search.to),
     creator: text(search.creator),
+    // The router reads ?waiting=1 as the number 1; a link may also say true.
+    waiting: search.waiting === 1 || search.waiting === "1" || search.waiting === true ? true : undefined,
     page: Number.isInteger(Number(search.page)) && Number(search.page) > 1 ? Number(search.page) : undefined,
   };
 }
@@ -69,7 +74,7 @@ export function useOrdersFilters(search: OrdersSearch) {
   };
 
   // A new search, tab or filter starts again at page 1.
-  const filterKey = [section, field, debouncedQ, search.from, search.to, search.creator].join("|");
+  const filterKey = [section, field, debouncedQ, search.from, search.to, search.creator, search.waiting].join("|");
   const lastKey = useRef(filterKey);
   useEffect(() => {
     if (lastKey.current === filterKey) return;
@@ -82,12 +87,23 @@ export function useOrdersFilters(search: OrdersSearch) {
     from: search.from,
     to: search.to,
     creator: search.creator,
+    waiting: search.waiting ? "1" : undefined,
     limit: String(ORDERS_PAGE_SIZE),
     page: page > 1 ? String(page) : undefined,
   };
   if (debouncedQ) params[field === "any" ? "q" : field] = debouncedQ;
 
-  return { search, section, setSection, q, setQ, field, setField, debouncedQ, params, page, setPage };
+  /** Waiting orders are open ones, so turning the filter on goes to Active. */
+  const setWaiting = (on: boolean) => {
+    if (on) setSection("active");
+    navigate({
+      to: ".",
+      search: ((prev: OrdersSearch) => ({ ...prev, waiting: on ? true : undefined, page: undefined })) as never,
+      replace: true,
+    });
+  };
+
+  return { search, section, setSection, q, setQ, field, setField, debouncedQ, params, page, setPage, setWaiting };
 }
 
 const showDay = (iso: string) => format(new Date(`${iso}T00:00:00`), "dd MMM yyyy");
@@ -103,13 +119,19 @@ export function OrdersFilterBar({
   filters,
   total,
   shown,
+  waiting,
 }: {
   filters: ReturnType<typeof useOrdersFilters>;
   total: number;
   shown: number;
+  /**
+   * A toggle for orders allotted and not filled yet, with how many there are (undefined while
+   * the count loads). Pages that leave it out show no toggle.
+   */
+  waiting?: { label: string; count?: number };
 }) {
   const navigate = useNavigate();
-  const { search, section, setSection, q, setQ, field, setField, debouncedQ, page } = filters;
+  const { search, section, setSection, q, setQ, field, setField, debouncedQ, page, setWaiting } = filters;
   const clear = (keys: (keyof OrdersSearch)[]) =>
     navigate({
       to: ".",
@@ -183,9 +205,31 @@ export function OrdersFilterBar({
         </div>
       </div>
 
-      {(hasDates || search.creator) && (
+      {(waiting || hasDates || search.creator) && (
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs text-muted-foreground">Showing only:</span>
+          {waiting && (
+            <button
+              type="button"
+              aria-pressed={!!search.waiting}
+              onClick={() => setWaiting(!search.waiting)}
+              className={cn(
+                "inline-flex min-h-9 items-center gap-2 rounded-full border px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                search.waiting ? "border-primary bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted/50",
+              )}
+            >
+              {waiting.label}
+              {/* A fixed-width count, so the chip doesn't grow when the number arrives. */}
+              <span
+                className={cn(
+                  "inline-flex h-5 min-w-6 items-center justify-center rounded-full px-1.5 text-[11px] tabular-nums",
+                  search.waiting ? "bg-primary/15" : "bg-muted text-foreground",
+                )}
+              >
+                {waiting.count ?? <span className="h-2 w-3 animate-pulse rounded-sm bg-muted-foreground/30" aria-hidden />}
+              </span>
+            </button>
+          )}
+          {(hasDates || search.creator) && <span className="text-xs text-muted-foreground">Showing only:</span>}
           {hasDates && (
             <FilterChip
               label={`Dated ${search.from ? showDay(search.from) : "any time"} to ${search.to ? showDay(search.to) : "today"}`}

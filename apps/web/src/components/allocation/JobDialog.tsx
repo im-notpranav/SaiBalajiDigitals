@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Check, ChevronDown, ChevronsUpDown, Loader2, Plus, X } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, ChevronsUpDown, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -66,7 +66,10 @@ interface Form {
   csm_user_id: number | null;
   csm2_code_id: number | null;
   member_ids: number[];
-  helpers_required: boolean;
+  /** Roles marked Required; a role with people on it counts as required anyway. */
+  required: Record<FieldRole, boolean>;
+  /** Empty dropdowns opened with "+" under each role. */
+  blanks: Record<FieldRole, number>;
   route: string;
   extra_tag: string;
   instructions: string;
@@ -83,7 +86,9 @@ const blankForm = (start: string, members: number[] = []): Form => ({
   csm_user_id: null,
   csm2_code_id: null,
   member_ids: members,
-  helpers_required: false,
+  // Every role starts as Not required (Q17); a person pre-picked from the grid makes theirs required.
+  required: { PASTER: false, HELPER: false, DRIVER: false },
+  blanks: { PASTER: 0, HELPER: 0, DRIVER: 0 },
   route: "",
   extra_tag: "",
   instructions: "",
@@ -105,7 +110,13 @@ const formFromJob = (job: WorkJob): Form => ({
   csm_user_id: job.csm?.id ?? null,
   csm2_code_id: job.csm2_code?.id ?? null,
   member_ids: job.members.map((m) => m.user_id),
-  helpers_required: job.members.some((m) => m.slot_role === "HELPER"),
+  // The roles the job already has show as Required with their people.
+  required: {
+    PASTER: job.members.some((m) => m.slot_role === "PASTER"),
+    HELPER: job.members.some((m) => m.slot_role === "HELPER"),
+    DRIVER: job.members.some((m) => m.slot_role === "DRIVER"),
+  },
+  blanks: { PASTER: 0, HELPER: 0, DRIVER: 0 },
   route: job.route ?? "",
   extra_tag: job.extra_tag ?? "",
   instructions: job.instructions ?? "",
@@ -166,6 +177,11 @@ export function JobDialog({
   const { data: staffData } = useQuery({ ...fieldStaffQuery, enabled: open });
 
   const csms = csmData?.csms ?? [];
+  // A CSM since made inactive still shows on their old job, in its alphabetical place.
+  const csmChoices = [
+    ...csms,
+    ...(job?.csm && !csms.some((c) => c.id === job.csm!.id) ? [job.csm] : []),
+  ].sort((a, b) => a.name.localeCompare(b.name));
   /** The order's creator, when a CSM: the order fills the CSM dropdown with them. */
   const csmOfOrder = (createdBy: number | null, current: number | null) =>
     csms.some((c) => c.id === createdBy) ? createdBy : current;
@@ -239,7 +255,12 @@ export function JobDialog({
     return map;
   }, [leaveData]);
 
-  const areas = (areaData?.areas ?? []).filter((a) => a.is_active && a.locality === form.locality);
+  // Only the admin adds area names (Master Library), so the form picks from the active ones.
+  const areaNames = (locality: AreaLocality | null) =>
+    (areaData?.areas ?? [])
+      .filter((a) => a.is_active && a.locality === locality)
+      .map((a) => a.name)
+      .sort((a, b) => a.localeCompare(b));
   const codes = (codeData?.codes ?? []).filter((c) => c.is_active || c.id === form.csm2_code_id);
   const staff = (staffData?.staff ?? []).filter(
     (s) => s.is_active || form.member_ids.includes(s.id),
@@ -248,8 +269,9 @@ export function JobDialog({
   const roleCount = (r: FieldRole) => chosen.filter((s) => s.role === r).length;
   const clashing = chosen.filter((s) => busy.has(s.id));
   const chosenOnLeave = chosen.filter((s) => onLeave.has(s.id));
-  // A grid cell can start a job with a Helper already on it.
-  const helpersRequired = form.helpers_required || roleCount("HELPER") > 0;
+  // A grid cell can start a job with someone already on it, which makes their role required.
+  const requiredOf = (r: FieldRole) => form.required[r] || roleCount(r) > 0;
+  const required = { PASTER: requiredOf("PASTER"), HELPER: requiredOf("HELPER"), DRIVER: requiredOf("DRIVER") };
 
   const save = useMutation({
     mutationFn: (allowOverride?: boolean) => {
@@ -277,10 +299,11 @@ export function JobDialog({
       toast.success(
         job
           ? `Job${on} updated`
-          : `Job${on} assigned to ${saved.members.length} ${saved.members.length === 1 ? "person" : "people"}`,
+          : saved.members.length
+            ? `Job${on} assigned to ${saved.members.length} ${saved.members.length === 1 ? "person" : "people"}`
+            : `Job${on} saved. No team yet.`,
       );
       qc.invalidateQueries({ queryKey: ["work-jobs"] });
-      qc.invalidateQueries({ queryKey: ["masters", "areas"] });
       onClose();
     },
     onError: (err: unknown) => {
@@ -300,28 +323,66 @@ export function JobDialog({
     ? "Pick the CSM."
     : !datesValid
       ? "Fix the dates."
-      : (teamShortfall(roleCount, helpersRequired) ??
+      : (teamShortfall(roleCount, requiredOf) ??
         // Saving before this is known could book someone twice without the warning showing.
         (checking ? "Checking who is free on these dates…" : null));
   const canSave = !missing;
 
+  const roleOf = (id: number) => staff.find((s) => s.id === id)?.role;
+
+  /**
+   * A new team. A role that had people stays Required even when its last person is taken off,
+   * so its dropdown stays open and the hint asks for someone, or for "Not required".
+   */
   const setTeam = (ids: number[]) => {
-    set("member_ids", ids);
+    setForm((f) => {
+      const had = (r: FieldRole) => f.member_ids.some((id) => roleOf(id) === r);
+      return {
+        ...f,
+        member_ids: ids,
+        required: {
+          PASTER: f.required.PASTER || had("PASTER"),
+          HELPER: f.required.HELPER || had("HELPER"),
+          DRIVER: f.required.DRIVER || had("DRIVER"),
+        },
+      };
+    });
     setConflicts([]);
     setLeaveConflicts([]);
   };
 
-  /** Saying Helpers are not required takes any Helpers off the team. */
-  const setHelpersRequired = (on: boolean) => {
-    set("helpers_required", on);
-    if (!on)
-      setTeam(form.member_ids.filter((id) => staff.find((s) => s.id === id)?.role !== "HELPER"));
+  /** Saying a role is not required takes its people off the team. */
+  const setRoleRequired = (role: FieldRole, on: boolean) => {
+    setForm((f) => ({
+      ...f,
+      member_ids: on ? f.member_ids : f.member_ids.filter((id) => roleOf(id) !== role),
+      required: { ...f.required, [role]: on },
+      blanks: { ...f.blanks, [role]: 0 },
+    }));
+    if (!on) {
+      setConflicts([]);
+      setLeaveConflicts([]);
+    }
   };
 
-  /** Pressing the chosen location again clears it, since the location is optional. */
+  const setBlanks = (role: FieldRole, n: number) =>
+    setForm((f) => ({ ...f, blanks: { ...f.blanks, [role]: Math.max(0, n) } }));
+
+  /**
+   * Pressing the chosen location again clears it, since the location is optional. Switching
+   * between Hyderabad and Non-local keeps the area only if it is listed under the new choice.
+   */
   const pickLocality = (l: AreaLocality) =>
     setForm((f) =>
-      f.locality === l ? { ...f, locality: null, area_name: "" } : { ...f, locality: l },
+      f.locality === l
+        ? { ...f, locality: null, area_name: "" }
+        : {
+            ...f,
+            locality: l,
+            area_name: areaNames(l).some((n) => n.toLowerCase() === f.area_name.toLowerCase())
+              ? f.area_name
+              : "",
+          },
     );
 
   const changeOrder = (o: OrderOption | null) =>
@@ -366,11 +427,7 @@ export function JobDialog({
                     <SelectValue placeholder="Pick the CSM" />
                   </SelectTrigger>
                   <SelectContent>
-                    {/* A CSM since made inactive still shows on their old job. */}
-                    {job?.csm && !csms.some((c) => c.id === job.csm!.id) && (
-                      <SelectItem value={String(job.csm.id)}>{job.csm.name}</SelectItem>
-                    )}
-                    {csms.map((c) => (
+                    {csmChoices.map((c) => (
                       <SelectItem key={c.id} value={String(c.id)}>
                         {c.name}
                       </SelectItem>
@@ -459,12 +516,55 @@ export function JobDialog({
             <TeamPicker
               staff={staff}
               selected={form.member_ids}
-              helpersRequired={helpersRequired}
+              required={required}
+              blanks={form.blanks}
               busy={busy}
               onLeave={onLeave}
               checking={checking}
               onChange={setTeam}
-              onHelpersRequired={setHelpersRequired}
+              onRequired={setRoleRequired}
+              onBlanks={setBlanks}
+              driverAside={
+                // Where: on the Driver row, as the driver is the one who needs to know.
+                <div className="grid content-start gap-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <Label>
+                      Location{" "}
+                      <span className="font-normal text-muted-foreground">(optional)</span>
+                    </Label>
+                    <div
+                      role="radiogroup"
+                      aria-label="Location"
+                      className="inline-flex rounded-xl border bg-muted/40 p-1 text-sm"
+                    >
+                      {(["LOCAL", "NON_LOCAL"] as const).map((l) => (
+                        <button
+                          key={l}
+                          type="button"
+                          role="radio"
+                          aria-checked={form.locality === l}
+                          onClick={() => pickLocality(l)}
+                          className={cn(
+                            "min-h-8 rounded-lg px-3 font-medium transition-colors",
+                            form.locality === l
+                              ? "bg-background text-foreground shadow-sm"
+                              : "text-muted-foreground hover:text-foreground",
+                          )}
+                        >
+                          {PLACE_LABELS[l]}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {form.locality && (
+                    <AreaNamePicker
+                      names={areaNames(form.locality)}
+                      value={form.area_name}
+                      onChange={(name) => set("area_name", name)}
+                    />
+                  )}
+                </div>
+              }
             />
             {chosenOnLeave.length > 0 && (
               <p className="flex items-start gap-1.5 text-xs text-destructive">
@@ -480,50 +580,6 @@ export function JobDialog({
                 {clashing.length === 1 ? "has" : "have"} work on these dates. Saving books both
                 jobs.
               </p>
-            )}
-          </section>
-
-          {/* Where */}
-          <section className="grid gap-3">
-            <div className="grid gap-2">
-              <Label>
-                Location <span className="font-normal text-muted-foreground">(optional)</span>
-              </Label>
-              <div
-                role="radiogroup"
-                aria-label="Location"
-                className="inline-flex justify-self-start rounded-xl border bg-muted/40 p-1 text-sm"
-              >
-                {(["LOCAL", "NON_LOCAL"] as const).map((l) => (
-                  <button
-                    key={l}
-                    type="button"
-                    role="radio"
-                    aria-checked={form.locality === l}
-                    onClick={() => pickLocality(l)}
-                    className={cn(
-                      "min-h-8 rounded-lg px-3 font-medium transition-colors",
-                      form.locality === l
-                        ? "bg-background text-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    {PLACE_LABELS[l]}
-                  </button>
-                ))}
-              </div>
-            </div>
-            {form.locality && (
-              <div className="grid gap-2 sm:max-w-sm">
-                <Label>
-                  Area name <span className="font-normal text-muted-foreground">(optional)</span>
-                </Label>
-                <AreaNamePicker
-                  names={areas.map((a) => a.name)}
-                  value={form.area_name}
-                  onChange={(name) => set("area_name", name)}
-                />
-              </div>
             )}
           </section>
 
@@ -780,23 +836,23 @@ function OrderPicker({
   );
 }
 
-/** Pick an area from the list, or type a new name; the API adds new names to the list. */
+/**
+ * Pick an area from the active list. New names are not typed here: the admin adds them in the
+ * Master Library (Q25), and the API refuses a name it does not know.
+ */
 function AreaNamePicker({
   names,
   value,
   onChange,
 }: {
+  /** Alphabetical. */
   names: string[];
   value: string;
   onChange: (name: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [q, setQ] = useState("");
-  const typed = q.trim();
-  const known = names.some((n) => n.toLowerCase() === typed.toLowerCase());
   const pick = (name: string) => {
     onChange(name);
-    setQ("");
     setOpen(false);
   };
   return (
@@ -811,7 +867,7 @@ function AreaNamePicker({
             {value ? (
               <span className="truncate">{value}</span>
             ) : (
-              <span className="text-muted-foreground">Pick or type an area</span>
+              <span className="text-muted-foreground">Pick an area (optional)</span>
             )}
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
@@ -821,21 +877,14 @@ function AreaNamePicker({
           align="start"
         >
           <Command>
-            <CommandInput
-              value={q}
-              onValueChange={setQ}
-              maxLength={100}
-              placeholder="Search or type a new area"
-            />
+            <CommandInput maxLength={100} placeholder="Search areas" />
             <CommandList>
-              {!typed && <CommandEmpty>No areas yet. Type a name to add one.</CommandEmpty>}
+              <CommandEmpty className="px-3 py-4 text-center text-sm text-muted-foreground">
+                {names.length
+                  ? "No area matches. Ask the admin to add it in Master Library."
+                  : "No areas listed here yet. Ask the admin to add them in Master Library."}
+              </CommandEmpty>
               <CommandGroup>
-                {typed && !known && (
-                  // Matches the search whatever is typed, so it always stays in the list.
-                  <CommandItem value={typed} onSelect={() => pick(typed)}>
-                    <Plus className="mr-2 h-4 w-4" /> Add “{typed}”
-                  </CommandItem>
-                )}
                 {names.map((n) => (
                   <CommandItem key={n} value={n} onSelect={() => pick(n)}>
                     <Check

@@ -17,21 +17,21 @@ import {
   findConflicts,
   findLeaveClashes,
   gridLabel,
+  isCsmsJob,
   isOverlapViolation,
   jobPlace,
   lockPeople,
   lockRows,
   onOrder,
   parseDay,
-  teamLimitErrors,
   todayIST,
 } from "../utils/work-allocation";
 
 /**
  * Field work jobs: the Operation Manager's replacement for the old Task Log sheet.
  *
- * A job runs over whole days and carries a team of Pasters, Helpers and a Driver. Its order,
- * location and work details may come later. Nobody may be booked on two overlapping jobs
+ * A job runs over whole days and carries a team of Pasters, Helpers and Drivers: any number of
+ * each, or nobody yet. Its order, location, team and work details may all come later. Nobody may be booked on two overlapping jobs
  * unless the job says "Allow 2nd job" — checked here for a readable answer, and enforced again
  * by an exclusion constraint in the database so two managers saving at once cannot both win.
  */
@@ -124,16 +124,16 @@ async function assertOrderCanChange(tx: Prisma.TransactionClient, jobId: number,
 }
 
 /**
- * The area with this name whatever its case, added to the list when new. A name no longer in
- * use comes back into the list, since someone is using it again.
+ * The active area with this name, whatever its case. The admin owns area names in the Master
+ * Library (Q25), so a job may only pick from that list: an unknown or archived name is refused,
+ * never added. A job already in an area that was archived since may keep it.
  */
-async function areaNamed(tx: Prisma.TransactionClient, name: string, locality: "LOCAL" | "NON_LOCAL") {
-  const find = () => tx.area.findFirst({ where: { name: { equals: name, mode: "insensitive" } } });
-  const found = await find();
-  if (found) return found.is_active ? found : tx.area.update({ where: { id: found.id }, data: { is_active: true } });
-  // skipDuplicates: two managers typing the same new name at once share one row.
-  await tx.area.createMany({ data: [{ name, locality }], skipDuplicates: true });
-  return (await find())!;
+async function listedArea(tx: Prisma.TransactionClient, name: string, keepId?: number | null) {
+  const found = await tx.area.findFirst({ where: { name: { equals: name, mode: "insensitive" } } });
+  if (!found || (!found.is_active && found.id !== keepId)) {
+    throw new HttpError(400, "Area not in the list. Ask the admin to add it in Master Library.");
+  }
+  return found;
 }
 
 /**
@@ -143,7 +143,7 @@ async function areaNamed(tx: Prisma.TransactionClient, name: string, locality: "
 async function resolveJobInput(
   tx: Prisma.TransactionClient,
   body: unknown,
-  current?: { id: number; start: string; end: string; memberIds: number[] },
+  current?: { id: number; start: string; end: string; memberIds: number[]; areaId: number | null },
 ) {
   const excludeJobId = current?.id;
   const parsed = workJobSchema.safeParse(body);
@@ -166,7 +166,7 @@ async function resolveJobInput(
     if (stores.length !== new Set(input.store_ids).size) throw new HttpError(400, "Some of the chosen stores are not on this order.");
   }
 
-  const area = input.area_name ? await areaNamed(tx, input.area_name, input.locality!) : null;
+  const area = input.area_name ? await listedArea(tx, input.area_name, current?.areaId) : null;
 
   // The CSM chosen on the form, else the CSM who raised the order.
   let csmUserId = input.csm_user_id ?? null;
@@ -194,8 +194,7 @@ async function resolveJobInput(
   if (notField.length) throw new HttpError(400, `${notField.map((p) => p.name).join(", ")} is not a Paster, Helper or Driver.`);
   const inactive = people.filter((p) => !p.is_active);
   if (inactive.length) throw new HttpError(400, `${inactive.map((p) => p.name).join(", ")} is deactivated.`);
-  const limitErrors = teamLimitErrors(people.map((p) => p.role));
-  if (limitErrors.length) throw new HttpError(400, limitErrors.join(" "));
+  // Any mix of roles is fine, nobody included (Q17/Q18): there is no team rule left to check.
 
   // Queue behind any other save touching these people (jobs, leave, overtime).
   await lockPeople(tx, input.member_ids);
@@ -397,6 +396,7 @@ export const updateJob = async (req: Request, res: Response) => {
         start: dayKey(current.start_date),
         end: dayKey(current.end_date),
         memberIds: current.members.map((m) => m.user_id),
+        areaId: current.area_id,
       });
       const blocks = blocksCalendar({ status: current.status, allow_double_booking: r.data.allow_double_booking });
       const before = new Set(current.members.map((m) => m.user_id));
@@ -609,160 +609,239 @@ export const overview = async (req: Request, res: Response) => {
   }
 };
 
+/**
+ * Who is reading the grid, the board or a job's details, and so how much of it they get.
+ * Managers get everything. A CSM gets every job read-only, each marked whether it is his, and
+ * is told who is on leave but not why. Field staff get only their own row and the jobs they
+ * are on, without anyone else's name. Each is a separate route, so the role decides this and
+ * nothing in the request can widen it.
+ */
+type Viewer = { role: "manager" } | { role: "csm"; userId: number } | { role: "field"; userId: number };
+const MANAGER: { role: "manager" } = { role: "manager" };
+
+/** A job as a CSM reads it carries `mine`, so his page knows which jobs he may update. */
+function jobFor(viewer: Viewer, job: JobRow) {
+  const s = serializeJob(job);
+  return viewer.role === "csm" ? { ...s, mine: isCsmsJob(job, viewer.userId) } : s;
+}
+
 /** A job with its order's stores and items, for reading from the grid. Rates and amounts stay out. */
+async function jobDetailsFor(viewer: Exclude<Viewer, { role: "field" }>, id: number) {
+  const job = await prisma.workJob.findUnique({ where: { id }, include: jobInclude });
+  if (!job) throw new HttpError(404, "Job not found");
+  const stores = job.order_id
+    ? await prisma.orderStore.findMany({
+        where: { order_id: job.order_id },
+        orderBy: { s_no: "asc" },
+        select: {
+          id: true,
+          s_no: true,
+          store_name: true,
+          location: true,
+          items: {
+            orderBy: { s_no: "asc" },
+            select: { id: true, s_no: true, media: true, width_inches: true, height_inches: true, qty: true, total_sft: true },
+          },
+        },
+      })
+    : [];
+  return {
+    job: jobFor(viewer, job),
+    order_stores: stores.map((s) => ({
+      ...s,
+      items: s.items.map((i) => ({
+        ...i,
+        width_inches: Number(i.width_inches),
+        height_inches: Number(i.height_inches),
+        qty: Number(i.qty),
+        total_sft: Number(i.total_sft),
+      })),
+    })),
+  };
+}
+
 export const jobDetails = async (req: Request, res: Response) => {
   try {
-    const job = await prisma.workJob.findUnique({ where: { id: parseId(req.params.id) }, include: jobInclude });
-    if (!job) return res.status(404).json({ message: "Job not found" });
-    const stores = job.order_id
-      ? await prisma.orderStore.findMany({
-          where: { order_id: job.order_id },
-          orderBy: { s_no: "asc" },
-          select: {
-            id: true,
-            s_no: true,
-            store_name: true,
-            location: true,
-            items: {
-              orderBy: { s_no: "asc" },
-              select: { id: true, s_no: true, media: true, width_inches: true, height_inches: true, qty: true, total_sft: true },
-            },
-          },
-        })
-      : [];
-    return res.status(200).json({
-      job: serializeJob(job),
-      order_stores: stores.map((s) => ({
-        ...s,
-        items: s.items.map((i) => ({
-          ...i,
-          width_inches: Number(i.width_inches),
-          height_inches: Number(i.height_inches),
-          qty: Number(i.qty),
-          total_sft: Number(i.total_sft),
-        })),
-      })),
-    });
+    return res.status(200).json(await jobDetailsFor(MANAGER, parseId(req.params.id)));
   } catch (err) {
     return sendError(res, err);
   }
 };
 
 /** One day: who is free, who is on which job, and every job running that day. */
+async function boardFor(viewer: Exclude<Viewer, { role: "field" }>, rawDate: unknown) {
+  const date = dayQuery.safeParse(rawDate).success ? String(rawDate) : todayIST();
+  const day = parseDay(date);
+  const [staff, jobs, leave] = await Promise.all([
+    prisma.user.findMany({ where: { role: { in: [...FIELD_ROLES] }, is_active: true }, select: staffSelect, orderBy: { name: "asc" } }),
+    prisma.workJob.findMany({
+      where: { status: { not: "CANCELLED" }, start_date: { lte: day }, end_date: { gte: day } },
+      include: jobInclude,
+      orderBy: { id: "asc" },
+    }),
+    prisma.leaveRecord.findMany({ where: { cancelled_at: null, status: "APPROVED", from_date: { lte: day }, to_date: { gte: day } } }),
+  ]);
+  // Why someone is on leave stays between them and their managers.
+  const leaveByUser = new Map(
+    leave.map((l) => [
+      l.user_id,
+      { id: l.id, from_date: dayKey(l.from_date), to_date: dayKey(l.to_date), reason: viewer.role === "manager" ? l.reason : null },
+    ]),
+  );
+  const jobsByUser = new Map<number, { job_id: number; order_no: string | null; label: string }[]>();
+  for (const j of jobs) {
+    for (const m of j.members) {
+      const list = jobsByUser.get(m.user_id) ?? [];
+      list.push({ job_id: j.id, order_no: j.order?.order_no ?? null, label: gridLabel(j) });
+      jobsByUser.set(m.user_id, list);
+    }
+  }
+  const people = staff.map((s) => ({ ...s, jobs: jobsByUser.get(s.id) ?? [], leave: leaveByUser.get(s.id) ?? null }));
+  const free = (role: string) => people.filter((p) => p.role === role && p.jobs.length === 0 && !p.leave);
+  return {
+    date,
+    counts: {
+      jobs: jobs.length,
+      free_pasters: free("PASTER").length,
+      free_helpers: free("HELPER").length,
+      free_drivers: free("DRIVER").length,
+      busy: people.filter((p) => p.jobs.length > 0).length,
+      double_booked: people.filter((p) => p.jobs.length > 1).length,
+      on_leave: people.filter((p) => p.leave).length,
+    },
+    free: { PASTER: free("PASTER"), HELPER: free("HELPER"), DRIVER: free("DRIVER") },
+    busy: people.filter((p) => p.jobs.length > 0),
+    // Everyone on leave; those also on a job that day were booked before the leave.
+    on_leave: people.filter((p) => p.leave),
+    jobs: jobs.map((j) => jobFor(viewer, j)),
+  };
+}
+
 export const dailyBoard = async (req: Request, res: Response) => {
   try {
-    const date = dayQuery.safeParse(req.query.date).success ? String(req.query.date) : todayIST();
-    const day = parseDay(date);
-    const [staff, jobs, leave] = await Promise.all([
-      prisma.user.findMany({ where: { role: { in: [...FIELD_ROLES] }, is_active: true }, select: staffSelect, orderBy: { name: "asc" } }),
-      prisma.workJob.findMany({
-        where: { status: { not: "CANCELLED" }, start_date: { lte: day }, end_date: { gte: day } },
-        include: jobInclude,
-        orderBy: { id: "asc" },
-      }),
-      prisma.leaveRecord.findMany({ where: { cancelled_at: null, status: "APPROVED", from_date: { lte: day }, to_date: { gte: day } } }),
-    ]);
-    const leaveByUser = new Map(leave.map((l) => [l.user_id, { id: l.id, from_date: dayKey(l.from_date), to_date: dayKey(l.to_date), reason: l.reason }]));
-    const jobsByUser = new Map<number, { job_id: number; order_no: string | null; label: string }[]>();
-    for (const j of jobs) {
-      for (const m of j.members) {
-        const list = jobsByUser.get(m.user_id) ?? [];
-        list.push({ job_id: j.id, order_no: j.order?.order_no ?? null, label: gridLabel(j) });
-        jobsByUser.set(m.user_id, list);
-      }
-    }
-    const people = staff.map((s) => ({ ...s, jobs: jobsByUser.get(s.id) ?? [], leave: leaveByUser.get(s.id) ?? null }));
-    const free = (role: string) => people.filter((p) => p.role === role && p.jobs.length === 0 && !p.leave);
-    return res.status(200).json({
-      date,
-      counts: {
-        jobs: jobs.length,
-        free_pasters: free("PASTER").length,
-        free_helpers: free("HELPER").length,
-        free_drivers: free("DRIVER").length,
-        busy: people.filter((p) => p.jobs.length > 0).length,
-        double_booked: people.filter((p) => p.jobs.length > 1).length,
-        on_leave: people.filter((p) => p.leave).length,
-      },
-      free: { PASTER: free("PASTER"), HELPER: free("HELPER"), DRIVER: free("DRIVER") },
-      busy: people.filter((p) => p.jobs.length > 0),
-      // Everyone on leave; those also on a job that day were booked before the leave.
-      on_leave: people.filter((p) => p.leave),
-      jobs: jobs.map(serializeJob),
-    });
+    return res.status(200).json(await boardFor(MANAGER, req.query.date));
   } catch (err) {
     return sendError(res, err);
   }
 };
 
 /** The weekly grid (the old WAS sheet): one row per person, one cell per day. */
+async function gridFor(viewer: Viewer, query: Request["query"]) {
+  const from = dayQuery.safeParse(query.from).success ? String(query.from) : addDays(todayIST(), -1);
+  const days = Math.min(Math.max(parseInt(String(query.days ?? "7"), 10) || 7, 1), 31);
+  const to = addDays(from, days - 1);
+  const dates = Array.from({ length: days }, (_, i) => addDays(from, i));
+  // Field staff: only their own row, their own jobs and their own leave.
+  const self = viewer.role === "field" ? viewer.userId : null;
+
+  const [staff, jobs, leave] = await Promise.all([
+    prisma.user.findMany({
+      where: self ? { id: self } : { role: { in: [...FIELD_ROLES] }, is_active: true },
+      select: staffSelect,
+      orderBy: { name: "asc" },
+    }),
+    prisma.workJob.findMany({
+      where: {
+        status: { not: "CANCELLED" },
+        start_date: { lte: parseDay(to) },
+        end_date: { gte: parseDay(from) },
+        ...(self ? { members: { some: { user_id: self } } } : {}),
+      },
+      include: {
+        csmCode: { select: { code: true, user: { select: { id: true } } } },
+        csm2Code: { select: { code: true, user: { select: { id: true } } } },
+        csmUser: { select: { name: true } },
+        order: { select: { order_no: true, client_name: true } },
+        area: { select: { name: true } },
+        // A field person is never sent who else is on their jobs.
+        members: {
+          where: self ? { user_id: self } : undefined,
+          select: { user_id: true, slot_role: true, user: { select: { name: true } } },
+          orderBy: { user: { name: "asc" } },
+        },
+      },
+    }),
+    prisma.leaveRecord.findMany({
+      where: {
+        cancelled_at: null,
+        status: "APPROVED",
+        from_date: { lte: parseDay(to) },
+        to_date: { gte: parseDay(from) },
+        ...(self ? { user_id: self } : {}),
+      },
+    }),
+  ]);
+  const onLeave = new Set<string>(); // `${user}|${date}`
+  for (const l of leave) {
+    for (let d = dayKey(l.from_date) < from ? from : dayKey(l.from_date); d <= (dayKey(l.to_date) > to ? to : dayKey(l.to_date)); d = addDays(d, 1)) {
+      onLeave.add(`${l.user_id}|${d}`);
+    }
+  }
+
+  type Cell = { job_id: number; order_no: string | null; label: string; status: WorkJobStatus };
+  const cells = new Map<string, Cell[]>(); // `${user}|${date}`
+  for (const j of jobs) {
+    const s = dayKey(j.start_date) < from ? from : dayKey(j.start_date);
+    const e = dayKey(j.end_date) > to ? to : dayKey(j.end_date);
+    for (let d = s; d <= e; d = addDays(d, 1)) {
+      for (const m of j.members) {
+        const key = `${m.user_id}|${d}`;
+        const list = cells.get(key) ?? [];
+        list.push({ job_id: j.id, order_no: j.order?.order_no ?? null, label: gridLabel(j), status: j.status });
+        cells.set(key, list);
+      }
+    }
+  }
+
+  const roleOrder = { PASTER: 0, HELPER: 1, DRIVER: 2 } as Record<string, number>;
+  const rows = staff
+    .sort((a, b) => roleOrder[a.role] - roleOrder[b.role] || a.name.localeCompare(b.name))
+    .map((s) => ({
+      ...s,
+      days: dates.map((d) => cells.get(`${s.id}|${d}`) ?? []),
+      leave: dates.map((d) => onLeave.has(`${s.id}|${d}`)),
+    }));
+  const freeCount = (role: string, i: number) => rows.filter((r) => r.role === role && r.days[i].length === 0 && !r.leave[i]).length;
+
+  return {
+    from,
+    to,
+    dates,
+    rows,
+    // How many others are free says nothing to a field person about their own work.
+    free: self ? [] : dates.map((_, i) => ({ PASTER: freeCount("PASTER", i), HELPER: freeCount("HELPER", i), DRIVER: freeCount("DRIVER", i) })),
+    // What a cell's box shows, once per job: a person's every day repeats the same job.
+    jobs: Object.fromEntries(
+      jobs.map((j) => {
+        // Field staff see their own work only, so their boxes carry no team.
+        const names = (role: string) => (self ? [] : j.members.filter((m) => m.slot_role === role).map((m) => m.user.name));
+        return [
+          j.id,
+          {
+            order_no: j.order?.order_no ?? null,
+            client_name: j.order?.client_name ?? null,
+            csm: j.csmUser?.name ?? null,
+            pasters: names("PASTER"),
+            helpers: names("HELPER"),
+            drivers: names("DRIVER"),
+            place: jobPlace(j),
+            locality: j.locality,
+            work_details: j.work_details,
+            start_date: dayKey(j.start_date),
+            end_date: dayKey(j.end_date),
+            days: daysBetween(dayKey(j.start_date), dayKey(j.end_date)) + 1,
+            status: j.status,
+            ...(viewer.role === "csm" ? { mine: isCsmsJob(j, viewer.userId) } : {}),
+          },
+        ];
+      }),
+    ),
+  };
+}
+
 export const weeklyGrid = async (req: Request, res: Response) => {
   try {
-    const from = dayQuery.safeParse(req.query.from).success ? String(req.query.from) : addDays(todayIST(), -1);
-    const days = Math.min(Math.max(parseInt(String(req.query.days ?? "7"), 10) || 7, 1), 31);
-    const to = addDays(from, days - 1);
-    const dates = Array.from({ length: days }, (_, i) => addDays(from, i));
-
-    const [staff, jobs, leave] = await Promise.all([
-      prisma.user.findMany({ where: { role: { in: [...FIELD_ROLES] }, is_active: true }, select: staffSelect, orderBy: { name: "asc" } }),
-      prisma.workJob.findMany({
-        where: { status: { not: "CANCELLED" }, start_date: { lte: parseDay(to) }, end_date: { gte: parseDay(from) } },
-        include: {
-          csmCode: { select: { code: true } },
-          csm2Code: { select: { code: true } },
-          csmUser: { select: { name: true } },
-          order: { select: { order_no: true } },
-          members: { select: { user_id: true, slot_role: true, user: { select: { name: true } } } },
-        },
-      }),
-      prisma.leaveRecord.findMany({ where: { cancelled_at: null, status: "APPROVED", from_date: { lte: parseDay(to) }, to_date: { gte: parseDay(from) } } }),
-    ]);
-    const onLeave = new Set<string>(); // `${user}|${date}`
-    for (const l of leave) {
-      for (let d = dayKey(l.from_date) < from ? from : dayKey(l.from_date); d <= (dayKey(l.to_date) > to ? to : dayKey(l.to_date)); d = addDays(d, 1)) {
-        onLeave.add(`${l.user_id}|${d}`);
-      }
-    }
-
-    type Cell = { job_id: number; order_no: string | null; label: string; status: WorkJobStatus };
-    const cells = new Map<string, Cell[]>(); // `${user}|${date}`
-    for (const j of jobs) {
-      const s = dayKey(j.start_date) < from ? from : dayKey(j.start_date);
-      const e = dayKey(j.end_date) > to ? to : dayKey(j.end_date);
-      for (let d = s; d <= e; d = addDays(d, 1)) {
-        for (const m of j.members) {
-          const key = `${m.user_id}|${d}`;
-          const list = cells.get(key) ?? [];
-          list.push({ job_id: j.id, order_no: j.order?.order_no ?? null, label: gridLabel(j), status: j.status });
-          cells.set(key, list);
-        }
-      }
-    }
-
-    const roleOrder = { PASTER: 0, HELPER: 1, DRIVER: 2 } as Record<string, number>;
-    const rows = staff
-      .sort((a, b) => roleOrder[a.role] - roleOrder[b.role] || a.name.localeCompare(b.name))
-      .map((s) => ({
-        ...s,
-        days: dates.map((d) => cells.get(`${s.id}|${d}`) ?? []),
-        leave: dates.map((d) => onLeave.has(`${s.id}|${d}`)),
-      }));
-    const freeCount = (role: string, i: number) => rows.filter((r) => r.role === role && r.days[i].length === 0 && !r.leave[i]).length;
-
-    return res.status(200).json({
-      from,
-      to,
-      dates,
-      rows,
-      free: dates.map((_, i) => ({ PASTER: freeCount("PASTER", i), HELPER: freeCount("HELPER", i), DRIVER: freeCount("DRIVER", i) })),
-      // What a cell's box shows, once per job: a person's every day repeats the same job.
-      jobs: Object.fromEntries(
-        jobs.map((j) => {
-          const names = (role: string) => j.members.filter((m) => m.slot_role === role).map((m) => m.user.name);
-          return [j.id, { order_no: j.order?.order_no ?? null, csm: j.csmUser?.name ?? null, pasters: names("PASTER"), helpers: names("HELPER"), drivers: names("DRIVER") }];
-        }),
-      ),
-    });
+    return res.status(200).json(await gridFor(MANAGER, req.query));
   } catch (err) {
     return sendError(res, err);
   }
@@ -797,6 +876,18 @@ export const myJobs = async (req: Request, res: Response) => {
         };
       }),
     });
+  } catch (err) {
+    return sendError(res, err);
+  }
+};
+
+/**
+ * A Paster / Helper / Driver's Weekly Grid: their own row only, the jobs they are on and their
+ * own leave. Read-only; starting and completing stay on My Work.
+ */
+export const myWeeklyGrid = async (req: Request, res: Response) => {
+  try {
+    return res.status(200).json(await gridFor({ role: "field", userId: req.user!.id }, req.query));
   } catch (err) {
     return sendError(res, err);
   }
@@ -857,15 +948,42 @@ export const myJobStatus = async (req: Request, res: Response) => {
 };
 
 // ---------------------------------------------------------------------------
-// CSMs: the jobs they are the CSM for
+// CSMs: every job to read, their own to update
 // ---------------------------------------------------------------------------
 
-/** Jobs for this CSM: named on the job, or on an order they raised. */
+/** A CSM's own jobs (Q10), as a database filter: the same rule as isCsmsJob. */
 const csmJobsWhere = (userId: number): Prisma.WorkJobWhereInput => ({
-  OR: [{ csm_user_id: userId }, { csm_user_id: null, order: { created_by: userId } }],
+  OR: [{ csm_user_id: userId }, { csmCode: { user_id: userId } }, { csm2Code: { user_id: userId } }],
 });
 
-/** Everything not cancelled from two weeks back on. */
+/** The Weekly Grid as a CSM sees it: every CSM's jobs, read-only, his own marked `mine`. */
+export const csmWeeklyGrid = async (req: Request, res: Response) => {
+  try {
+    return res.status(200).json(await gridFor({ role: "csm", userId: req.user!.id }, req.query));
+  } catch (err) {
+    return sendError(res, err);
+  }
+};
+
+/** The Daily Board as a CSM sees it: every job that day, his own marked; no leave reasons. */
+export const csmDailyBoard = async (req: Request, res: Response) => {
+  try {
+    return res.status(200).json(await boardFor({ role: "csm", userId: req.user!.id }, req.query.date));
+  } catch (err) {
+    return sendError(res, err);
+  }
+};
+
+/** Any job's details for a CSM to read; `mine` says whether he may update it. */
+export const csmJobDetails = async (req: Request, res: Response) => {
+  try {
+    return res.status(200).json(await jobDetailsFor({ role: "csm", userId: req.user!.id }, parseId(req.params.id)));
+  } catch (err) {
+    return sendError(res, err);
+  }
+};
+
+/** A CSM's own jobs: everything not cancelled from two weeks back on. */
 export const csmJobs = async (req: Request, res: Response) => {
   try {
     const jobs = await prisma.workJob.findMany({
@@ -899,8 +1017,9 @@ export const csmOrderOptions = async (req: Request, res: Response) => {
 };
 
 /**
- * A CSM adds a job's work details, or links it to one of their own orders. Anyone else, and
- * any job that is not theirs, gets a 404, so job ids cannot be probed.
+ * A CSM adds his own job's work details, or links it to one of his own orders. The team,
+ * dates and location stay with the Operation Manager. Any job that is not his gets a 404,
+ * as before, though he can read every job from the grid and the board.
  */
 export const updateCsmJob = async (req: Request, res: Response) => {
   try {

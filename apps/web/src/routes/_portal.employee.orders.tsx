@@ -5,7 +5,10 @@ import { OrdersFilterBar, OrdersPager, parseOrdersSearch, useOrdersFilters } fro
 import { OrdersTable } from "@/components/orders/OrdersTable";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { fetchOrders, exportOrders } from "@/api/orders";
+import { fetchOrders, fetchWaitingOrderCount, exportOrders } from "@/api/orders";
+
+/** An order the Admin allotted to this CSM, with no stores or items yet. */
+const WAITING_LABEL = "Allotted — add stores and items";
 
 export const Route = createFileRoute("/_portal/employee/orders")({
   head: () => ({ meta: [{ title: "My Orders — SB OMS" }] }),
@@ -21,6 +24,10 @@ function MyOrders() {
     queryKey: ["orders", "employee", params],
     queryFn: () => fetchOrders(params),
     placeholderData: keepPreviousData,
+  });
+  const { data: waitingCount } = useQuery({
+    queryKey: ["orders", "waiting-count"],
+    queryFn: fetchWaitingOrderCount,
   });
 
   const handleExport = async () => {
@@ -48,12 +55,19 @@ function MyOrders() {
         }
       />
 
-      <OrdersFilterBar filters={filters} total={total} shown={orders.length} />
+      <OrdersFilterBar
+        filters={filters}
+        total={total}
+        shown={orders.length}
+        waiting={{ label: WAITING_LABEL, count: waitingCount }}
+      />
       <OrdersTable
         loading={isLoading}
         error={error}
         onRetry={() => refetch()}
         orders={orders} 
+        waitingLabel={WAITING_LABEL}
+        emptyText={filters.search.waiting ? "Nothing is waiting for your stores and items." : undefined}
         action={(o) => (
           <div className="flex justify-end gap-2">
             <Link to="/employee/orders/$id" params={{ id: String(o.id) }} className={buttonVariants({ size: "sm", variant: "ghost" })}>

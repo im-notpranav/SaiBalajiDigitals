@@ -51,20 +51,34 @@ function PortalLayout() {
   if (isLoading && !user) return <BrandLoader label="Signing you in" />;
   if (!user) return null;
   const field = isFieldRole(user.role);
+  // Sheet View gets the whole width and height under the header: a sheet needs the room. The
+  // layout is locked to the screen there, so the page itself never scrolls: only the sheet (and
+  // the sidebar menu, inside itself) do. Elsewhere the page scrolls as usual.
+  const sheet = location.pathname === "/sheet" || location.pathname.endsWith("/sheet");
 
   return (
-    <div className="flex min-h-screen bg-background dark:bg-transparent">
+    <div
+      className={cn(
+        "flex bg-background dark:bg-transparent",
+        sheet ? "h-dvh overflow-hidden overscroll-none" : "min-h-screen",
+      )}
+    >
       <Sidebar role={user.role} />
       <PreloadNavPages role={user.role} />
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className={cn("flex min-w-0 flex-1 flex-col", sheet && "min-h-0")}>
         <TopHeader />
-        <main className="flex-1 overflow-y-auto">
+        <main className={cn("flex-1", sheet ? "min-h-0 overflow-hidden" : "overflow-y-auto")}>
           {/* No page transition: people switch pages all day, and it only delayed each one. */}
           <div
             className={cn(
-              "mx-auto w-full max-w-7xl p-4 sm:p-6 lg:p-8",
+              sheet
+                ? "flex h-full w-full flex-col p-2 sm:p-3 lg:p-4"
+                : "mx-auto w-full max-w-7xl p-4 sm:p-6 lg:p-8",
               // Room for the bottom tab bar (4rem plus the home-indicator inset).
-              field && "pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-6 lg:pb-8",
+              field &&
+                (sheet
+                  ? "pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-3 lg:pb-4"
+                  : "pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-6 lg:pb-8"),
             )}
           >
             <Outlet />

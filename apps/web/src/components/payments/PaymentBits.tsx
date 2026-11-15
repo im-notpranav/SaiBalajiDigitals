@@ -272,7 +272,9 @@ export function RequestFields({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={NONE}>Not set</SelectItem>
-            {(Object.keys(CATEGORY_LABELS) as PaymentCategory[]).map((c) => (
+            {(Object.keys(CATEGORY_LABELS) as PaymentCategory[])
+              .sort((a, b) => CATEGORY_LABELS[a].localeCompare(CATEGORY_LABELS[b]))
+              .map((c) => (
               <SelectItem key={c} value={c}>
                 {CATEGORY_LABELS[c]}
               </SelectItem>

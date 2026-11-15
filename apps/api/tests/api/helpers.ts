@@ -11,8 +11,22 @@ let seq = 0;
 export const uniq = (prefix: string) => `${prefix}${Date.now().toString(36)}${++seq}`;
 
 export async function makeUser(role: Role, over: { is_super_admin?: boolean; is_active?: boolean } = {}) {
-  const username = uniq(role.toLowerCase().slice(0, 6));
+  // Usernames are stored in capitals (CHECK user_username_upper).
+  const username = uniq(role.slice(0, 6)).toUpperCase();
   return prisma.user.create({ data: { name: username, username, password: "not-used", role, ...over } });
+}
+
+/**
+ * Puts names in the Master Library, as the admin would, so orders may use them. A name that is
+ * already there is left as it is.
+ */
+export async function addMasters(names: { clients?: string[]; media?: string[]; locations?: string[] }) {
+  await prisma.client.createMany({ data: (names.clients ?? []).map((name) => ({ name })), skipDuplicates: true });
+  await prisma.media.createMany({ data: (names.media ?? []).map((name) => ({ name })), skipDuplicates: true });
+  await prisma.area.createMany({
+    data: (names.locations ?? []).map((name) => ({ name, locality: "LOCAL" as const })),
+    skipDuplicates: true,
+  });
 }
 
 type U = { id: number; username: string; name: string; role: Role | string };

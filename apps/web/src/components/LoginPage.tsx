@@ -3,8 +3,6 @@ import { motion, AnimatePresence, useAnimate } from "framer-motion";
 import {
   User,
   Lock,
-  Eye,
-  EyeOff,
   ArrowRight,
   Loader2,
   Check,
@@ -13,6 +11,7 @@ import {
 import { useAuth } from "@/lib/auth-store";
 import { LogoImage } from "@/components/brand/Logo";
 import { AssemblingLogo } from "@/components/brand/BrandLoader";
+import { PasswordToggle } from "@/components/ui/password-input";
 
 type FieldState = "idle" | "error" | "success";
 
@@ -258,14 +257,11 @@ export default function LoginPage() {
                       if (formError) setFormError(null);
                     }}
                     rightIcon={
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword((v) => !v)}
-                        aria-label={showPassword ? "Hide password" : "Show password"}
-                        className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-white/10 dark:hover:text-slate-100"
-                      >
-                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
+                      <PasswordToggle
+                        shown={showPassword}
+                        onToggle={() => setShowPassword((v) => !v)}
+                        className="rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-white/10 dark:hover:text-slate-100"
+                      />
                     }
                   />
                 </FormField>

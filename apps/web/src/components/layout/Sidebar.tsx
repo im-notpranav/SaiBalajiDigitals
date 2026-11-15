@@ -38,17 +38,22 @@ import {
   Clock,
   LayoutGrid,
   Truck,
+  FileSpreadsheet,
+  Library,
+  Map as MapIcon,
 } from "lucide-react";
 import { type UserRole, useAuth } from "@/lib/auth-store";
 import { cn } from "@/lib/utils";
 import { BrandLockup } from "@/components/brand/Logo";
 import { fetchMyNotifications } from "@/api/notifications";
+import { AllocationSwitch } from "./AllocationSwitch";
 
 interface NavItem {
   to: string;
   label: string;
   icon: LucideIcon;
-  /** The admin portal's module the item sits under; items without one are listed plainly. */
+  /** The module the item sits under (admin portal, and the CSM's Work Allocation); items
+   *  without one are listed plainly. */
   group?: NavGroup;
 }
 
@@ -77,6 +82,8 @@ const WORK_ALLOCATION: NavItem[] = (
   [
     { to: "/admin/grid", label: "Weekly Grid", icon: CalendarRange },
     { to: "/admin/board", label: "Daily Board", icon: LayoutGrid },
+    { to: "/admin/zones", label: "Zone Board", icon: MapIcon },
+    { to: "/admin/sheet", label: "Sheet View", icon: FileSpreadsheet },
     { to: "/admin/jobs", label: "Field Jobs", icon: Truck },
     { to: "/admin/leave", label: "Leave", icon: CalendarOff },
     { to: "/admin/overtime", label: "Overtime", icon: Clock },
@@ -87,13 +94,18 @@ const WORK_ALLOCATION: NavItem[] = (
 
 const FIELD_NAV: NavItem[] = [
   { to: "/field/dashboard", label: "My Work", icon: ClipboardList },
+  { to: "/field/grid", label: "Weekly Grid", icon: CalendarRange },
+  { to: "/sheet", label: "Sheet View", icon: FileSpreadsheet },
   { to: "/field/leave", label: "Leave & Overtime", icon: CalendarOff },
   { to: "/field/payments", label: "Payments", icon: Wallet },
   { to: "/field/notifications", label: "Notifications", icon: Bell },
   { to: "/profile", label: "Profile", icon: UserCircle },
 ];
 
-/** Shorter labels for the phone tab bar, where five items share one row. */
+/**
+ * The phone tab bar's five items, with shorter labels to share one row. The Weekly Grid is not
+ * one of them: it is in the menu, and the Live Grid shortcut at its top.
+ */
 const FIELD_TAB_LABELS: Record<string, string> = {
   "/field/dashboard": "Work",
   "/field/leave": "Leave",
@@ -101,6 +113,8 @@ const FIELD_TAB_LABELS: Record<string, string> = {
   "/field/notifications": "Alerts",
   "/profile": "Profile",
 };
+
+const FIELD_TABS = FIELD_NAV.filter((i) => i.to in FIELD_TAB_LABELS);
 
 const FIELD_ROLES: UserRole[] = ["PASTER", "HELPER", "DRIVER"];
 export const isFieldRole = (role: UserRole) => FIELD_ROLES.includes(role);
@@ -111,7 +125,10 @@ const NAV: Record<UserRole, NavItem[]> = {
     { to: "/employee/new-order", label: "New Order", icon: PlusCircle },
     { to: "/employee/upload-orders", label: "Upload Orders", icon: Upload },
     { to: "/employee/orders", label: "My Orders", icon: ClipboardList },
-    { to: "/employee/jobs", label: "Field Jobs", icon: CalendarRange },
+    { to: "/employee/grid", label: "Weekly Grid", icon: CalendarRange, group: "Work Allocation" },
+    { to: "/employee/board", label: "Daily Board", icon: LayoutGrid, group: "Work Allocation" },
+    { to: "/employee/sheet", label: "Sheet View", icon: FileSpreadsheet, group: "Work Allocation" },
+    { to: "/employee/jobs", label: "Field Jobs", icon: Truck, group: "Work Allocation" },
     { to: "/employee/payments", label: "Payment Requests", icon: Wallet },
     { to: "/employee/notifications", label: "Notifications", icon: Bell },
     { to: "/profile", label: "Profile", icon: UserCircle },
@@ -119,6 +136,7 @@ const NAV: Record<UserRole, NavItem[]> = {
   PRODUCTION: [
     { to: "/production/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { to: "/production/queue", label: "Queue", icon: Workflow },
+    { to: "/sheet", label: "Sheet View", icon: FileSpreadsheet },
     { to: "/production/notifications", label: "Notifications", icon: Bell },
     { to: "/profile", label: "Profile", icon: UserCircle },
   ],
@@ -128,17 +146,20 @@ const NAV: Record<UserRole, NavItem[]> = {
     { to: "/accountant/orders", label: "All Orders", icon: Boxes },
     { to: "/accountant/reports", label: "Financial Reports", icon: FileBarChart2 },
     { to: "/accountant/financial-year", label: "Financial Year", icon: CalendarClock },
+    { to: "/sheet", label: "Sheet View", icon: FileSpreadsheet },
     { to: "/accountant/notifications", label: "Notifications", icon: Bell },
     { to: "/profile", label: "Profile", icon: UserCircle },
   ],
   PRODUCTION_MANAGER: [
     { to: "/prod-manager/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { to: "/prod-manager/assign", label: "Assign Work", icon: Workflow },
+    { to: "/sheet", label: "Sheet View", icon: FileSpreadsheet },
     { to: "/prod-manager/notifications", label: "Notifications", icon: Bell },
     { to: "/profile", label: "Profile", icon: UserCircle },
   ],
   COST_CONTROL_MANAGER: [
     { to: "/cost-control/dashboard", label: "Dashboard", icon: Wallet },
+    { to: "/sheet", label: "Sheet View", icon: FileSpreadsheet },
     { to: "/cost-control/notifications", label: "Notifications", icon: Bell },
     { to: "/profile", label: "Profile", icon: UserCircle },
   ],
@@ -159,6 +180,7 @@ const NAV: Record<UserRole, NavItem[]> = {
     ...ORDER_SYSTEM,
     { to: "/admin/import", label: "Bulk Import", icon: Upload, group: "Automated System" },
     { to: "/admin/users", label: "Users", icon: Users, group: "Automated System" },
+    { to: "/admin/master-library", label: "Master Library", icon: Library, group: "Automated System" },
     { to: "/admin/whatsapp", label: "WhatsApp", icon: MessageCircle, group: "Automated System" },
     { to: "/admin/settings", label: "Settings", icon: Settings, group: "Automated System" },
     ...WORK_ALLOCATION,
@@ -248,6 +270,7 @@ function SidebarBody({
       >
         <BrandLockup logoSize={44} />
       </Link>
+      <AllocationSwitch role={role} layoutGroup={layoutGroup} onNavigate={onNavigate} />
       <div className="shrink-0 px-5 pt-5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
         {roleLabels[role]}
       </div>
@@ -341,7 +364,7 @@ export function FieldTabBar() {
       className="liquid-bar fixed inset-x-0 bottom-0 z-30 border-t bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden"
     >
       <ul className="grid grid-cols-5">
-        {FIELD_NAV.map((item) => {
+        {FIELD_TABS.map((item) => {
           const active =
             location.pathname === item.to || location.pathname.startsWith(item.to + "/");
           const Icon = item.icon;

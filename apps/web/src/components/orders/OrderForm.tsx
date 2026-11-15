@@ -27,7 +27,7 @@ import {
   lineBillable,
 } from "@/lib/constants";
 import type { CreateOrderInput, CreateOrderItemInput, Order, UserRole } from "@sb-oms/shared-types";
-import { ClientCombobox, MediaCombobox } from "./AutocompleteComboboxes";
+import { ClientCombobox, LocationCombobox, MediaCombobox } from "./AutocompleteComboboxes";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -531,11 +531,10 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
             </div>
             <div>
               <Label htmlFor={`location-${store.id}`} className={fieldLabel}>Location *</Label>
-              <Input
+              <LocationCombobox
                 id={`location-${store.id}`}
                 value={store.location}
-                onChange={(e) => patchStore(store.id, { location: e.target.value })}
-                placeholder="e.g. Madhapur"
+                onChange={(v) => patchStore(store.id, { location: v })}
                 className="mt-1 h-9"
               />
             </div>
@@ -583,6 +582,7 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
                       value={line.media}
                       onChange={(val) => update(store.id, line.id, { media: val })}
                       className="h-9"
+                      disabled={isReadOnlyItem}
                     />
                   </div>
                   <LineInput
@@ -686,7 +686,10 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
                       size="icon"
                       className="h-8 w-8"
                       onClick={() => removeLine(store.id, line.id)}
-                      disabled={store.lines.length === 1 || isReadOnlyItem}
+                      // A saved line can't be deleted from here (the API only adds and updates
+                      // lines), so removing it would look done and quietly come back. Mark it
+                      // with a remark instead.
+                      disabled={store.lines.length === 1 || isReadOnlyItem || !!line.originalId}
                       aria-label={`Remove item ${idx + 1}`}
                     >
                       <Trash2 className="h-4 w-4 text-destructive" />

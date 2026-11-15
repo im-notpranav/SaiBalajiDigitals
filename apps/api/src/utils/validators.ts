@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { validateCustomOrderNo } from "./order-sequence";
 
 export const remarkEnum = z.enum([
   "Reprint",
@@ -96,15 +97,26 @@ export const createOrderSchema = z.object({
   .refine(uniqueStores, uniqueStoresConfig);
 
 /**
- * An admin starts an order for a CSM, who adds the stores and items. A blank number takes the
- * next one in the series.
+ * An admin allots an order to a CSM, who adds the stores and items. A blank number takes the
+ * next one in the series; a typed one must follow the order-number rule (validateCustomOrderNo).
  */
 export const startOrderSchema = z.object({
   client_name: z.string().trim().min(1).max(100),
   csm_user_id: z.number().int().positive(),
   order_no: z.preprocess(
     (v) => (typeof v === "string" && !v.trim() ? null : v),
-    z.string().trim().toUpperCase().regex(/^ORD\d{1,16}$/, "An order number is ORD followed by digits, like ORD260123").nullable().optional(),
+    z
+      .string()
+      .transform((v, ctx) => {
+        const check = validateCustomOrderNo(v);
+        if (!check.ok) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: check.error });
+          return z.NEVER;
+        }
+        return check.order_no;
+      })
+      .nullable()
+      .optional(),
   ),
 });
 
@@ -295,11 +307,37 @@ export const indianMobile = z
 const userEmail = z.string().trim().toLowerCase().email("Enter a valid email address").max(200);
 
 const empCode = z.string().trim().min(1).max(20);
+/**
+ * Usernames are kept in capitals (CHECK user_username_upper), so whatever case is typed is
+ * trimmed and upper-cased before it is checked and stored.
+ */
 const username = z
   .string()
-  .min(3)
-  .max(50)
-  .regex(/^[a-z0-9_]+$/, "Username must be lowercase letters, numbers, or underscores");
+  .trim()
+  .transform((v) => v.toUpperCase())
+  .pipe(
+    z
+      .string()
+      .min(3, "Username must be at least 3 characters")
+      .max(50, "Username can be up to 50 characters")
+      .regex(/^[A-Z0-9_]+$/, "Username can only have letters, numbers and underscores")
+      // DELETED_<id> is what a permanently deleted account becomes; taking it would make
+      // that delete fail.
+      .refine((v) => !v.startsWith("DELETED_"), "Usernames can't start with DELETED_"),
+  );
+
+/** A CSM's own code (e.g. 300), separate from the employee code. Stored in capitals. */
+const csmCodeValue = z
+  .string()
+  .trim()
+  .transform((v) => v.toUpperCase())
+  .pipe(
+    z
+      .string()
+      .min(1, "Enter the CSM code")
+      .max(20, "CSM code can be up to 20 characters")
+      .regex(/^[A-Z0-9]+$/, "CSM code can only have letters and numbers"),
+  );
 
 export const createFieldStaffSchema = z.object({
   name: z.string().trim().min(1).max(100),
@@ -313,6 +351,8 @@ export const createFieldStaffSchema = z.object({
 
 export const updateFieldStaffSchema = z.object({
   name: z.string().trim().min(1).max(100).optional(),
+  /** The super admin may correct a username after the account is made (2026-11-15). */
+  username: username.optional(),
   role: fieldRoleEnum.optional(),
   phone: indianMobile,
   email: userEmail,
@@ -348,30 +388,38 @@ export const csmCodeSchema = z.object({
   is_active: z.boolean().optional(),
 });
 
-export const createUserSchema = z.object({
-  name: z.string().min(1).max(100),
-  username: z
-    .string()
-    .min(3)
-    .max(50)
-    .regex(/^[a-z0-9_]+$/, "Username must be lowercase letters, numbers, or underscores"),
-  password: z.string().min(8),
-  role: roleEnum,
-  phone: indianMobile,
-  email: userEmail,
-});
+/** A new CSM must come with their CSM code; other roles leave it out. */
+export const createUserSchema = z
+  .object({
+    name: z.string().min(1).max(100),
+    username,
+    password: z.string().min(8),
+    role: roleEnum,
+    phone: indianMobile,
+    email: userEmail,
+    csm_code: csmCodeValue.optional().nullable(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.role === "CSM" && !v.csm_code) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["csm_code"], message: "Enter the CSM code" });
+    }
+  });
 
+/**
+ * The CSM code is optional on edit, so CSMs who never had one still save. `replace_csm_code`
+ * names the code the new one takes over from; without it the new code is added alongside.
+ */
 export const updateUserSchema = z.object({
   name: z.string().min(1).max(100),
-  username: z
-    .string()
-    .min(3)
-    .max(50)
-    .regex(/^[a-z0-9_]+$/, "Username must be lowercase letters, numbers, or underscores"),
+  username,
   role: roleEnum,
   phone: indianMobile,
   email: userEmail,
   whatsapp_opt_out: z.boolean().optional(),
+  csm_code: csmCodeValue.optional().nullable(),
+  replace_csm_code: z.string().trim().max(20).transform((v) => v.toUpperCase()).optional().nullable(),
+  /** Company employee code; null clears it, left out keeps it. */
+  emp_code: empCode.optional().nullable(),
 });
 
 /** Admin-initiated password reset for another account. */
@@ -411,13 +459,17 @@ export const workJobSchema = z
     csm2_code_id: optionalId,
     work_details: z.string().trim().max(500).optional().nullable(),
     locality: z.enum(["LOCAL", "NON_LOCAL"]).optional().nullable(),
-    /** Typed or picked; a new name joins the area list. */
+    /** Picked from the active areas (Master Library); a name not in the list is refused. */
     area_name: z.string().trim().max(100).optional().nullable(),
     route: z.string().trim().max(200).optional().nullable(),
     extra_tag: z.string().trim().max(20).optional().nullable(),
     instructions: z.string().trim().max(1000).optional().nullable(),
     allow_double_booking: z.boolean().default(false),
-    member_ids: z.array(z.number().int().positive()).min(1, "Pick at least one person").max(5),
+    /**
+     * Any number of Pasters, Helpers and Drivers, or nobody yet (Q17/Q18). The cap is above the
+     * whole field staff and only stops junk input.
+     */
+    member_ids: z.array(z.number().int().positive()).max(300).default([]),
   })
   .refine((j) => !j.end_date || j.end_date >= j.start_date, { message: "End date cannot be before start date", path: ["end_date"] })
   .refine((j) => !j.area_name || !!j.locality, { message: "Choose Hyderabad or Non-local for this area", path: ["locality"] })

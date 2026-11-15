@@ -3,6 +3,7 @@
  * used until someone saves a value, and a validator for what may be saved.
  */
 import { prisma } from "./prisma";
+import { isGoogleSheetUrl } from "./google-sheet";
 
 export const SETTINGS = {
   /** A payment request's waiting condition turns red after this many working days. */
@@ -11,6 +12,11 @@ export const SETTINGS = {
   payment_admin_threshold: {
     default: 5_000,
     valid: (v: unknown) => typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= 99_999_999,
+  },
+  /** The team's Google Sheet, shown in Work Allocation as Sheet View. Google Sheets links only. */
+  allocation_sheet_url: {
+    default: "https://docs.google.com/spreadsheets/d/11QfGW_viCceR_baPTm-wdy_CS1qGVJ63qkpDDFOEHV4/edit?usp=sharing",
+    valid: isGoogleSheetUrl,
   },
 } as const;
 

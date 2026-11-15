@@ -27,3 +27,33 @@ export const notifyRole = async (role: "ADMIN" | "CSM" | "ACCOUNTS" | "PRODUCTIO
     })),
   });
 };
+
+/** Master Library: someone asked for a name missing from a pick-list. Every active admin is told. */
+export const notifyNameRequested = (kindLabel: string, name: string, requesterName: string) =>
+  notifyRole(
+    "ADMIN",
+    "New name request",
+    `${requesterName} asked to add the ${kindLabel} "${name}". Add or reject it in the Master Library.`,
+    "info",
+  );
+
+/** Master Library: tells the person who asked what the admin decided. */
+export const notifyNameRequestDecided = (
+  userId: number,
+  decision: { approved: true; kindLabel: string; asked: string; added: string } | { approved: false; kindLabel: string; asked: string; reason: string },
+) =>
+  decision.approved
+    ? notifyUser(
+        userId,
+        "Name added",
+        decision.added === decision.asked
+          ? `The ${decision.kindLabel} "${decision.added}" is now in the list.`
+          : `The ${decision.kindLabel} you asked for is in the list as "${decision.added}".`,
+        "success",
+      )
+    : notifyUser(
+        userId,
+        "Name not added",
+        `The ${decision.kindLabel} "${decision.asked}" was not added: ${decision.reason}`,
+        "warning",
+      );

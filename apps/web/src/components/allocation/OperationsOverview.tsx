@@ -16,20 +16,14 @@ import { ErrorState, LoadingState } from "@/components/layout/PageStates";
 import {
   FIELD_ROLE_LABELS,
   fetchJobOverview,
-  fetchWorkJobs,
-  formatJobDates,
   todayIST,
   type FieldRole,
-  type WorkJob,
 } from "@/api/allocation";
+import type { Zone } from "@/api/zoneBoard";
 import { JobDialog } from "./JobDialog";
-import { JobDetailDialog } from "./JobDetailDialog";
-import { JobStatusBadge } from "./JobBits";
 
 const ALL = "__all__";
-const LIVE = "ASSIGNED,STARTED,HOLD,COMPLETED";
-type Tile = "LOCAL" | "NON_LOCAL" | "NOT_SET";
-const TILES: { key: Tile; label: string }[] = [
+const TILES: { key: Zone; label: string }[] = [
   { key: "LOCAL", label: "Hyderabad" },
   { key: "NON_LOCAL", label: "Non-local" },
   { key: "NOT_SET", label: "Not set" },
@@ -38,17 +32,15 @@ const FREE_ROLES: FieldRole[] = ["PASTER", "HELPER"];
 
 /**
  * The Operation Manager's first view: a shortcut to assign work, who is free over a date range,
- * and how many jobs run where. A tile opens that location's jobs, grouped by area.
+ * and how many jobs run where. A tile opens the Zone Board on that location and date (its
+ * week, when the range is more than a day).
  */
 export function OperationsOverview() {
   const today = todayIST();
   const [from, setFrom] = useState(today);
   const [to, setTo] = useState(today);
   const [area, setArea] = useState(ALL);
-  const [tile, setTile] = useState<Tile | null>(null);
   const [assigning, setAssigning] = useState(false);
-  const [detail, setDetail] = useState<number | null>(null);
-  const [editing, setEditing] = useState<WorkJob | null>(null);
 
   const areaName = area === ALL ? undefined : area;
   const { data, isLoading, error, refetch } = useQuery({
@@ -57,7 +49,9 @@ export function OperationsOverview() {
     placeholderData: keepPreviousData,
   });
   // Keeps a chosen area in the list even when the new dates have no job there.
-  const areas = [...new Set([...(data?.areas ?? []), ...(areaName ? [areaName] : [])])].sort();
+  const areas = [...new Set([...(data?.areas ?? []), ...(areaName ? [areaName] : [])])].sort((a, b) =>
+    a.localeCompare(b, "en", { sensitivity: "base" }),
+  );
 
   return (
     <section className="surface-panel mb-6 grid gap-4 p-4 sm:p-5" aria-label="Field work overview">
@@ -71,6 +65,11 @@ export function OperationsOverview() {
           </Button>
           <Button asChild variant="outline" size="lg" className="rounded-xl">
             <Link to="/admin/grid">Weekly Grid</Link>
+          </Button>
+          <Button asChild variant="outline" size="lg" className="rounded-xl">
+            <Link to="/admin/zones" search={{ date: from === today ? undefined : from }}>
+              Zone Board
+            </Link>
           </Button>
         </div>
         <div className="flex flex-wrap items-end gap-2 sm:ml-auto">
@@ -125,31 +124,22 @@ export function OperationsOverview() {
         <>
           <div className="grid grid-cols-3 gap-2 sm:gap-3">
             {TILES.map((t) => (
-              <button
+              <Link
                 key={t.key}
-                type="button"
-                aria-expanded={tile === t.key}
-                onClick={() => setTile(tile === t.key ? null : t.key)}
-                className={cn(
-                  "min-w-0 rounded-xl border p-3 text-left transition-colors",
-                  tile === t.key ? "border-primary bg-primary/10" : "hover:bg-muted/50",
-                )}
+                to="/admin/zones"
+                search={{
+                  date: from === today ? undefined : from,
+                  span: from === to ? undefined : "week",
+                  zone: t.key,
+                }}
+                className="min-w-0 rounded-xl border p-3 text-left transition-colors hover:bg-muted/50"
               >
                 <div className="text-2xl font-bold tabular-nums">{data.jobs[t.key]}</div>
                 <div className="truncate text-xs text-muted-foreground sm:text-sm">{t.label}</div>
-                <div className="mt-1 text-xs font-medium text-primary">
-                  {tile === t.key ? "Hide jobs" : "List jobs"}
-                </div>
-              </button>
+                <div className="mt-1 text-xs font-medium text-primary">View on Zone Board</div>
+              </Link>
             ))}
           </div>
-
-          {tile && (
-            <TileJobs
-              filters={{ from, to, locality: tile, area: areaName }}
-              onOpen={(id) => setDetail(id)}
-            />
-          )}
 
           <div className="grid gap-3 md:grid-cols-2">
             {FREE_ROLES.map((r) => (
@@ -189,84 +179,6 @@ export function OperationsOverview() {
       )}
 
       <JobDialog open={assigning} onClose={() => setAssigning(false)} defaultDate={from} />
-      <JobDetailDialog
-        jobId={detail}
-        onClose={() => setDetail(null)}
-        onEdit={(job) => {
-          setDetail(null);
-          setEditing(job);
-        }}
-      />
-      <JobDialog open={!!editing} job={editing} onClose={() => setEditing(null)} />
     </section>
-  );
-}
-
-/** One location's jobs over the range, grouped by area name. */
-function TileJobs({
-  filters,
-  onOpen,
-}: {
-  filters: { from: string; to: string; locality: Tile; area?: string };
-  onOpen: (id: number) => void;
-}) {
-  const params = { ...filters, status: LIVE };
-  const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ["work-jobs", "list", params],
-    queryFn: () => fetchWorkJobs(params),
-  });
-  if (isLoading) return <LoadingState bare className="p-4" />;
-  if (!data) return <ErrorState bare error={error} onRetry={() => refetch()} />;
-  if (data.jobs.length === 0) {
-    return (
-      <div className="rounded-xl border border-dashed p-4 text-center text-sm text-muted-foreground">
-        No jobs here over these dates.
-      </div>
-    );
-  }
-
-  const groups = new Map<string, WorkJob[]>();
-  for (const j of data.jobs) {
-    const name = j.area?.name ?? "No area name";
-    groups.set(name, [...(groups.get(name) ?? []), j]);
-  }
-  return (
-    <div className="grid gap-3">
-      {[...groups.entries()]
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([name, jobs]) => (
-          <div key={name} className="overflow-hidden rounded-xl border">
-            <div className="flex items-center justify-between gap-2 bg-muted/40 px-3 py-2 text-sm font-medium">
-              <span className="min-w-0 truncate">{name}</span>
-              <span className="tabular-nums text-muted-foreground">{jobs.length}</span>
-            </div>
-            <ul>
-              {jobs.map((j) => (
-                <li key={j.id} className="border-t">
-                  <button
-                    type="button"
-                    onClick={() => onOpen(j.id)}
-                    className="flex w-full flex-wrap items-center justify-between gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-muted/40"
-                  >
-                    <span className="min-w-0">
-                      <span className="font-mono font-semibold">
-                        {j.order?.order_no ?? "No order"}
-                      </span>
-                      {j.order && (
-                        <span className="text-muted-foreground"> · {j.order.client_name}</span>
-                      )}
-                      <span className="block text-xs text-muted-foreground">
-                        {formatJobDates(j.start_date, j.end_date)}
-                        {j.csm ? ` · ${j.csm.name}` : ""}
-                      </span>
-                    </span>
-                    <JobStatusBadge status={j.status} />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
-    </div>
   );
 }

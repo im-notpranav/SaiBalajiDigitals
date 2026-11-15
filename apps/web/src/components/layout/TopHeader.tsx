@@ -12,10 +12,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth-store";
 import { fetchMyNotifications, markNotificationRead } from "@/api/notifications";
+import { photoSrc } from "@/api/users";
 import { notificationsPath, orderLinkLabel, useGoToOrder } from "@/lib/use-order-nav";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -190,6 +191,8 @@ export function TopHeader() {
               className="flex shrink-0 items-center gap-2 rounded-full border bg-background py-1 pl-1 pr-2 transition hover:bg-accent sm:ml-1 sm:pr-3 dark:bg-white/[0.06] dark:hover:bg-white/10"
             >
               <Avatar className="h-8 w-8">
+                {/* The admin's picture of them; initials until it loads, or when there is none. */}
+                {user?.photo_url && <AvatarImage src={photoSrc(user.photo_url)} alt="" className="object-cover" />}
                 <AvatarFallback className="bg-gradient-to-br from-primary to-primary-deep text-xs font-bold text-primary-foreground">
                   {user?.name?.slice(0, 2).toUpperCase()}
                 </AvatarFallback>

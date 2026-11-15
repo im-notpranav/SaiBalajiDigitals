@@ -77,6 +77,9 @@ import myRoutes from "./routes/my.routes";
 import leaveRoutes from "./routes/leave.routes";
 import overtimeRoutes from "./routes/overtime.routes";
 import paymentRequestsRoutes from "./routes/payment-requests.routes";
+import masterLibraryRoutes from "./routes/master-library.routes";
+import allocationSheetRoutes from "./routes/allocation-sheet.routes";
+import zoneBoardRoutes from "./routes/zone-board.routes";
 
 app.use("/api/auth", authRoutes);
 app.use("/api/orders", ordersRoutes);
@@ -93,6 +96,9 @@ app.use("/api/csm-jobs", csmJobsRoutes);
 app.use("/api/leave", leaveRoutes);
 app.use("/api/overtime", overtimeRoutes);
 app.use("/api/payment-requests", paymentRequestsRoutes);
+app.use("/api/master-library", masterLibraryRoutes);
+app.use("/api/allocation-sheet", allocationSheetRoutes);
+app.use("/api/zone-board", zoneBoardRoutes);
 app.use("/api/my", myRoutes);
 app.use("/api/whatsapp", whatsappRoutes);
 

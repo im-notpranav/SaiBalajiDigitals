@@ -66,6 +66,8 @@ export interface OrdersQuery {
   status?: string;
   section?: "active" | "completed";
   q?: string;
+  /** "1": allotted and not filled — no stores and no items yet. */
+  waiting?: "1";
   page?: number;
   limit?: number;
   /** Whole item rows. Lists otherwise carry only what the order tables show. */
@@ -83,6 +85,15 @@ export async function fetchOrders(params: OrdersQuery = {}) {
     orders: res.data || [],
     pagination: { page: res.page, limit: params.limit || 50, total: res.total }
   };
+}
+
+/**
+ * How many open orders are allotted and still waiting for their CSM: no stores, no items. A CSM
+ * gets only their own. Cache it under ["orders", ...] so anything that changes orders refreshes it.
+ */
+export async function fetchWaitingOrderCount(): Promise<number> {
+  const res = await fetchOrders({ waiting: "1", section: "active", limit: 1 });
+  return Number(res.pagination.total) || 0;
 }
 
 export async function fetchProductionOrders() {
@@ -143,14 +154,18 @@ export async function updateStore(orderId: number, storeId: number, data: StoreP
   return apiFetch<OrderStore>(`/orders/${orderId}/stores/${storeId}`, { method: "PATCH", data });
 }
 
-/** An admin starts an order for a CSM. Leave the number out to take the next in the series. */
+/** Allot Order: an admin opens an order for a CSM. Leave the number out to take the next in the series. */
 export async function startOrder(data: { client_name: string; csm_user_id: number; order_no?: string | null }) {
   return apiFetch<Order>("/orders/start", { method: "POST", data });
 }
 
+/**
+ * The next number in the series and this financial year's code, as the server sees them.
+ * `next` is null once the year's numbers are used up (past ORD{YY}9999).
+ */
 export async function fetchNextOrderNumber() {
-  const res = await apiClient.get<{ next_order_number: string }>("/admin/order-sequence");
-  return res.data.next_order_number;
+  const res = await apiClient.get<{ next_order_number: string | null; seq: { year_code: string } }>("/admin/order-sequence");
+  return { next: res.data.next_order_number, yearCode: res.data.seq.year_code };
 }
 
 export async function addStore(orderId: number, data: { store_name: string; location: string; po_number?: string | null }) {

@@ -1,10 +1,7 @@
 import { Router } from "express";
-import { getUsers, createUser, deleteUser, updateMe, checkUsername, toggleUserStatus, updateUser, getProductionStaff, resetUserPassword, uploadMyPhoto, removeMyPhoto, getUserPhoto } from "../controllers/users.controller";
+import { getUsers, createUser, deleteUser, updateMe, checkUsername, toggleUserStatus, updateUser, getProductionStaff, resetUserPassword, uploadUserPhoto, removeUserPhoto, getUserPhoto, MAX_PHOTO_BYTES } from "../controllers/users.controller";
 import { authenticate, authorize, requireSuperAdmin , denyReadOnlyMutations } from "../middlewares/auth.middleware";
 import { rawUpload } from "../middlewares/raw-upload";
-
-/** Browsers shrink a picture to a few KB before sending it; this only stops abuse. */
-const MAX_PHOTO_BYTES = 512 * 1024;
 
 const router = Router();
 
@@ -12,10 +9,9 @@ router.use(authenticate);
 
 router.get("/me", (req, res) => res.status(200).json(req.user)); // Should be in auth but keeping for completeness if needed
 // Self-service sits ahead of the read-only rule: the Operation Manager may still change
-// their own profile and password, as every user can.
+// their own profile and password, as every user can. Pictures are the admin's to set, so
+// there is no self-upload.
 router.put("/me", updateMe);
-router.post("/me/photo", rawUpload(MAX_PHOTO_BYTES, "512 KB"), uploadMyPhoto);
-router.delete("/me/photo", removeMyPhoto);
 router.get("/:id/photo", getUserPhoto);
 
 router.use(denyReadOnlyMutations);
@@ -30,5 +26,8 @@ router.delete("/:id", authorize("ADMIN"), requireSuperAdmin, deleteUser);
 router.put("/:id/status", authorize("ADMIN"), requireSuperAdmin, toggleUserStatus);
 router.put("/:id", authorize("ADMIN"), requireSuperAdmin, updateUser);
 router.put("/:id/password", authorize("ADMIN"), requireSuperAdmin, resetUserPassword);
+// A picture is part of editing the person, so it follows the same rule as PUT /:id.
+router.post("/:id/photo", authorize("ADMIN"), requireSuperAdmin, rawUpload(MAX_PHOTO_BYTES, "512 KB"), uploadUserPhoto);
+router.delete("/:id/photo", authorize("ADMIN"), requireSuperAdmin, removeUserPhoto);
 
 export default router;

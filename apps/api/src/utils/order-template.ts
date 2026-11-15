@@ -2,12 +2,15 @@ import * as xlsx from "xlsx";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
 import { itemAdjustment, itemBillable } from "./order-totals";
+import { missingFrom, spellerOf, type MasterLookup, type RejectedRow } from "./lookups";
 
 /**
  * The company's order spreadsheet, used for uploads, the downloadable template and exports.
  *
  * On upload, S.No, Order No, Total SFT and Amount are ignored: the number comes from the
- * sequence, and SFT and Amount are worked out here. One order per client.
+ * sequence, and SFT and Amount are worked out here. One order per client. A row naming a
+ * client, location or media that is not in the Master Library is left out (Q24), and the
+ * rest of the file still goes in.
  */
 export const ORDER_TEMPLATE_HEADER = [
   "S.No", "Date", "Client Name", "Location", "Store Name", "Order No", "Media",
@@ -104,17 +107,37 @@ function dayOf(raw: unknown): string | null {
 const number = (raw: unknown) => Number(String(raw).replace(/,/g, "").trim());
 const todayPlusOne = () => new Date(Date.now() + 5.5 * 3600_000 + 86_400_000).toISOString().slice(0, 10);
 
-/** Reads the first sheet, or says plainly what is wrong with the file. Every row is checked. */
-export function parseOrderTemplate(file: Buffer): { orders: TemplateOrder[]; errors: TemplateError[]; fileError?: string } {
+/**
+ * Reads the first sheet, or says plainly what is wrong with the file. Every row is checked.
+ *
+ * With `masters`, a row that is otherwise fine but names a client, location or media the
+ * lookup does not hold goes to `rejected` instead of an order, and the rows kept carry the
+ * masters' spelling. Problems are reported first, so a rejected row imports cleanly once the
+ * admin adds its names.
+ */
+export function parseOrderTemplate(
+  file: Buffer,
+  masters?: MasterLookup,
+): { orders: TemplateOrder[]; errors: TemplateError[]; rejected: RejectedRow[]; fileError?: string } {
   let rows: unknown[][];
   let firstRowNumber = 1;
   try {
-    const wb = xlsx.read(file, { type: "buffer" });
+    // Capped like the Master Library import: a small file can declare a huge range, and
+    // reading all of it would starve the single API process. 10,000 rows is far past any
+    // real bulk order sheet; the declared width is cut to the template's columns plus spare.
+    const wb = xlsx.read(file, { type: "buffer", sheetRows: 10_000, cellFormula: false, cellHTML: false, cellStyles: false });
     const sheet = wb.Sheets[wb.SheetNames[0]!]!;
-    if (sheet["!ref"]) firstRowNumber = xlsx.utils.decode_range(sheet["!ref"]).s.r + 1;
+    if (sheet["!ref"]) {
+      const range = xlsx.utils.decode_range(sheet["!ref"]);
+      if (range.e.c - range.s.c > 39) {
+        range.e.c = range.s.c + 39;
+        sheet["!ref"] = xlsx.utils.encode_range(range);
+      }
+      firstRowNumber = range.s.r + 1;
+    }
     rows = xlsx.utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: true, defval: "", blankrows: true });
   } catch {
-    return { orders: [], errors: [], fileError: "Could not read the file. Make sure it is a valid Excel file." };
+    return { orders: [], errors: [], rejected: [], fileError: "Could not read the file. Make sure it is a valid Excel file." };
   }
 
   // The company's sheet starts with its headings, but a title row above them is harmless.
@@ -128,10 +151,12 @@ export function parseOrderTemplate(file: Buffer): { orders: TemplateOrder[]; err
     at[key] = i;
   }
   if (missing.length) {
-    return { orders: [], errors: [], fileError: `This is not the order template: it has no ${missing.join(", ")} column. Download the template and use that.` };
+    return { orders: [], errors: [], rejected: [], fileError: `This is not the order template: it has no ${missing.join(", ")} column. Download the template and use that.` };
   }
 
   const errors: TemplateError[] = [];
+  const rejected: RejectedRow[] = [];
+  const spell = masters ? spellerOf(masters) : (_kind: unknown, name: string) => name;
   const clients = new Map<string, TemplateOrder>();
   const storesOf = new Map<TemplateOrder, Map<string, TemplateStore>>();
   /** The last Location per client and store name: a blank one means the same place as before. */
@@ -144,8 +169,8 @@ export function parseOrderTemplate(file: Buffer): { orders: TemplateOrder[]; err
   const filled = (r: unknown[]) =>
     ["date", "client", "location", "store", "media"].some((k) => String(r[at[k]!] ?? "").trim() !== "");
   const dataCount = data.filter(filled).length;
-  if (dataCount === 0) return { orders: [], errors: [], fileError: "The sheet has no order rows." };
-  if (dataCount > MAX_ROWS) return { orders: [], errors: [], fileError: `This file has ${dataCount} rows. The most it can take is ${MAX_ROWS}, so split it.` };
+  if (dataCount === 0) return { orders: [], errors: [], rejected: [], fileError: "The sheet has no order rows." };
+  if (dataCount > MAX_ROWS) return { orders: [], errors: [], rejected: [], fileError: `This file has ${dataCount} rows. The most it can take is ${MAX_ROWS}, so split it.` };
 
   data.forEach((r, idx) => {
     if (!filled(r)) return;
@@ -180,24 +205,36 @@ export function parseOrderTemplate(file: Buffer): { orders: TemplateOrder[]; err
     if (!(q > 0) || !Number.isInteger(q)) return fail("Qty must be a whole number above 0.");
     if (!(rate > 0)) return fail("Rate must be a number above 0.");
 
+    if (masters) {
+      const unknown = missingFrom(masters, [
+        { kind: "CLIENT", name: client },
+        { kind: "LOCATION", name: location },
+        { kind: "MEDIA", name: media },
+      ]);
+      if (unknown.length) return rejected.push({ row: rowNo, missing: unknown });
+    }
+    // Matched case-insensitively, so the keys above still hold for the masters' spelling.
+    const place = spell("LOCATION", location);
+    const mediaName = spell("MEDIA", media);
+
     let order = clients.get(clientKey);
     if (!order) {
-      order = { client_name: client, date, has_other_dates: false, first_row: rowNo, stores: [] };
+      order = { client_name: spell("CLIENT", client), date, has_other_dates: false, first_row: rowNo, stores: [] };
       clients.set(clientKey, order);
       storesOf.set(order, new Map());
     }
     if (date !== order.date) order.has_other_dates = true;
 
     const stores = storesOf.get(order)!;
-    const storeKey = `${storeName.toLowerCase()}\u0000${location.toLowerCase()}`;
+    const storeKey = `${storeName.toLowerCase()}\u0000${place.toLowerCase()}`;
     let store = stores.get(storeKey);
     if (!store) {
-      store = { store_name: storeName, location, items: [] };
+      store = { store_name: storeName, location: place, items: [] };
       stores.set(storeKey, store);
       order.stores.push(store);
     }
     const total_sft = sftOf(w, h, q);
-    store.items.push({ media, width_inches: w, height_inches: h, qty: q, rate, total_sft, amount: amountOf(total_sft, rate) });
+    store.items.push({ media: mediaName, width_inches: w, height_inches: h, qty: q, rate, total_sft, amount: amountOf(total_sft, rate) });
   });
 
   const orders = [...clients.values()];
@@ -206,7 +243,7 @@ export function parseOrderTemplate(file: Buffer): { orders: TemplateOrder[]; err
       errors.push({ row: o.first_row, message: `${o.client_name} has ${o.stores.length} stores. An order can hold at most ${MAX_STORES}.` });
     }
   }
-  return { orders, errors: errors.sort((a, b) => a.row - b.row) };
+  return { orders, errors: errors.sort((a, b) => a.row - b.row), rejected };
 }
 
 /** The blank template: the headings, with S.No, Total SFT and Amount working as the sheet is typed in. */
@@ -227,6 +264,7 @@ export function buildOrderTemplate(): Buffer {
     ["Leave S.No, Order No, Total SFT and Amount. The system ignores them, gives the order number, and works out SFT and Amount."],
     ["Total SFT = Width x Height x Qty / 144. Amount = Total SFT x Rate."],
     ["Each Client Name becomes one order. The first date on that client's rows is the order date."],
+    ["Client Name, Location and Media must be names in the Master Library. A row with any other name is left out; ask the admin to add it."],
     ["Rows with the same Store Name and Location are one store."],
     [`Limits: ${MAX_ROWS} rows per file, ${MAX_STORES} stores per order.`],
     ["You will see every order on a review screen before anything is saved."],

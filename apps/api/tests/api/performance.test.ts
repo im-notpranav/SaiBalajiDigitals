@@ -92,10 +92,12 @@ describe("password cost", () => {
     const admin = await makeUser("ADMIN", { is_super_admin: true });
     const username = uniq("newperson");
     const res = await as(admin).post("/api/users").send({
-      name: "New Person", username, password: "a-good-password-1", role: "CSM", email: `${username}@example.com`, phone: "9000000000",
+      // Helper, not CSM: a new CSM also needs a CSM code, which this test is not about.
+      name: "New Person", username, password: "a-good-password-1", role: "HELPER", email: `${username}@example.com`, phone: "9000000000",
     });
     expect(res.status, JSON.stringify(res.body)).toBe(201);
-    const saved = await prisma.user.findUniqueOrThrow({ where: { username } });
+    // Usernames are stored in capitals whatever case was typed.
+    const saved = await prisma.user.findUniqueOrThrow({ where: { username: username.toUpperCase() } });
     expect(bcrypt.getRounds(saved.password)).toBe(PASSWORD_HASH_ROUNDS);
   });
 });

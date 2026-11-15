@@ -33,12 +33,13 @@ async function main() {
   const password = await bcrypt.hash("demo1234", PASSWORD_HASH_ROUNDS);
 
   const users = [
-    { name: "Bablu Goud", username: "employee", role: "CSM" },
-    { name: "Karthik Menon", username: "production", role: "PRODUCTION" },
-    { name: "Ravi Teja", username: "production2", role: "PRODUCTION" },
-    { name: "Priya Sharma", username: "accountant", role: "ACCOUNTS" },
-    { name: "Mahesh Goud", username: "maheshgoud", role: "ADMIN", is_super_admin: true },
-    { name: "Suresh Kumar", username: "operator", role: "PRODUCTION_MANAGER" },
+    // Usernames are stored in capitals (CHECK user_username_upper); login ignores case.
+    { name: "Bablu Goud", username: "EMPLOYEE", role: "CSM" },
+    { name: "Karthik Menon", username: "PRODUCTION", role: "PRODUCTION" },
+    { name: "Ravi Teja", username: "PRODUCTION2", role: "PRODUCTION" },
+    { name: "Priya Sharma", username: "ACCOUNTANT", role: "ACCOUNTS" },
+    { name: "Mahesh Goud", username: "MAHESHGOUD", role: "ADMIN", is_super_admin: true },
+    { name: "Suresh Kumar", username: "OPERATOR", role: "PRODUCTION_MANAGER" },
   ];
 
   for (const u of users) {

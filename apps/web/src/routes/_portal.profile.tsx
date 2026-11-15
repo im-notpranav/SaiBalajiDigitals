@@ -1,18 +1,18 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
-import { Camera, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { apiErrorMessage } from "@/api/allocation";
 import { useAuth } from "@/lib/auth-store";
 import { roleLabel } from "@/lib/constants";
-import { photoSrc, removeMyPhoto, updateMe, uploadMyPhoto } from "@/api/users";
-import { shrinkImage } from "@/lib/image";
+import { photoSrc, updateMe } from "@/api/users";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 export const Route = createFileRoute("/_portal/profile")({
@@ -28,25 +28,6 @@ function ProfilePage() {
   const [whatsapp, setWhatsapp] = useState(!user?.whatsapp_opt_out);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
-  const photoInput = useRef<HTMLInputElement>(null);
-
-  const photo = useMutation({
-    mutationFn: async (file: File | null) => {
-      if (!file) return removeMyPhoto();
-      const picture = await shrinkImage(file, { maxSide: 256, square: true }).catch(() => {
-        throw new Error("Could not read that picture. Use a JPG or PNG.");
-      });
-      return uploadMyPhoto(picture);
-    },
-    onSuccess: (_saved, file) => {
-      toast.success(file ? "Picture updated" : "Picture removed");
-      queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
-    },
-    onError: (err: any) => toast.error(apiErrorMessage(err, err.message)),
-    onSettled: () => {
-      if (photoInput.current) photoInput.current.value = "";
-    },
-  });
 
   const mutation = useMutation({
     mutationFn: updateMe,
@@ -110,31 +91,6 @@ function ProfilePage() {
                 </div>
               )}
             </div>
-            <div className="mt-3 flex flex-wrap gap-2 lg:justify-center">
-              <input
-                ref={photoInput}
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                className="sr-only"
-                aria-label="Choose a profile picture"
-                onChange={(e) => e.target.files?.[0] && photo.mutate(e.target.files[0])}
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={photo.isPending}
-                onClick={() => photoInput.current?.click()}
-              >
-                {photo.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Camera className="mr-2 h-4 w-4" />}
-                {user?.photo_url ? "Change picture" : "Upload picture"}
-              </Button>
-              {user?.photo_url && (
-                <Button type="button" variant="ghost" size="sm" disabled={photo.isPending} onClick={() => photo.mutate(null)}>
-                  Remove
-                </Button>
-              )}
-            </div>
           </div>
         </div>
         <form
@@ -162,7 +118,7 @@ function ProfilePage() {
               <Input id="profile-phone" type="tel" value={user?.phone ?? ""} disabled className="bg-muted" />
             </div>
             <p className="sm:col-span-2 text-xs text-muted-foreground">
-              To change your username, email or mobile number, contact the admin.
+              To change your username, email, mobile number or picture, contact the admin.
             </p>
             <div className="sm:col-span-2 flex items-center justify-between gap-3 rounded-xl border px-3 py-3">
               <div>
@@ -186,9 +142,8 @@ function ProfilePage() {
 
             <div className="space-y-2">
               <Label htmlFor="profile-current-password">Current Password</Label>
-              <Input
+              <PasswordInput
                 id="profile-current-password"
-                type="password"
                 autoComplete="current-password"
                 value={currentPassword}
                 onChange={e => setCurrentPassword(e.target.value)}
@@ -196,9 +151,8 @@ function ProfilePage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="profile-new-password">New Password</Label>
-              <Input
+              <PasswordInput
                 id="profile-new-password"
-                type="password"
                 autoComplete="new-password"
                 value={newPassword}
                 onChange={e => setNewPassword(e.target.value)}

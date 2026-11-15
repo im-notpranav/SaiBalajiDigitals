@@ -33,14 +33,17 @@ export const fieldStaffQuery = {
 /**
  * Loads the job form's lists in the background as soon as a page that can open the form is
  * shown. Without this the form opens with empty dropdowns that fill in one by one, each
- * re-render landing in the middle of the dialog's opening animation.
+ * re-render landing in the middle of the dialog's opening animation. Pages shared with CSMs
+ * and field staff pass `enabled = false` for them: they never open the form, and the lists
+ * are managers' only.
  */
-export function usePrefetchJobLookups() {
+export function usePrefetchJobLookups(enabled = true) {
   const qc = useQueryClient();
   useEffect(() => {
+    if (!enabled) return;
     void qc.prefetchQuery(areasQuery);
     void qc.prefetchQuery(csmCodesQuery);
     void qc.prefetchQuery(csmOptionsQuery);
     void qc.prefetchQuery(fieldStaffQuery);
-  }, [qc]);
+  }, [qc, enabled]);
 }

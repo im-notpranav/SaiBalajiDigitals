@@ -27,10 +27,26 @@ interface OrdersTableProps {
   error?: unknown;
   onRetry?: () => void;
   emptyText?: string;
+  /** What an allotted, not-yet-filled order says where its store would be. */
+  waitingLabel?: string;
 }
 
 const created = (o: Order) =>
   o.created_at ? formatDistanceToNow(new Date(o.created_at), { addSuffix: true }) : "—";
+
+/** Allotted by an admin and not filled yet: no stores and no items (the API's ?waiting=1). */
+const isWaitingForCsm = (o: Pick<Order, "store_count" | "stores" | "items">) =>
+  (o.store_count ?? o.stores?.length ?? 0) === 0 && (o.items?.length ?? 0) === 0;
+
+/** Sits in the store's place, so a waiting row is no taller than any other. */
+function WaitingBadge({ label }: { label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-400">
+      <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" aria-hidden />
+      {label}
+    </span>
+  );
+}
 
 export function OrdersTable({
   orders,
@@ -41,6 +57,7 @@ export function OrdersTable({
   error,
   onRetry,
   emptyText = "No orders match your filters.",
+  waitingLabel = "Waiting for CSM",
 }: OrdersTableProps) {
   const { sorted, sortKey, sortDir, toggleSort } = useSortableTable(
     orders,
@@ -85,8 +102,14 @@ export function OrdersTable({
                   <StatusBadge status={o.status} />
                 </div>
                 <div className="text-sm text-muted-foreground">
-                  {storeLabel(o)}
-                  {storeSubLabel(o) && <span className="text-xs"> · {storeSubLabel(o)}</span>}
+                  {isWaitingForCsm(o) ? (
+                    <WaitingBadge label={waitingLabel} />
+                  ) : (
+                    <>
+                      {storeLabel(o)}
+                      {storeSubLabel(o) && <span className="text-xs"> · {storeSubLabel(o)}</span>}
+                    </>
+                  )}
                 </div>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                   <span>
@@ -160,9 +183,15 @@ export function OrdersTable({
                     <TableCell className="whitespace-nowrap font-mono text-xs font-semibold text-primary">{o.order_no}</TableCell>
                     <TableCell className="font-medium">{o.client_name}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      <div>{storeLabel(o)}</div>
-                      {storeSubLabel(o) && (
-                        <div className="text-xs text-muted-foreground/70">{storeSubLabel(o)}</div>
+                      {isWaitingForCsm(o) ? (
+                        <WaitingBadge label={waitingLabel} />
+                      ) : (
+                        <>
+                          <div>{storeLabel(o)}</div>
+                          {storeSubLabel(o) && (
+                            <div className="text-xs text-muted-foreground/70">{storeSubLabel(o)}</div>
+                          )}
+                        </>
                       )}
                     </TableCell>
                     {showCreator && <TableCell className="text-sm text-muted-foreground">{o.creator_name}</TableCell>}

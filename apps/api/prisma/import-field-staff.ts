@@ -36,8 +36,9 @@ function tempPassword(): string {
   return Array.from({ length: 10 }, () => alphabet[randomInt(alphabet.length)]).join("");
 }
 
+/** "Mohd Moin" → "MOHD_MOIN". Usernames are stored in capitals (CHECK user_username_upper). */
 const baseUsername = (name: string) =>
-  name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 44) || "staff";
+  name.toUpperCase().trim().replace(/[^A-Z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 44) || "STAFF";
 
 /** 10-digit Indian mobile → +91XXXXXXXXXX, anything else → null (fix it in the app later). */
 function normalisePhone(raw: unknown): string | null {
@@ -57,7 +58,7 @@ async function main() {
 
   const existing = await prisma.user.findMany({ select: { name: true, username: true, role: true, emp_code: true } });
   const fieldNames = new Set(existing.filter((u) => ["PASTER", "HELPER", "DRIVER"].includes(u.role)).map((u) => u.name.toLowerCase()));
-  const usernames = new Set(existing.map((u) => u.username.toLowerCase()));
+  const usernames = new Set(existing.map((u) => u.username.toUpperCase()));
   const empCodes = new Set(existing.map((u) => u.emp_code).filter(Boolean) as string[]);
 
   const toCreate: { name: string; username: string; password: string; role: "PASTER" | "HELPER" | "DRIVER"; phone: string | null; emp_code: string | null }[] = [];

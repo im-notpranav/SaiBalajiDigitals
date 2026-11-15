@@ -31,6 +31,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { fetchAdminDashboard, fetchCsmDashboard, fetchOverdueReport } from "@/api/dashboard";
 import { fetchUsers } from "@/api/users";
+import { fetchWaitingOrderCount } from "@/api/orders";
 import { inr } from "@/lib/format";
 import { useAuth } from "@/lib/auth-store";
 import { PaymentOverviewCard } from "@/components/payments/PaymentDashboard";
@@ -113,6 +114,11 @@ function AdminDashboard() {
     queryFn: () => fetchOverdueReport(STAGE_AGING.severe),
   });
   const stuck = overdueReport?.count ?? 0;
+  // Allotted orders whose CSM hasn't added a store or an item yet, over every open order.
+  const { data: waitingCount = 0 } = useQuery({
+    queryKey: ["orders", "waiting-count"],
+    queryFn: fetchWaitingOrderCount,
+  });
 
   const activeUsers =
     usersData?.users?.filter((u: { last_login_at?: string | null }) => {
@@ -145,6 +151,17 @@ function AdminDashboard() {
       detail: `Invoiced more than ${STAGE_AGING.severe} working days ago and not paid yet.`,
       cta: "See which",
       onClick: () => scrollToSection(OVERDUE_SECTION),
+    });
+  }
+  if (waitingCount > 0) {
+    attention.push({
+      key: "allotted-waiting",
+      tone: "info",
+      title: `${waitingCount} allotted ${waitingCount === 1 ? "order is" : "orders are"} waiting for the CSM`,
+      detail: "No stores or items added yet, so production can't start.",
+      cta: "See which",
+      to: "/admin/orders",
+      search: { section: "active", waiting: true },
     });
   }
 

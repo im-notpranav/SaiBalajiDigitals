@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as PortalRouteImport } from './routes/_portal'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as PortalProfileRouteImport } from './routes/_portal.profile'
+import { Route as PortalSheetRouteImport } from './routes/_portal.sheet'
 import { Route as GoSplatRouteImport } from './routes/go.$'
 import { Route as PortalAccountantBillingRouteImport } from './routes/_portal.accountant.billing'
 import { Route as PortalAccountantDashboardRouteImport } from './routes/_portal.accountant.dashboard'
@@ -30,6 +31,7 @@ import { Route as PortalAdminImportRouteImport } from './routes/_portal.admin.im
 import { Route as PortalAdminJobsRouteImport } from './routes/_portal.admin.jobs'
 import { Route as PortalAdminLeaveRouteImport } from './routes/_portal.admin.leave'
 import { Route as PortalAdminLossReportRouteImport } from './routes/_portal.admin.loss-report'
+import { Route as PortalAdminMasterLibraryRouteImport } from './routes/_portal.admin.master-library'
 import { Route as PortalAdminMastersRouteImport } from './routes/_portal.admin.masters'
 import { Route as PortalAdminNotificationsRouteImport } from './routes/_portal.admin.notifications'
 import { Route as PortalAdminOrdersRouteImport } from './routes/_portal.admin.orders'
@@ -38,18 +40,24 @@ import { Route as PortalAdminOvertimeRouteImport } from './routes/_portal.admin.
 import { Route as PortalAdminPaymentsRouteImport } from './routes/_portal.admin.payments'
 import { Route as PortalAdminReportsRouteImport } from './routes/_portal.admin.reports'
 import { Route as PortalAdminSettingsRouteImport } from './routes/_portal.admin.settings'
+import { Route as PortalAdminSheetRouteImport } from './routes/_portal.admin.sheet'
 import { Route as PortalAdminUsersRouteImport } from './routes/_portal.admin.users'
 import { Route as PortalAdminWhatsappRouteImport } from './routes/_portal.admin.whatsapp'
+import { Route as PortalAdminZonesRouteImport } from './routes/_portal.admin.zones'
 import { Route as PortalCostControlDashboardRouteImport } from './routes/_portal.cost-control.dashboard'
 import { Route as PortalCostControlNotificationsRouteImport } from './routes/_portal.cost-control.notifications'
+import { Route as PortalEmployeeBoardRouteImport } from './routes/_portal.employee.board'
 import { Route as PortalEmployeeDashboardRouteImport } from './routes/_portal.employee.dashboard'
+import { Route as PortalEmployeeGridRouteImport } from './routes/_portal.employee.grid'
 import { Route as PortalEmployeeJobsRouteImport } from './routes/_portal.employee.jobs'
 import { Route as PortalEmployeeNewOrderRouteImport } from './routes/_portal.employee.new-order'
 import { Route as PortalEmployeeNotificationsRouteImport } from './routes/_portal.employee.notifications'
 import { Route as PortalEmployeeOrdersRouteImport } from './routes/_portal.employee.orders'
 import { Route as PortalEmployeePaymentsRouteImport } from './routes/_portal.employee.payments'
+import { Route as PortalEmployeeSheetRouteImport } from './routes/_portal.employee.sheet'
 import { Route as PortalEmployeeUploadOrdersRouteImport } from './routes/_portal.employee.upload-orders'
 import { Route as PortalFieldDashboardRouteImport } from './routes/_portal.field.dashboard'
+import { Route as PortalFieldGridRouteImport } from './routes/_portal.field.grid'
 import { Route as PortalFieldLeaveRouteImport } from './routes/_portal.field.leave'
 import { Route as PortalFieldNotificationsRouteImport } from './routes/_portal.field.notifications'
 import { Route as PortalFieldPaymentsRouteImport } from './routes/_portal.field.payments'
@@ -83,6 +91,11 @@ const LoginRoute = LoginRouteImport.update({
 const PortalProfileRoute = PortalProfileRouteImport.update({
   id: '/profile',
   path: '/profile',
+  getParentRoute: () => PortalRoute,
+} as any)
+const PortalSheetRoute = PortalSheetRouteImport.update({
+  id: '/sheet',
+  path: '/sheet',
   getParentRoute: () => PortalRoute,
 } as any)
 const GoSplatRoute = GoSplatRouteImport.update({
@@ -174,6 +187,12 @@ const PortalAdminLossReportRoute = PortalAdminLossReportRouteImport.update({
   path: '/admin/loss-report',
   getParentRoute: () => PortalRoute,
 } as any)
+const PortalAdminMasterLibraryRoute =
+  PortalAdminMasterLibraryRouteImport.update({
+    id: '/admin/master-library',
+    path: '/admin/master-library',
+    getParentRoute: () => PortalRoute,
+  } as any)
 const PortalAdminMastersRoute = PortalAdminMastersRouteImport.update({
   id: '/admin/masters',
   path: '/admin/masters',
@@ -215,6 +234,11 @@ const PortalAdminSettingsRoute = PortalAdminSettingsRouteImport.update({
   path: '/admin/settings',
   getParentRoute: () => PortalRoute,
 } as any)
+const PortalAdminSheetRoute = PortalAdminSheetRouteImport.update({
+  id: '/admin/sheet',
+  path: '/admin/sheet',
+  getParentRoute: () => PortalRoute,
+} as any)
 const PortalAdminUsersRoute = PortalAdminUsersRouteImport.update({
   id: '/admin/users',
   path: '/admin/users',
@@ -223,6 +247,11 @@ const PortalAdminUsersRoute = PortalAdminUsersRouteImport.update({
 const PortalAdminWhatsappRoute = PortalAdminWhatsappRouteImport.update({
   id: '/admin/whatsapp',
   path: '/admin/whatsapp',
+  getParentRoute: () => PortalRoute,
+} as any)
+const PortalAdminZonesRoute = PortalAdminZonesRouteImport.update({
+  id: '/admin/zones',
+  path: '/admin/zones',
   getParentRoute: () => PortalRoute,
 } as any)
 const PortalCostControlDashboardRoute =
@@ -237,9 +266,19 @@ const PortalCostControlNotificationsRoute =
     path: '/cost-control/notifications',
     getParentRoute: () => PortalRoute,
   } as any)
+const PortalEmployeeBoardRoute = PortalEmployeeBoardRouteImport.update({
+  id: '/employee/board',
+  path: '/employee/board',
+  getParentRoute: () => PortalRoute,
+} as any)
 const PortalEmployeeDashboardRoute = PortalEmployeeDashboardRouteImport.update({
   id: '/employee/dashboard',
   path: '/employee/dashboard',
+  getParentRoute: () => PortalRoute,
+} as any)
+const PortalEmployeeGridRoute = PortalEmployeeGridRouteImport.update({
+  id: '/employee/grid',
+  path: '/employee/grid',
   getParentRoute: () => PortalRoute,
 } as any)
 const PortalEmployeeJobsRoute = PortalEmployeeJobsRouteImport.update({
@@ -268,6 +307,11 @@ const PortalEmployeePaymentsRoute = PortalEmployeePaymentsRouteImport.update({
   path: '/employee/payments',
   getParentRoute: () => PortalRoute,
 } as any)
+const PortalEmployeeSheetRoute = PortalEmployeeSheetRouteImport.update({
+  id: '/employee/sheet',
+  path: '/employee/sheet',
+  getParentRoute: () => PortalRoute,
+} as any)
 const PortalEmployeeUploadOrdersRoute =
   PortalEmployeeUploadOrdersRouteImport.update({
     id: '/employee/upload-orders',
@@ -277,6 +321,11 @@ const PortalEmployeeUploadOrdersRoute =
 const PortalFieldDashboardRoute = PortalFieldDashboardRouteImport.update({
   id: '/field/dashboard',
   path: '/field/dashboard',
+  getParentRoute: () => PortalRoute,
+} as any)
+const PortalFieldGridRoute = PortalFieldGridRouteImport.update({
+  id: '/field/grid',
+  path: '/field/grid',
   getParentRoute: () => PortalRoute,
 } as any)
 const PortalFieldLeaveRoute = PortalFieldLeaveRouteImport.update({
@@ -367,6 +416,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/profile': typeof PortalProfileRoute
+  '/sheet': typeof PortalSheetRoute
   '/go/$': typeof GoSplatRoute
   '/accountant/billing': typeof PortalAccountantBillingRoute
   '/accountant/dashboard': typeof PortalAccountantDashboardRoute
@@ -384,6 +434,7 @@ export interface FileRoutesByFullPath {
   '/admin/jobs': typeof PortalAdminJobsRoute
   '/admin/leave': typeof PortalAdminLeaveRoute
   '/admin/loss-report': typeof PortalAdminLossReportRoute
+  '/admin/master-library': typeof PortalAdminMasterLibraryRoute
   '/admin/masters': typeof PortalAdminMastersRoute
   '/admin/notifications': typeof PortalAdminNotificationsRoute
   '/admin/orders': typeof PortalAdminOrdersRoute
@@ -392,18 +443,24 @@ export interface FileRoutesByFullPath {
   '/admin/payments': typeof PortalAdminPaymentsRoute
   '/admin/reports': typeof PortalAdminReportsRoute
   '/admin/settings': typeof PortalAdminSettingsRoute
+  '/admin/sheet': typeof PortalAdminSheetRoute
   '/admin/users': typeof PortalAdminUsersRoute
   '/admin/whatsapp': typeof PortalAdminWhatsappRoute
+  '/admin/zones': typeof PortalAdminZonesRoute
   '/cost-control/dashboard': typeof PortalCostControlDashboardRoute
   '/cost-control/notifications': typeof PortalCostControlNotificationsRoute
+  '/employee/board': typeof PortalEmployeeBoardRoute
   '/employee/dashboard': typeof PortalEmployeeDashboardRoute
+  '/employee/grid': typeof PortalEmployeeGridRoute
   '/employee/jobs': typeof PortalEmployeeJobsRoute
   '/employee/new-order': typeof PortalEmployeeNewOrderRoute
   '/employee/notifications': typeof PortalEmployeeNotificationsRoute
   '/employee/orders': typeof PortalEmployeeOrdersRoute
   '/employee/payments': typeof PortalEmployeePaymentsRoute
+  '/employee/sheet': typeof PortalEmployeeSheetRoute
   '/employee/upload-orders': typeof PortalEmployeeUploadOrdersRoute
   '/field/dashboard': typeof PortalFieldDashboardRoute
+  '/field/grid': typeof PortalFieldGridRoute
   '/field/leave': typeof PortalFieldLeaveRoute
   '/field/notifications': typeof PortalFieldNotificationsRoute
   '/field/payments': typeof PortalFieldPaymentsRoute
@@ -424,6 +481,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/profile': typeof PortalProfileRoute
+  '/sheet': typeof PortalSheetRoute
   '/go/$': typeof GoSplatRoute
   '/accountant/billing': typeof PortalAccountantBillingRoute
   '/accountant/dashboard': typeof PortalAccountantDashboardRoute
@@ -441,6 +499,7 @@ export interface FileRoutesByTo {
   '/admin/jobs': typeof PortalAdminJobsRoute
   '/admin/leave': typeof PortalAdminLeaveRoute
   '/admin/loss-report': typeof PortalAdminLossReportRoute
+  '/admin/master-library': typeof PortalAdminMasterLibraryRoute
   '/admin/masters': typeof PortalAdminMastersRoute
   '/admin/notifications': typeof PortalAdminNotificationsRoute
   '/admin/orders': typeof PortalAdminOrdersRoute
@@ -449,18 +508,24 @@ export interface FileRoutesByTo {
   '/admin/payments': typeof PortalAdminPaymentsRoute
   '/admin/reports': typeof PortalAdminReportsRoute
   '/admin/settings': typeof PortalAdminSettingsRoute
+  '/admin/sheet': typeof PortalAdminSheetRoute
   '/admin/users': typeof PortalAdminUsersRoute
   '/admin/whatsapp': typeof PortalAdminWhatsappRoute
+  '/admin/zones': typeof PortalAdminZonesRoute
   '/cost-control/dashboard': typeof PortalCostControlDashboardRoute
   '/cost-control/notifications': typeof PortalCostControlNotificationsRoute
+  '/employee/board': typeof PortalEmployeeBoardRoute
   '/employee/dashboard': typeof PortalEmployeeDashboardRoute
+  '/employee/grid': typeof PortalEmployeeGridRoute
   '/employee/jobs': typeof PortalEmployeeJobsRoute
   '/employee/new-order': typeof PortalEmployeeNewOrderRoute
   '/employee/notifications': typeof PortalEmployeeNotificationsRoute
   '/employee/orders': typeof PortalEmployeeOrdersRoute
   '/employee/payments': typeof PortalEmployeePaymentsRoute
+  '/employee/sheet': typeof PortalEmployeeSheetRoute
   '/employee/upload-orders': typeof PortalEmployeeUploadOrdersRoute
   '/field/dashboard': typeof PortalFieldDashboardRoute
+  '/field/grid': typeof PortalFieldGridRoute
   '/field/leave': typeof PortalFieldLeaveRoute
   '/field/notifications': typeof PortalFieldNotificationsRoute
   '/field/payments': typeof PortalFieldPaymentsRoute
@@ -483,6 +548,7 @@ export interface FileRoutesById {
   '/_portal': typeof PortalRouteWithChildren
   '/login': typeof LoginRoute
   '/_portal/profile': typeof PortalProfileRoute
+  '/_portal/sheet': typeof PortalSheetRoute
   '/go/$': typeof GoSplatRoute
   '/_portal/accountant/billing': typeof PortalAccountantBillingRoute
   '/_portal/accountant/dashboard': typeof PortalAccountantDashboardRoute
@@ -500,6 +566,7 @@ export interface FileRoutesById {
   '/_portal/admin/jobs': typeof PortalAdminJobsRoute
   '/_portal/admin/leave': typeof PortalAdminLeaveRoute
   '/_portal/admin/loss-report': typeof PortalAdminLossReportRoute
+  '/_portal/admin/master-library': typeof PortalAdminMasterLibraryRoute
   '/_portal/admin/masters': typeof PortalAdminMastersRoute
   '/_portal/admin/notifications': typeof PortalAdminNotificationsRoute
   '/_portal/admin/orders': typeof PortalAdminOrdersRoute
@@ -508,18 +575,24 @@ export interface FileRoutesById {
   '/_portal/admin/payments': typeof PortalAdminPaymentsRoute
   '/_portal/admin/reports': typeof PortalAdminReportsRoute
   '/_portal/admin/settings': typeof PortalAdminSettingsRoute
+  '/_portal/admin/sheet': typeof PortalAdminSheetRoute
   '/_portal/admin/users': typeof PortalAdminUsersRoute
   '/_portal/admin/whatsapp': typeof PortalAdminWhatsappRoute
+  '/_portal/admin/zones': typeof PortalAdminZonesRoute
   '/_portal/cost-control/dashboard': typeof PortalCostControlDashboardRoute
   '/_portal/cost-control/notifications': typeof PortalCostControlNotificationsRoute
+  '/_portal/employee/board': typeof PortalEmployeeBoardRoute
   '/_portal/employee/dashboard': typeof PortalEmployeeDashboardRoute
+  '/_portal/employee/grid': typeof PortalEmployeeGridRoute
   '/_portal/employee/jobs': typeof PortalEmployeeJobsRoute
   '/_portal/employee/new-order': typeof PortalEmployeeNewOrderRoute
   '/_portal/employee/notifications': typeof PortalEmployeeNotificationsRoute
   '/_portal/employee/orders': typeof PortalEmployeeOrdersRoute
   '/_portal/employee/payments': typeof PortalEmployeePaymentsRoute
+  '/_portal/employee/sheet': typeof PortalEmployeeSheetRoute
   '/_portal/employee/upload-orders': typeof PortalEmployeeUploadOrdersRoute
   '/_portal/field/dashboard': typeof PortalFieldDashboardRoute
+  '/_portal/field/grid': typeof PortalFieldGridRoute
   '/_portal/field/leave': typeof PortalFieldLeaveRoute
   '/_portal/field/notifications': typeof PortalFieldNotificationsRoute
   '/_portal/field/payments': typeof PortalFieldPaymentsRoute
@@ -542,6 +615,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/profile'
+    | '/sheet'
     | '/go/$'
     | '/accountant/billing'
     | '/accountant/dashboard'
@@ -559,6 +633,7 @@ export interface FileRouteTypes {
     | '/admin/jobs'
     | '/admin/leave'
     | '/admin/loss-report'
+    | '/admin/master-library'
     | '/admin/masters'
     | '/admin/notifications'
     | '/admin/orders'
@@ -567,18 +642,24 @@ export interface FileRouteTypes {
     | '/admin/payments'
     | '/admin/reports'
     | '/admin/settings'
+    | '/admin/sheet'
     | '/admin/users'
     | '/admin/whatsapp'
+    | '/admin/zones'
     | '/cost-control/dashboard'
     | '/cost-control/notifications'
+    | '/employee/board'
     | '/employee/dashboard'
+    | '/employee/grid'
     | '/employee/jobs'
     | '/employee/new-order'
     | '/employee/notifications'
     | '/employee/orders'
     | '/employee/payments'
+    | '/employee/sheet'
     | '/employee/upload-orders'
     | '/field/dashboard'
+    | '/field/grid'
     | '/field/leave'
     | '/field/notifications'
     | '/field/payments'
@@ -599,6 +680,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/profile'
+    | '/sheet'
     | '/go/$'
     | '/accountant/billing'
     | '/accountant/dashboard'
@@ -616,6 +698,7 @@ export interface FileRouteTypes {
     | '/admin/jobs'
     | '/admin/leave'
     | '/admin/loss-report'
+    | '/admin/master-library'
     | '/admin/masters'
     | '/admin/notifications'
     | '/admin/orders'
@@ -624,18 +707,24 @@ export interface FileRouteTypes {
     | '/admin/payments'
     | '/admin/reports'
     | '/admin/settings'
+    | '/admin/sheet'
     | '/admin/users'
     | '/admin/whatsapp'
+    | '/admin/zones'
     | '/cost-control/dashboard'
     | '/cost-control/notifications'
+    | '/employee/board'
     | '/employee/dashboard'
+    | '/employee/grid'
     | '/employee/jobs'
     | '/employee/new-order'
     | '/employee/notifications'
     | '/employee/orders'
     | '/employee/payments'
+    | '/employee/sheet'
     | '/employee/upload-orders'
     | '/field/dashboard'
+    | '/field/grid'
     | '/field/leave'
     | '/field/notifications'
     | '/field/payments'
@@ -657,6 +746,7 @@ export interface FileRouteTypes {
     | '/_portal'
     | '/login'
     | '/_portal/profile'
+    | '/_portal/sheet'
     | '/go/$'
     | '/_portal/accountant/billing'
     | '/_portal/accountant/dashboard'
@@ -674,6 +764,7 @@ export interface FileRouteTypes {
     | '/_portal/admin/jobs'
     | '/_portal/admin/leave'
     | '/_portal/admin/loss-report'
+    | '/_portal/admin/master-library'
     | '/_portal/admin/masters'
     | '/_portal/admin/notifications'
     | '/_portal/admin/orders'
@@ -682,18 +773,24 @@ export interface FileRouteTypes {
     | '/_portal/admin/payments'
     | '/_portal/admin/reports'
     | '/_portal/admin/settings'
+    | '/_portal/admin/sheet'
     | '/_portal/admin/users'
     | '/_portal/admin/whatsapp'
+    | '/_portal/admin/zones'
     | '/_portal/cost-control/dashboard'
     | '/_portal/cost-control/notifications'
+    | '/_portal/employee/board'
     | '/_portal/employee/dashboard'
+    | '/_portal/employee/grid'
     | '/_portal/employee/jobs'
     | '/_portal/employee/new-order'
     | '/_portal/employee/notifications'
     | '/_portal/employee/orders'
     | '/_portal/employee/payments'
+    | '/_portal/employee/sheet'
     | '/_portal/employee/upload-orders'
     | '/_portal/field/dashboard'
+    | '/_portal/field/grid'
     | '/_portal/field/leave'
     | '/_portal/field/notifications'
     | '/_portal/field/payments'
@@ -746,6 +843,13 @@ declare module '@tanstack/react-router' {
       path: '/profile'
       fullPath: '/profile'
       preLoaderRoute: typeof PortalProfileRouteImport
+      parentRoute: typeof PortalRoute
+    }
+    '/_portal/sheet': {
+      id: '/_portal/sheet'
+      path: '/sheet'
+      fullPath: '/sheet'
+      preLoaderRoute: typeof PortalSheetRouteImport
       parentRoute: typeof PortalRoute
     }
     '/go/$': {
@@ -867,6 +971,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PortalAdminLossReportRouteImport
       parentRoute: typeof PortalRoute
     }
+    '/_portal/admin/master-library': {
+      id: '/_portal/admin/master-library'
+      path: '/admin/master-library'
+      fullPath: '/admin/master-library'
+      preLoaderRoute: typeof PortalAdminMasterLibraryRouteImport
+      parentRoute: typeof PortalRoute
+    }
     '/_portal/admin/masters': {
       id: '/_portal/admin/masters'
       path: '/admin/masters'
@@ -923,6 +1034,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PortalAdminSettingsRouteImport
       parentRoute: typeof PortalRoute
     }
+    '/_portal/admin/sheet': {
+      id: '/_portal/admin/sheet'
+      path: '/admin/sheet'
+      fullPath: '/admin/sheet'
+      preLoaderRoute: typeof PortalAdminSheetRouteImport
+      parentRoute: typeof PortalRoute
+    }
     '/_portal/admin/users': {
       id: '/_portal/admin/users'
       path: '/admin/users'
@@ -935,6 +1053,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/whatsapp'
       fullPath: '/admin/whatsapp'
       preLoaderRoute: typeof PortalAdminWhatsappRouteImport
+      parentRoute: typeof PortalRoute
+    }
+    '/_portal/admin/zones': {
+      id: '/_portal/admin/zones'
+      path: '/admin/zones'
+      fullPath: '/admin/zones'
+      preLoaderRoute: typeof PortalAdminZonesRouteImport
       parentRoute: typeof PortalRoute
     }
     '/_portal/cost-control/dashboard': {
@@ -951,11 +1076,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PortalCostControlNotificationsRouteImport
       parentRoute: typeof PortalRoute
     }
+    '/_portal/employee/board': {
+      id: '/_portal/employee/board'
+      path: '/employee/board'
+      fullPath: '/employee/board'
+      preLoaderRoute: typeof PortalEmployeeBoardRouteImport
+      parentRoute: typeof PortalRoute
+    }
     '/_portal/employee/dashboard': {
       id: '/_portal/employee/dashboard'
       path: '/employee/dashboard'
       fullPath: '/employee/dashboard'
       preLoaderRoute: typeof PortalEmployeeDashboardRouteImport
+      parentRoute: typeof PortalRoute
+    }
+    '/_portal/employee/grid': {
+      id: '/_portal/employee/grid'
+      path: '/employee/grid'
+      fullPath: '/employee/grid'
+      preLoaderRoute: typeof PortalEmployeeGridRouteImport
       parentRoute: typeof PortalRoute
     }
     '/_portal/employee/jobs': {
@@ -993,6 +1132,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PortalEmployeePaymentsRouteImport
       parentRoute: typeof PortalRoute
     }
+    '/_portal/employee/sheet': {
+      id: '/_portal/employee/sheet'
+      path: '/employee/sheet'
+      fullPath: '/employee/sheet'
+      preLoaderRoute: typeof PortalEmployeeSheetRouteImport
+      parentRoute: typeof PortalRoute
+    }
     '/_portal/employee/upload-orders': {
       id: '/_portal/employee/upload-orders'
       path: '/employee/upload-orders'
@@ -1005,6 +1151,13 @@ declare module '@tanstack/react-router' {
       path: '/field/dashboard'
       fullPath: '/field/dashboard'
       preLoaderRoute: typeof PortalFieldDashboardRouteImport
+      parentRoute: typeof PortalRoute
+    }
+    '/_portal/field/grid': {
+      id: '/_portal/field/grid'
+      path: '/field/grid'
+      fullPath: '/field/grid'
+      preLoaderRoute: typeof PortalFieldGridRouteImport
       parentRoute: typeof PortalRoute
     }
     '/_portal/field/leave': {
@@ -1117,6 +1270,7 @@ declare module '@tanstack/react-router' {
 
 interface PortalRouteChildren {
   PortalProfileRoute: typeof PortalProfileRoute
+  PortalSheetRoute: typeof PortalSheetRoute
   PortalAccountantBillingRoute: typeof PortalAccountantBillingRoute
   PortalAccountantDashboardRoute: typeof PortalAccountantDashboardRoute
   PortalAccountantFinancialYearRoute: typeof PortalAccountantFinancialYearRoute
@@ -1133,6 +1287,7 @@ interface PortalRouteChildren {
   PortalAdminJobsRoute: typeof PortalAdminJobsRoute
   PortalAdminLeaveRoute: typeof PortalAdminLeaveRoute
   PortalAdminLossReportRoute: typeof PortalAdminLossReportRoute
+  PortalAdminMasterLibraryRoute: typeof PortalAdminMasterLibraryRoute
   PortalAdminMastersRoute: typeof PortalAdminMastersRoute
   PortalAdminNotificationsRoute: typeof PortalAdminNotificationsRoute
   PortalAdminOrdersRoute: typeof PortalAdminOrdersRoute
@@ -1141,18 +1296,24 @@ interface PortalRouteChildren {
   PortalAdminPaymentsRoute: typeof PortalAdminPaymentsRoute
   PortalAdminReportsRoute: typeof PortalAdminReportsRoute
   PortalAdminSettingsRoute: typeof PortalAdminSettingsRoute
+  PortalAdminSheetRoute: typeof PortalAdminSheetRoute
   PortalAdminUsersRoute: typeof PortalAdminUsersRoute
   PortalAdminWhatsappRoute: typeof PortalAdminWhatsappRoute
+  PortalAdminZonesRoute: typeof PortalAdminZonesRoute
   PortalCostControlDashboardRoute: typeof PortalCostControlDashboardRoute
   PortalCostControlNotificationsRoute: typeof PortalCostControlNotificationsRoute
+  PortalEmployeeBoardRoute: typeof PortalEmployeeBoardRoute
   PortalEmployeeDashboardRoute: typeof PortalEmployeeDashboardRoute
+  PortalEmployeeGridRoute: typeof PortalEmployeeGridRoute
   PortalEmployeeJobsRoute: typeof PortalEmployeeJobsRoute
   PortalEmployeeNewOrderRoute: typeof PortalEmployeeNewOrderRoute
   PortalEmployeeNotificationsRoute: typeof PortalEmployeeNotificationsRoute
   PortalEmployeeOrdersRoute: typeof PortalEmployeeOrdersRoute
   PortalEmployeePaymentsRoute: typeof PortalEmployeePaymentsRoute
+  PortalEmployeeSheetRoute: typeof PortalEmployeeSheetRoute
   PortalEmployeeUploadOrdersRoute: typeof PortalEmployeeUploadOrdersRoute
   PortalFieldDashboardRoute: typeof PortalFieldDashboardRoute
+  PortalFieldGridRoute: typeof PortalFieldGridRoute
   PortalFieldLeaveRoute: typeof PortalFieldLeaveRoute
   PortalFieldNotificationsRoute: typeof PortalFieldNotificationsRoute
   PortalFieldPaymentsRoute: typeof PortalFieldPaymentsRoute
@@ -1172,6 +1333,7 @@ interface PortalRouteChildren {
 
 const PortalRouteChildren: PortalRouteChildren = {
   PortalProfileRoute: PortalProfileRoute,
+  PortalSheetRoute: PortalSheetRoute,
   PortalAccountantBillingRoute: PortalAccountantBillingRoute,
   PortalAccountantDashboardRoute: PortalAccountantDashboardRoute,
   PortalAccountantFinancialYearRoute: PortalAccountantFinancialYearRoute,
@@ -1188,6 +1350,7 @@ const PortalRouteChildren: PortalRouteChildren = {
   PortalAdminJobsRoute: PortalAdminJobsRoute,
   PortalAdminLeaveRoute: PortalAdminLeaveRoute,
   PortalAdminLossReportRoute: PortalAdminLossReportRoute,
+  PortalAdminMasterLibraryRoute: PortalAdminMasterLibraryRoute,
   PortalAdminMastersRoute: PortalAdminMastersRoute,
   PortalAdminNotificationsRoute: PortalAdminNotificationsRoute,
   PortalAdminOrdersRoute: PortalAdminOrdersRoute,
@@ -1196,18 +1359,24 @@ const PortalRouteChildren: PortalRouteChildren = {
   PortalAdminPaymentsRoute: PortalAdminPaymentsRoute,
   PortalAdminReportsRoute: PortalAdminReportsRoute,
   PortalAdminSettingsRoute: PortalAdminSettingsRoute,
+  PortalAdminSheetRoute: PortalAdminSheetRoute,
   PortalAdminUsersRoute: PortalAdminUsersRoute,
   PortalAdminWhatsappRoute: PortalAdminWhatsappRoute,
+  PortalAdminZonesRoute: PortalAdminZonesRoute,
   PortalCostControlDashboardRoute: PortalCostControlDashboardRoute,
   PortalCostControlNotificationsRoute: PortalCostControlNotificationsRoute,
+  PortalEmployeeBoardRoute: PortalEmployeeBoardRoute,
   PortalEmployeeDashboardRoute: PortalEmployeeDashboardRoute,
+  PortalEmployeeGridRoute: PortalEmployeeGridRoute,
   PortalEmployeeJobsRoute: PortalEmployeeJobsRoute,
   PortalEmployeeNewOrderRoute: PortalEmployeeNewOrderRoute,
   PortalEmployeeNotificationsRoute: PortalEmployeeNotificationsRoute,
   PortalEmployeeOrdersRoute: PortalEmployeeOrdersRoute,
   PortalEmployeePaymentsRoute: PortalEmployeePaymentsRoute,
+  PortalEmployeeSheetRoute: PortalEmployeeSheetRoute,
   PortalEmployeeUploadOrdersRoute: PortalEmployeeUploadOrdersRoute,
   PortalFieldDashboardRoute: PortalFieldDashboardRoute,
+  PortalFieldGridRoute: PortalFieldGridRoute,
   PortalFieldLeaveRoute: PortalFieldLeaveRoute,
   PortalFieldNotificationsRoute: PortalFieldNotificationsRoute,
   PortalFieldPaymentsRoute: PortalFieldPaymentsRoute,
