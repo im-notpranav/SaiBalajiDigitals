@@ -15,12 +15,16 @@ import { PackageSearch } from "lucide-react";
 import { SortableHead, useSortableTable } from "@/hooks/useSortableTable";
 import { storeLabel, storeSubLabel } from "@/lib/stores";
 import { EmptyState, ErrorState, LoadingState, TableStateRow } from "@/components/layout/PageStates";
+import { useRowLink, type RowLinkTarget } from "@/hooks/useRowLink";
+import { cn } from "@/lib/utils";
 
 interface OrdersTableProps {
   orders: Order[];
   showCreator?: boolean;
   showAmount?: boolean;
   action?: (o: Order) => ReactNode;
+  /** Where a click anywhere on the order's row or card goes; null leaves that row inert. */
+  rowLink?: (o: Order) => RowLinkTarget | null;
   /** The list is still loading; shown in place of the rows. */
   loading?: boolean;
   /** The list failed to load; shown in place of the rows, with a retry. */
@@ -53,6 +57,7 @@ export function OrdersTable({
   showCreator,
   showAmount = true,
   action,
+  rowLink,
   loading,
   error,
   onRetry,
@@ -75,6 +80,12 @@ export function OrdersTable({
     },
   );
 
+  const linkProps = useRowLink();
+  const rowProps = (o: Order, className?: string) => {
+    const { className: linkClass, ...handlers } = linkProps(rowLink?.(o));
+    return { ...handlers, className: cn(className, linkClass) };
+  };
+
   const colSpan = (showCreator ? 1 : 0) + (showAmount ? 1 : 0) + 6 + (action ? 1 : 0);
   const failed = !loading && !!error && orders.length === 0;
   const empty = !loading && !failed && sorted.length === 0;
@@ -93,7 +104,7 @@ export function OrdersTable({
         ) : (
           <ul className="grid gap-3">
             {sorted.map((o) => (
-              <li key={o.id} className="surface-panel grid gap-2 p-4">
+              <li key={o.id} {...rowProps(o, "surface-panel grid gap-2 p-4")}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div className="font-mono text-sm font-semibold text-primary">{o.order_no}</div>
@@ -179,7 +190,7 @@ export function OrdersTable({
               )}
               {!loading &&
                 sorted.map((o) => (
-                  <TableRow key={o.id} className="group">
+                  <TableRow key={o.id} {...rowProps(o, "group")}>
                     <TableCell className="whitespace-nowrap font-mono text-xs font-semibold text-primary">{o.order_no}</TableCell>
                     <TableCell className="font-medium">{o.client_name}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">

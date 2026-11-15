@@ -125,6 +125,7 @@ function AdminOrders() {
         onRetry={() => refetch()}
         orders={data?.orders || []}
         showCreator
+        rowLink={(o) => ({ to: "/admin/orders/$id", params: { id: String(o.id) } })}
         emptyText={filters.search.waiting ? "No allotted order is waiting for its CSM." : undefined}
         action={(o) => (
           <div className="flex justify-end gap-2">

@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { StatusBadge } from "@/components/orders/StatusBadge";
 import { inr } from "@/lib/format";
 import { format } from "date-fns";
+import { useRowLink } from "@/hooks/useRowLink";
 
 export const Route = createFileRoute("/_portal/admin/overdue")({
   head: () => ({ meta: [{ title: "Overdue Orders — SB OMS" }] }),
@@ -22,6 +23,7 @@ export const Route = createFileRoute("/_portal/admin/overdue")({
 });
 
 function OverduePage() {
+  const rowLink = useRowLink();
   const { days = 5 } = Route.useSearch();
   const [daysInput, setDaysInput] = useState(String(days));
   const [threshold, setThreshold] = useState(days);
@@ -89,7 +91,7 @@ function OverduePage() {
                 </TableHeader>
                 <TableBody>
                   {data?.orders.map((o) => (
-                    <TableRow key={o.id}>
+                    <TableRow key={o.id} {...rowLink({ to: "/admin/orders/$id", params: { id: String(o.id) } })}>
                       <TableCell className="font-medium">
                         {o.order_no}
                         <div className="text-xs text-muted-foreground font-normal mt-0.5">{o.client_name}</div>

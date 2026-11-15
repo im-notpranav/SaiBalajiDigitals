@@ -67,6 +67,7 @@ function MyOrders() {
         onRetry={() => refetch()}
         orders={orders} 
         waitingLabel={WAITING_LABEL}
+        rowLink={(o) => ({ to: "/employee/orders/$id", params: { id: String(o.id) } })}
         emptyText={filters.search.waiting ? "Nothing is waiting for your stores and items." : undefined}
         action={(o) => (
           <div className="flex justify-end gap-2">

@@ -65,6 +65,11 @@ function BillingQueue() {
         onRetry={() => refetch()}
         orders={queue}
         showCreator
+        rowLink={(o) =>
+          (o.store_count ?? o.stores?.length ?? 1) === 0
+            ? null
+            : { to: "/accountant/billing/$id", params: { id: String(o.id) } }
+        }
         action={(o) => {
           // No stores means no items either: nothing to invoice until the CSM adds them.
           if ((o.store_count ?? o.stores?.length ?? 1) === 0) {

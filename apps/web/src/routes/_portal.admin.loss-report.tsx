@@ -11,6 +11,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { inr } from "@/lib/format";
 import { remarkLabel } from "@/lib/constants";
 import { format, subDays } from "date-fns";
+import { useRowLink } from "@/hooks/useRowLink";
+
+/** A loss or adjustment row opens its order; one with no order stays put. */
+const orderLink = (id: unknown) => (id ? { to: "/admin/orders/$id", params: { id: String(id) } } : null);
 
 export const Route = createFileRoute("/_portal/admin/loss-report")({
   head: () => ({ meta: [{ title: "Loss Report — SB OMS" }] }),
@@ -18,6 +22,7 @@ export const Route = createFileRoute("/_portal/admin/loss-report")({
 });
 
 function LossReportPage() {
+  const rowLink = useRowLink();
   const [startDate, setStartDate] = useState(() => format(subDays(new Date(), 30), "yyyy-MM-dd"));
   const [endDate, setEndDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
   
@@ -102,7 +107,7 @@ function LossReportPage() {
                 </TableHeader>
                 <TableBody>
                   {data?.items?.map((item: any) => (
-                    <TableRow key={item.id}>
+                    <TableRow key={item.id} {...rowLink(orderLink(item.order_id))}>
                       <TableCell className="font-medium">
                         {item.order?.order_no || "Unknown"}
                         <div className="text-xs text-muted-foreground font-normal mt-0.5">{item.order?.client_name}</div>
@@ -165,6 +170,7 @@ function LossReportPage() {
  * write-off figure. Each row's effect is signed: + billed more, − billed less.
  */
 function AdjustmentsSection({ data }: { data: any }) {
+  const rowLink = useRowLink();
   const rows: any[] = data.adjustments ?? [];
   const byType = Object.entries((data.adjustments_by_type ?? {}) as Record<string, { count: number; amount: number }>);
   const net = Number(data.net_adjustment ?? 0);
@@ -187,7 +193,7 @@ function AdjustmentsSection({ data }: { data: any }) {
           </TableHeader>
           <TableBody>
             {rows.map((a) => (
-              <TableRow key={a.key}>
+              <TableRow key={a.key} {...rowLink(orderLink(a.order_id))}>
                 <TableCell className="font-medium">
                   {a.order?.order_no || "Unknown"}
                   <div className="text-xs text-muted-foreground font-normal mt-0.5">{a.order?.client_name}</div>
