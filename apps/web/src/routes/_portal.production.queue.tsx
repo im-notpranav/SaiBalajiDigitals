@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import type { Order, OrderItem } from "@sb-oms/shared-types";
 import { storeLabel, storeSubLabel } from "@/lib/stores";
+import { friendlyError } from "@/lib/friendly-error";
 
 type QueueFilter = "all" | "todo" | "flagged" | "done";
 
@@ -56,7 +57,7 @@ function ProductionQueue() {
       toast.success(vars.done ? "Marked complete" : "Reopened");
     },
     onError: (err: any) =>
-      toast.error("Could not update item", { description: err?.response?.data?.message || err.message }),
+      toast.error("Could not update item", { description: friendlyError(err) }),
   });
 
   /** The item being sent back, while its reason is typed. */
@@ -279,7 +280,7 @@ function SendBackDialog({ target, onClose }: { target: { order: Order; item: Ord
       onClose();
     },
     onError: (err: any) =>
-      toast.error("Could not send it back", { description: err?.response?.data?.message || err.message }),
+      toast.error("Could not send it back", { description: friendlyError(err) }),
   });
   const ok = reason.trim().length >= 3;
 

@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { shrinkImage } from "@/lib/image";
 import { cn } from "@/lib/utils";
+import { friendlyError } from "@/lib/friendly-error";
 
 /**
  * Pieces shared by the two pages where an admin manages people: Users (office accounts) and
@@ -96,7 +97,7 @@ export async function applyPhotoDraft(
     else if (draft.kind === "remove") await remove();
     return null;
   } catch (err: any) {
-    return err?.response?.data?.message || err?.message || "Could not save the picture.";
+    return friendlyError(err) || "Could not save the picture.";
   }
 }
 
@@ -227,7 +228,7 @@ export function QuickPhoto({
       toast.success(`Picture updated for ${name}`);
     } catch (err: any) {
       setPreview(null);
-      toast.error(err?.response?.data?.message || "Could not save that picture. Use a JPG or PNG.");
+      toast.error(friendlyError(err, "Could not save that picture. Use a JPG or PNG."));
     } finally {
       setSaving(false);
       if (input.current) input.current.value = "";

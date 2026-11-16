@@ -1,4 +1,5 @@
 import { apiFetch } from "./client";
+import { friendlyError } from "@/lib/friendly-error";
 
 /** Client for the work-allocation portal: field staff and the allocation masters. */
 
@@ -132,9 +133,7 @@ export const updateCsmCode = (id: number, data: Partial<CsmCode>) =>
 
 /** The API answers validation failures as { message, errors: ["field: problem"] }. */
 export function apiErrorMessage(err: any, fallback: string): string {
-  const data = err?.response?.data;
-  if (Array.isArray(data?.errors) && data.errors.length) return data.errors.join(", ");
-  return data?.message || fallback;
+  return friendlyError(err, fallback);
 }
 
 // --- Work jobs -------------------------------------------------------------

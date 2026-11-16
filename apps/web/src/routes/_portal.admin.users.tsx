@@ -48,6 +48,7 @@ import {
 import { toast } from "sonner";
 import { useAuth } from "@/lib/auth-store";
 import { ROLES, roleLabel } from "@/lib/constants";
+import { friendlyError } from "@/lib/friendly-error";
 
 export const Route = createFileRoute("/_portal/admin/users")({
   head: () => ({ meta: [{ title: "User Management — SB OMS" }] }),
@@ -167,7 +168,7 @@ function UsersPage() {
       setNewPassword("");
       setConfirmPassword("");
     },
-    onError: (err: any) => toast.error(err?.response?.data?.message || "Failed to reset password"),
+    onError: (err: any) => toast.error(friendlyError(err, "Failed to reset password")),
   });
 
   const toggleMutation = useMutation({
@@ -178,8 +179,7 @@ function UsersPage() {
       queryClient.invalidateQueries({ queryKey: ["field-staff"] });
     },
     onError: (err: any) => {
-      const data = err?.response?.data;
-      toast.error(data?.message || "Failed to update user status");
+      toast.error(friendlyError(err, "Failed to update user status"));
     }
   });
 

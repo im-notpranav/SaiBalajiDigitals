@@ -13,11 +13,12 @@ import { inr } from "@/lib/format";
 import { remarkLabel } from "@/lib/constants";
 import { createOrderAdjustment, decideOrderAdjustment, requestItemAdjustment } from "@/api/orders";
 import type { OrderAdjustment, OrderItem } from "@sb-oms/shared-types";
+import { friendlyError } from "@/lib/friendly-error";
 
 type AmountType = "ExtraAmount" | "LessAmount";
 type LessMode = "discount" | "newAmount";
 
-const errText = (err: any) => err?.response?.data?.message || err?.message || "Something went wrong";
+const errText = (err: any) => friendlyError(err) || "Something went wrong";
 
 /**
  * The figure for an Extra / Less Amount. A Less Amount can be typed as the discount or as the

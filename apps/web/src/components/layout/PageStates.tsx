@@ -5,6 +5,7 @@ import { InlineBrandLoader } from "@/components/brand/BrandLoader";
 import { Button } from "@/components/ui/button";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { friendlyError } from "@/lib/friendly-error";
 
 /**
  * The three states every data page passes through, drawn the same way everywhere: a quiet
@@ -13,14 +14,8 @@ import { cn } from "@/lib/utils";
  */
 
 /** The server's own message when there is one, so the person sees why it failed. */
-export function errorText(err: unknown, fallback = "Something went wrong."): string {
-  const data = (err as { response?: { data?: { message?: string; errors?: string[] } } })
-    ?.response?.data;
-  if (Array.isArray(data?.errors) && data.errors.length) return data.errors.join(", ");
-  if (data?.message) return data.message;
-  if (err instanceof Error && err.message === "Network Error")
-    return "Can't reach the server. Check your connection.";
-  return fallback;
+export function errorText(err: unknown, fallback?: string): string {
+  return friendlyError(err, fallback);
 }
 
 export function LoadingState({

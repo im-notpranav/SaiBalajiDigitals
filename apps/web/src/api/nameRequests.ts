@@ -2,6 +2,7 @@ import { toast } from "sonner";
 import { apiFetch } from "./client";
 import type { AreaLocality } from "./allocation";
 import type { BulkPreview } from "./orders";
+import { friendlyError } from "@/lib/friendly-error";
 
 /**
  * Master Library pick-lists and name requests. Only the admin adds client, media and location
@@ -107,7 +108,7 @@ export async function requestNames(names: MissingName[]) {
 export function toastMissingNames(err: unknown, opts: { isAdmin?: boolean } = {}): boolean {
   const missing = missingNamesOf(err);
   if (missing.length === 0) return false;
-  toast.error((err as any)?.response?.data?.message ?? "Some names are not in Master Library.", {
+  toast.error(friendlyError(err, "Some names are not in Master Library."), {
     duration: 12000,
     action: opts.isAdmin
       ? { label: "Open Master Library", onClick: () => void window.open("/admin/master-library", "_blank", "noopener") }

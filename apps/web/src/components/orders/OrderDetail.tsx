@@ -18,6 +18,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { AdjustmentFigure, figureOf, OrderAdjustmentsPanel, RequestLineAdjustmentDialog } from "./OrderAdjustments";
 import { storeRef } from "@/lib/stores";
 import { useQueryClient } from "@tanstack/react-query";
+import { friendlyError } from "@/lib/friendly-error";
 
 export interface OrderDetailProps {
   order: Order | any;
@@ -51,7 +52,7 @@ export function OrderDetail({ order, actions, related, userRole, currentUserId }
       refresh();
       queryClient.invalidateQueries({ queryKey: ["orders"] });
     } catch (err: any) {
-      toast.error("Couldn't mark installed", { description: err?.response?.data?.message || err.message });
+      toast.error("Couldn't mark installed", { description: friendlyError(err) });
     } finally {
       setIsSubmitting(false);
     }
@@ -64,7 +65,7 @@ export function OrderDetail({ order, actions, related, userRole, currentUserId }
       toast.success(po.trim() ? "Store PO saved" : "Store PO cleared");
       refresh();
     } catch (err: any) {
-      toast.error("Couldn't save the PO", { description: err?.response?.data?.message || err.message });
+      toast.error("Couldn't save the PO", { description: friendlyError(err) });
     } finally {
       setIsSubmitting(false);
     }
@@ -77,7 +78,7 @@ export function OrderDetail({ order, actions, related, userRole, currentUserId }
       toast.success(po.trim() ? "Job PO saved" : "Job PO cleared");
       refresh();
     } catch (err: any) {
-      toast.error("Couldn't save the PO", { description: err?.response?.data?.message || err.message });
+      toast.error("Couldn't save the PO", { description: friendlyError(err) });
     } finally {
       setIsSubmitting(false);
     }
@@ -117,7 +118,7 @@ export function OrderDetail({ order, actions, related, userRole, currentUserId }
       queryClient.invalidateQueries({ queryKey: ["order", order.id.toString()] });
       queryClient.invalidateQueries({ queryKey: ["orders"] });
     } catch (err: any) {
-      toast.error("Failed to set remark", { description: err?.response?.data?.message || err.message });
+      toast.error("Failed to set remark", { description: friendlyError(err) });
     } finally {
       setIsSubmitting(false);
     }

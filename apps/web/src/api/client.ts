@@ -1,4 +1,5 @@
 import axios from "axios";
+import { friendlyError } from "@/lib/friendly-error";
 
 export const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_URL || "/api",
@@ -8,14 +9,30 @@ export const apiClient = axios.create({
 // Optionally add interceptors here
 apiClient.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
+    // A failed download arrives as a Blob; read it so the server's message is not lost.
+    const data = error?.response?.data;
+    if (typeof Blob !== "undefined" && data instanceof Blob && data.type.includes("json")) {
+      try {
+        error.response.data = JSON.parse(await data.text());
+      } catch {
+        // Not JSON after all; the status alone decides the wording.
+      }
+    }
+
+    // Every screen that shows err.message now shows plain words, never
+    // "Request failed with status code 401".
+    if (error && typeof error === "object") error.message = friendlyError(error);
+
     // /auth/me only asks who is signed in; a 401 there means "nobody", which the
     // portal guard already handles. Redirecting on it would yank logged-out visitors
     // off public pages like the 404.
     const isWhoAmI = error.config?.url === "/auth/me";
     if (error.response && error.response.status === 401 && !isWhoAmI) {
       if (typeof window !== "undefined" && !window.location.pathname.includes("/login")) {
-        window.location.href = "/login";
+        // Tell the login page why the person landed there, and bring them back after.
+        const here = window.location.pathname + window.location.search;
+        window.location.href = `/login?expired=1&redirect=${encodeURIComponent(here)}`;
       }
     }
     return Promise.reject(error);

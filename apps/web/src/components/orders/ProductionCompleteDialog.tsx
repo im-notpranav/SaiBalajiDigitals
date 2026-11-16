@@ -12,6 +12,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { friendlyError } from "@/lib/friendly-error";
 
 export type CompleteRequest = { order_id: number; item_ids?: number[] }[];
 
@@ -52,7 +53,7 @@ export function ProductionCompleteDialog({
     },
     onError: (err: unknown) => {
       const e = err as { response?: { data?: { message?: string } }; message?: string } | null;
-      toast.error("Could not mark complete", { description: e?.response?.data?.message ?? e?.message });
+      toast.error("Could not mark complete", { description: friendlyError(e) });
     },
   });
 

@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { inr } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { Order } from "@sb-oms/shared-types";
+import { friendlyError } from "@/lib/friendly-error";
 
 export const Route = createFileRoute("/_portal/accountant/billing")({
   head: () => ({ meta: [{ title: "Billing Queue — SB OMS" }] }),
@@ -64,7 +65,7 @@ function BillingQueue() {
       setPicked(new Set());
     },
     onError: (err: any) =>
-      toast.error("Could not send the reminder", { description: err?.response?.data?.message || err?.message }),
+      toast.error("Could not send the reminder", { description: friendlyError(err) }),
   });
   const total = queue.reduce((s: number, o: Order) => s + (o.total_amount || 0), 0);
   const awaitingPayment = queue.filter((o: Order) => o.status === "BillingCompleted").length;

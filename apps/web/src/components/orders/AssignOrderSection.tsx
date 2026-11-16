@@ -23,15 +23,12 @@ import { OrderStageBadge } from "@/components/orders/StatusBadge";
 import { storeLabel, storeSubLabel } from "@/lib/stores";
 import { ProductionCompleteDialog, type CompleteRequest } from "./ProductionCompleteDialog";
 import type { Order, OrderItem } from "@sb-oms/shared-types";
+import { friendlyError } from "@/lib/friendly-error";
 
 type Staff = { id: number; name: string };
 type Assignment = { item_id: number; user_ids: number[] };
 
-type ApiError = { message?: string; response?: { data?: { message?: string } } };
-const errorText = (err: unknown) => {
-  const e = err as ApiError | null;
-  return e?.response?.data?.message || e?.message;
-};
+const errorText = (err: unknown) => friendlyError(err);
 const isClosed = (o: Order) => o.status === "Completed" || o.status === "PaymentReceived";
 const assignedCount = (i: OrderItem) => i.assignments?.length ?? 0;
 const NONE: ReadonlySet<number> = new Set();

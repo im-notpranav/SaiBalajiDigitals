@@ -11,15 +11,17 @@ export const Route = createFileRoute("/login")({
     ],
   }),
   // The page a signed-out user was sent away from; they go back there after sign-in.
-  validateSearch: (search: Record<string, unknown>): { redirect?: string } => ({
+  // `expired` is set when the app sent them here because their session ran out.
+  validateSearch: (search: Record<string, unknown>): { redirect?: string; expired?: boolean } => ({
     redirect: typeof search.redirect === "string" ? search.redirect : undefined,
+    expired: search.expired === 1 || search.expired === "1" || search.expired === true ? true : undefined,
   }),
   component: LoginPage,
 });
 
 function LoginPage() {
   const navigate = useNavigate();
-  const { redirect } = Route.useSearch();
+  const { redirect, expired } = Route.useSearch();
   const { user, isLoading } = useAuth();
 
   useEffect(() => {
@@ -28,5 +30,5 @@ function LoginPage() {
     }
   }, [user, isLoading, redirect, navigate]);
 
-  return <LoginPageComponent />;
+  return <LoginPageComponent expired={expired} />;
 }

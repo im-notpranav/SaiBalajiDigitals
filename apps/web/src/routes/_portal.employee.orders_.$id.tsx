@@ -12,6 +12,7 @@ import { useAuth } from "@/lib/auth-store";
 import { formatDistanceToNow } from "date-fns";
 import type { OrderItem } from "@sb-oms/shared-types";
 import { billingRollup, installedAt } from "@/lib/stores";
+import { friendlyError } from "@/lib/friendly-error";
 
 /** Statuses the edit page opens for (header always; line items only while Active or Installed). */
 const EDITABLE = ["Active", "Installed", "BillingCompleted", "Pending"];
@@ -40,7 +41,7 @@ function OrderDetailEmployee() {
       toast.success("Installation confirmed", { description: "The order is now ready for billing." });
     },
     onError: (err: any) =>
-      toast.error("Couldn't mark installed", { description: err?.response?.data?.message || err.message }),
+      toast.error("Couldn't mark installed", { description: friendlyError(err) }),
   });
 
   // Declared before the early returns below: a hook that only runs on the loaded path
@@ -59,7 +60,7 @@ function OrderDetailEmployee() {
       toast.success("Follow-up note added");
     },
     onError: (err: any) =>
-      toast.error("Failed to add note", { description: err?.response?.data?.message || err.message }),
+      toast.error("Failed to add note", { description: friendlyError(err) }),
   });
 
   if (isLoading) {

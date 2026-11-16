@@ -17,6 +17,7 @@ import { useAuth } from "@/lib/auth-store";
 import { RESERVED_NUMBERS, checkOrderNo } from "@/lib/order-number";
 import { SheetLinkCard } from "@/components/allocation/SheetLinkCard";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from "@/components/ui/dialog";
+import { friendlyError } from "@/lib/friendly-error";
 
 export const Route = createFileRoute("/_portal/admin/settings")({
   head: () => ({ meta: [{ title: "System Settings — SB OMS" }] }),
@@ -48,7 +49,7 @@ function SettingsPage() {
       setNewOrderNo("");
     },
     onError: (err: any) => {
-      toast.error(err.response?.data?.message || "Failed to update sequence");
+      toast.error(friendlyError(err, "Failed to update sequence"));
     }
   });
 

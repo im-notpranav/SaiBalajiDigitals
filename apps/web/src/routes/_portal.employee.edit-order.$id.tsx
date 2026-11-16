@@ -9,6 +9,7 @@ import { toastMissingNames } from "@/api/nameRequests";
 import type { CreateOrderInput } from "@sb-oms/shared-types";
 import { useAuth } from "@/lib/auth-store";
 import { Loader2 } from "lucide-react";
+import { friendlyError } from "@/lib/friendly-error";
 
 export const Route = createFileRoute("/_portal/employee/edit-order/$id")({
   head: () => ({ meta: [{ title: "Edit Order — SB OMS" }] }),
@@ -89,12 +90,7 @@ function EditOrderEmployee() {
     } catch (err: any) {
       // A name not in Master Library: say which, and offer to ask the admin for it.
       if (toastMissingNames(err, { isAdmin })) return;
-      const data = err?.response?.data;
-      if (data?.errors && Array.isArray(data.errors)) {
-        toast.error(`Validation Error: ${data.errors.join(", ")}`);
-      } else {
-        toast.error("Failed to update order", { description: data?.message || err.message });
-      }
+      toast.error("Failed to update order", { description: friendlyError(err) });
     } finally {
       setSaving(false);
     }

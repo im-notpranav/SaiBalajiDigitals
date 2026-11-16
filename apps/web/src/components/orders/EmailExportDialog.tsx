@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { emailExport, getRecentRecipients, type EmailExportPayload } from "@/api/orders";
 import { useDebounce } from "@/hooks/use-debounce";
 import { cn } from "@/lib/utils";
+import { friendlyError } from "@/lib/friendly-error";
 
 interface EmailExportDialogProps {
   /** Current filter context to include in the export */
@@ -57,7 +58,7 @@ export function EmailExportDialog({
     },
     onError: (err: any) => {
       toast.error("Failed to send", {
-        description: err?.response?.data?.message || err.message,
+        description: friendlyError(err),
       });
     },
   });

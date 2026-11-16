@@ -32,6 +32,7 @@ import { inr } from "@/lib/format";
 import { useAuth } from "@/lib/auth-store";
 import { storeRef, billingRollup } from "@/lib/stores";
 import { format, formatDistanceToNow } from "date-fns";
+import { friendlyError } from "@/lib/friendly-error";
 
 export const Route = createFileRoute("/_portal/accountant/billing_/$id")({
   head: () => ({ meta: [{ title: "Order Details — SB OMS" }] }),
@@ -93,7 +94,7 @@ function OrderDetailAccountant() {
       toast.success("Payment recorded");
     },
     onError: (err: any) =>
-      toast.error("Failed to record payment", { description: err?.response?.data?.message || err.message }),
+      toast.error("Failed to record payment", { description: friendlyError(err) }),
   });
 
   const editBillingMutation = useMutation({
@@ -105,7 +106,7 @@ function OrderDetailAccountant() {
       toast.success("Billing details updated");
     },
     onError: (err: any) =>
-      toast.error("Failed to update", { description: err?.response?.data?.message || err.message }),
+      toast.error("Failed to update", { description: friendlyError(err) }),
   });
 
   const editPaymentMutation = useMutation({
@@ -117,7 +118,7 @@ function OrderDetailAccountant() {
       toast.success("Payment details updated");
     },
     onError: (err: any) =>
-      toast.error("Failed to update", { description: err?.response?.data?.message || err.message }),
+      toast.error("Failed to update", { description: friendlyError(err) }),
   });
 
   const followUpMutation = useMutation({
@@ -128,7 +129,7 @@ function OrderDetailAccountant() {
       toast.success("Follow-up note added");
     },
     onError: (err: any) =>
-      toast.error("Failed to add note", { description: err?.response?.data?.message || err.message }),
+      toast.error("Failed to add note", { description: friendlyError(err) }),
   });
 
   if (isLoading) {
@@ -205,7 +206,7 @@ function OrderDetailAccountant() {
       toast.success(`Invoice raised on ${order.order_no}`);
     } catch (err: any) {
       toast.error("Failed to submit invoice", {
-        description: err?.response?.data?.message || err.message,
+        description: friendlyError(err),
       });
     } finally {
       setSubmitting(false);

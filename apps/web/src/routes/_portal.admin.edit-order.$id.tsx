@@ -9,6 +9,7 @@ import { OrderForm } from "@/components/orders/OrderForm";
 import type { CreateOrderInput } from "@sb-oms/shared-types";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/lib/auth-store";
+import { friendlyError } from "@/lib/friendly-error";
 
 export const Route = createFileRoute("/_portal/admin/edit-order/$id")({
   head: () => ({ meta: [{ title: "Edit Order — SB OMS" }] }),
@@ -82,12 +83,7 @@ function EditOrderAdmin() {
       queryClient.invalidateQueries({ queryKey: ["orders"] });
       // A name not in Master Library: say which, and offer to add it.
       if (toastMissingNames(err, { isAdmin: true })) return;
-      const data = err?.response?.data;
-      if (data?.errors && Array.isArray(data.errors)) {
-        toast.error(`Validation Error: ${data.errors.map((e: any) => `${e.path.join(".")}: ${e.message}`).join(", ")}`);
-      } else {
-        toast.error("Failed to update order", { description: data?.message || err.message });
-      }
+      toast.error("Failed to update order", { description: friendlyError(err) });
     } finally {
       setSaving(false);
     }

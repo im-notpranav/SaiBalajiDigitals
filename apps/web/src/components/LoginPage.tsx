@@ -7,8 +7,10 @@ import {
   Loader2,
   Check,
   AlertCircle,
+  Clock,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-store";
+import { friendlyError, SESSION_EXPIRED_TEXT } from "@/lib/friendly-error";
 import { LogoImage } from "@/components/brand/Logo";
 import { AssemblingLogo } from "@/components/brand/BrandLoader";
 import { PasswordToggle } from "@/components/ui/password-input";
@@ -20,7 +22,8 @@ const easeOutExpo = [0.16, 1, 0.3, 1] as const;
 /** Right after the index.html splash the logo has just assembled, so here it only fades in. */
 const afterSplash = () => typeof window !== "undefined" && !!window.__sbSplashShown;
 
-export default function LoginPage() {
+/** `expired`: the app sent them here because their session ran out, so say why. */
+export default function LoginPage({ expired = false }: { expired?: boolean } = {}) {
   const { login } = useAuth();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -31,6 +34,7 @@ export default function LoginPage() {
   const [passwordShake, setPasswordShake] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(expired ? SESSION_EXPIRED_TEXT : null);
   const [success, setSuccess] = useState(false);
   // The words wait for the cube to click shut, unless the splash already showed the logo.
   const [heroDelay] = useState(() => (afterSplash() ? 0.1 : 0.85));
@@ -62,7 +66,8 @@ export default function LoginPage() {
       setSuccess(true);
     } catch (err) {
       setSubmitting(false);
-      setFormError(err instanceof Error ? err.message : "Sign in failed");
+      setNotice(null);
+      setFormError(friendlyError(err, "Couldn't sign you in. Please try again."));
       setUsernameState("error");
       setPasswordState("error");
       setPasswordShake((n) => n + 1);
@@ -267,6 +272,17 @@ export default function LoginPage() {
                 </FormField>
 
                 <AnimatePresence>
+                  {notice && !formError && (
+                    <motion.div
+                      role="status"
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -4 }}
+                      className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700 dark:border-amber-400/30 dark:bg-amber-500/10 dark:text-amber-300"
+                    >
+                      <Clock className="h-4 w-4" /> {notice}
+                    </motion.div>
+                  )}
                   {formError && (
                     <motion.div
                       initial={{ opacity: 0, y: -4 }}
