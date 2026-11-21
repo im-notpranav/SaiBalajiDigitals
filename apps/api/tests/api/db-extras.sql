@@ -134,3 +134,27 @@ ALTER TABLE "AppSetting" ADD CONSTRAINT "AppSetting_key_check" CHECK ("key" ~ '^
 -- Whole-order adjustments: Extra / Less only, always a positive figure (20261109000000).
 ALTER TABLE "OrderAdjustment" ADD CONSTRAINT "OrderAdjustment_type_check" CHECK ("type" IN ('ExtraAmount', 'LessAmount'));
 ALTER TABLE "OrderAdjustment" ADD CONSTRAINT "OrderAdjustment_amount_check" CHECK ("amount" > 0);
+
+-- 20261122030000_machines
+-- The six machines.
+INSERT INTO "Machine" ("name", "sort_order") VALUES
+  ('CNC', 1), ('Epson', 2), ('Solvent', 3), ('UV Machine', 4), ('Outward', 5), ('Order Sheet', 6)
+ON CONFLICT ("name") DO NOTHING;
+
+-- A new line, or a line whose line item changes, takes the line item's default machine unless
+-- one was given. Every path that writes lines (forms, bulk upload, approved requests) gets it.
+CREATE OR REPLACE FUNCTION order_item_default_machine() RETURNS trigger AS $$
+BEGIN
+  IF (TG_OP = 'INSERT' AND NEW.machine_id IS NULL)
+     OR (TG_OP = 'UPDATE' AND NEW.media IS DISTINCT FROM OLD.media AND NEW.machine_id IS NOT DISTINCT FROM OLD.machine_id) THEN
+    SELECT m.default_machine_id INTO NEW.machine_id
+      FROM "Media" m WHERE lower(m.name) = lower(NEW.media) LIMIT 1;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS order_item_default_machine ON "OrderItem";
+CREATE TRIGGER order_item_default_machine
+  BEFORE INSERT OR UPDATE OF media ON "OrderItem"
+  FOR EACH ROW EXECUTE FUNCTION order_item_default_machine();

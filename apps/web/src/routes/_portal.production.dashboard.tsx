@@ -3,6 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowRight, CheckCircle2, Factory, Flag, Ruler, Workflow } from "lucide-react";
 import { format } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
+import { MachineQueuePanel } from "@/components/production/MachineQueuePanel";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { EmptyState, ErrorState, LoadingState } from "@/components/layout/PageStates";
 import { KpiCard } from "@/components/kpi/KpiCard";
@@ -73,6 +74,8 @@ function ProductionDashboard() {
           </Button>
         }
       />
+
+      <MachineQueuePanel />
 
       <DashboardGuide>
         <p>

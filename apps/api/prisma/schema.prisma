@@ -141,6 +141,9 @@ model User {
   assignmentsMade      OrderItemAssignment[] @relation("AssignmentAssigner")
   followUps            PaymentFollowUp[]     @relation("FollowUpAuthor")
   orderNotes           OrderNote[]           @relation("OrderNoteAuthor")
+  /// Operators only: the machine they work.
+  machine_id           Int?
+  machine              Machine?              @relation("OperatorMachine", fields: [machine_id], references: [id], onDelete: SetNull)
   rateCardsCreated     RateCard[]            @relation("RateCardCreator")
   rateCardsDecided     RateCard[]            @relation("RateCardDecider")
   changeRequests       ChangeRequest[]       @relation("ChangeRequester")
@@ -258,6 +261,12 @@ model OrderItem {
   /// A CSM typed a rate other than the rate card's: the line is billed at the card rate until an
   /// admin approves this one (a RATE_CHANGE request on the order).
   rate_requested          Decimal?              @db.Decimal(10, 2)
+  /// The machine the line is made on. Filled from the line item's default machine; the PM may change it.
+  machine_id              Int?
+  machine                 Machine?              @relation("LineMachine", fields: [machine_id], references: [id], onDelete: SetNull)
+  /// When an operator started the line (taking it from the machine queue, or their own assignment).
+  started_at              DateTime?
+  started_by              Int?
   remarks_set_at          DateTime?
   remarks_set_by          Int?
   remarksSetter           User?                 @relation("ItemRemarkSetter", fields: [remarks_set_by], references: [id], onDelete: SetNull)
@@ -527,12 +536,29 @@ model Client {
 
 /// Media / line-item names. Master Library: admin-owned, like Client.
 model Media {
-  id         Int        @id @default(autoincrement())
-  name       String     @unique
-  is_active  Boolean    @default(true)
-  created_at DateTime   @default(now())
-  updated_at DateTime   @default(now()) @updatedAt
-  rateCards  RateCard[]
+  id                 Int        @id @default(autoincrement())
+  name               String     @unique
+  is_active          Boolean    @default(true)
+  created_at         DateTime   @default(now())
+  updated_at         DateTime   @default(now()) @updatedAt
+  rateCards          RateCard[]
+  /// Where this line item is made. New order lines take it, and queue for its operators.
+  default_machine_id Int?
+  defaultMachine     Machine?   @relation("MediaDefaultMachine", fields: [default_machine_id], references: [id], onDelete: SetNull)
+}
+
+/// A production machine (CNC, Epson, Solvent, UV Machine, Outward, Order Sheet). Each operator
+/// works one machine; a line queues for every operator on its machine and the first to start takes it.
+model Machine {
+  id         Int         @id @default(autoincrement())
+  name       String      @unique
+  is_active  Boolean     @default(true)
+  sort_order Int         @default(0)
+  created_at DateTime    @default(now())
+  updated_at DateTime    @default(now()) @updatedAt
+  media      Media[]     @relation("MediaDefaultMachine")
+  operators  User[]      @relation("OperatorMachine")
+  lines      OrderItem[] @relation("LineMachine")
 }
 
 enum RateCardStatus {

@@ -1,4 +1,5 @@
 import { CsmTag } from "@/components/orders/CsmTag";
+import { MachineQueuePanel } from "@/components/production/MachineQueuePanel";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -147,6 +148,7 @@ function ProductionQueue() {
         description="Your items. Mark each complete when done."
         crumbs={[{ label: "Production", to: "/production/dashboard" }, { label: "Queue" }]}
       />
+      <MachineQueuePanel />
       <SendBackDialog target={returning} onClose={() => setReturning(null)} />
 
       {totalItems > 0 && (

@@ -42,6 +42,7 @@ import {
   Map as MapIcon,
   GitPullRequestArrow,
   Tags,
+  Cog,
 } from "lucide-react";
 import { fetchChangeQueueCount } from "@/api/changeRequests";
 import { fetchRateCardCount } from "@/api/rateCards";
@@ -159,6 +160,7 @@ const NAV: Record<UserRole, NavItem[]> = {
   PRODUCTION_MANAGER: [
     { to: "/prod-manager/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { to: "/prod-manager/assign", label: "Assign Work", icon: Workflow },
+    { to: "/prod-manager/machines", label: "Machines", icon: Cog },
     { to: "/prod-manager/reports", label: "Reports", icon: FileBarChart2 },
     { to: "/sheet", label: "GS-WAS", icon: FileSpreadsheet, was: "GS" },
     { to: "/prod-manager/notifications", label: "Notifications", icon: Bell },
@@ -190,6 +192,7 @@ const NAV: Record<UserRole, NavItem[]> = {
     { to: "/admin/import", label: "Bulk Import", icon: Upload, group: "Automated System" },
     { to: "/admin/users", label: "Users", icon: Users, group: "Automated System" },
     { to: "/admin/master-library", label: "Master Library", icon: Library, group: "Automated System" },
+    { to: "/admin/machines", label: "Machines", icon: Cog, group: "Automated System" },
     { to: "/admin/whatsapp", label: "WhatsApp", icon: MessageCircle, group: "Automated System" },
     { to: "/admin/settings", label: "Settings", icon: Settings, group: "Automated System" },
     ...WORK_ALLOCATION,

@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 import { ArrowRight, CheckCircle2, Clock, Factory, Flag, Ruler, Users, CheckCheck } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { KpiCard } from "@/components/kpi/KpiCard";
+import { MachineBoard } from "@/components/production/MachineBoard";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { EmptyState, ErrorState, LoadingState } from "@/components/layout/PageStates";
 import { Badge } from "@/components/ui/badge";
@@ -113,6 +114,8 @@ function ProdManagerDashboard() {
           </Button>
         }
       />
+
+      <MachineBoard />
 
       <DashboardGuide>
         <p>

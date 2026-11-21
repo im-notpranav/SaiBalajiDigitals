@@ -30,6 +30,7 @@ import { Route as PortalAdminImportRouteImport } from './routes/_portal.admin.im
 import { Route as PortalAdminJobsRouteImport } from './routes/_portal.admin.jobs'
 import { Route as PortalAdminLeaveRouteImport } from './routes/_portal.admin.leave'
 import { Route as PortalAdminLossReportRouteImport } from './routes/_portal.admin.loss-report'
+import { Route as PortalAdminMachinesRouteImport } from './routes/_portal.admin.machines'
 import { Route as PortalAdminMasterLibraryRouteImport } from './routes/_portal.admin.master-library'
 import { Route as PortalAdminMastersRouteImport } from './routes/_portal.admin.masters'
 import { Route as PortalAdminNotificationsRouteImport } from './routes/_portal.admin.notifications'
@@ -65,6 +66,7 @@ import { Route as PortalFieldNotificationsRouteImport } from './routes/_portal.f
 import { Route as PortalFieldPaymentsRouteImport } from './routes/_portal.field.payments'
 import { Route as PortalProdManagerAssignRouteImport } from './routes/_portal.prod-manager.assign'
 import { Route as PortalProdManagerDashboardRouteImport } from './routes/_portal.prod-manager.dashboard'
+import { Route as PortalProdManagerMachinesRouteImport } from './routes/_portal.prod-manager.machines'
 import { Route as PortalProdManagerNotificationsRouteImport } from './routes/_portal.prod-manager.notifications'
 import { Route as PortalProdManagerReportsRouteImport } from './routes/_portal.prod-manager.reports'
 import { Route as PortalProductionDashboardRouteImport } from './routes/_portal.production.dashboard'
@@ -182,6 +184,11 @@ const PortalAdminLeaveRoute = PortalAdminLeaveRouteImport.update({
 const PortalAdminLossReportRoute = PortalAdminLossReportRouteImport.update({
   id: '/admin/loss-report',
   path: '/admin/loss-report',
+  getParentRoute: () => PortalRoute,
+} as any)
+const PortalAdminMachinesRoute = PortalAdminMachinesRouteImport.update({
+  id: '/admin/machines',
+  path: '/admin/machines',
   getParentRoute: () => PortalRoute,
 } as any)
 const PortalAdminMasterLibraryRoute =
@@ -368,6 +375,12 @@ const PortalProdManagerDashboardRoute =
     path: '/prod-manager/dashboard',
     getParentRoute: () => PortalRoute,
   } as any)
+const PortalProdManagerMachinesRoute =
+  PortalProdManagerMachinesRouteImport.update({
+    id: '/prod-manager/machines',
+    path: '/prod-manager/machines',
+    getParentRoute: () => PortalRoute,
+  } as any)
 const PortalProdManagerNotificationsRoute =
   PortalProdManagerNotificationsRouteImport.update({
     id: '/prod-manager/notifications',
@@ -452,6 +465,7 @@ export interface FileRoutesByFullPath {
   '/admin/jobs': typeof PortalAdminJobsRoute
   '/admin/leave': typeof PortalAdminLeaveRoute
   '/admin/loss-report': typeof PortalAdminLossReportRoute
+  '/admin/machines': typeof PortalAdminMachinesRoute
   '/admin/master-library': typeof PortalAdminMasterLibraryRoute
   '/admin/masters': typeof PortalAdminMastersRoute
   '/admin/notifications': typeof PortalAdminNotificationsRoute
@@ -487,6 +501,7 @@ export interface FileRoutesByFullPath {
   '/field/payments': typeof PortalFieldPaymentsRoute
   '/prod-manager/assign': typeof PortalProdManagerAssignRoute
   '/prod-manager/dashboard': typeof PortalProdManagerDashboardRoute
+  '/prod-manager/machines': typeof PortalProdManagerMachinesRoute
   '/prod-manager/notifications': typeof PortalProdManagerNotificationsRoute
   '/prod-manager/reports': typeof PortalProdManagerReportsRoute
   '/production/dashboard': typeof PortalProductionDashboardRoute
@@ -520,6 +535,7 @@ export interface FileRoutesByTo {
   '/admin/jobs': typeof PortalAdminJobsRoute
   '/admin/leave': typeof PortalAdminLeaveRoute
   '/admin/loss-report': typeof PortalAdminLossReportRoute
+  '/admin/machines': typeof PortalAdminMachinesRoute
   '/admin/master-library': typeof PortalAdminMasterLibraryRoute
   '/admin/masters': typeof PortalAdminMastersRoute
   '/admin/notifications': typeof PortalAdminNotificationsRoute
@@ -555,6 +571,7 @@ export interface FileRoutesByTo {
   '/field/payments': typeof PortalFieldPaymentsRoute
   '/prod-manager/assign': typeof PortalProdManagerAssignRoute
   '/prod-manager/dashboard': typeof PortalProdManagerDashboardRoute
+  '/prod-manager/machines': typeof PortalProdManagerMachinesRoute
   '/prod-manager/notifications': typeof PortalProdManagerNotificationsRoute
   '/prod-manager/reports': typeof PortalProdManagerReportsRoute
   '/production/dashboard': typeof PortalProductionDashboardRoute
@@ -590,6 +607,7 @@ export interface FileRoutesById {
   '/_portal/admin/jobs': typeof PortalAdminJobsRoute
   '/_portal/admin/leave': typeof PortalAdminLeaveRoute
   '/_portal/admin/loss-report': typeof PortalAdminLossReportRoute
+  '/_portal/admin/machines': typeof PortalAdminMachinesRoute
   '/_portal/admin/master-library': typeof PortalAdminMasterLibraryRoute
   '/_portal/admin/masters': typeof PortalAdminMastersRoute
   '/_portal/admin/notifications': typeof PortalAdminNotificationsRoute
@@ -625,6 +643,7 @@ export interface FileRoutesById {
   '/_portal/field/payments': typeof PortalFieldPaymentsRoute
   '/_portal/prod-manager/assign': typeof PortalProdManagerAssignRoute
   '/_portal/prod-manager/dashboard': typeof PortalProdManagerDashboardRoute
+  '/_portal/prod-manager/machines': typeof PortalProdManagerMachinesRoute
   '/_portal/prod-manager/notifications': typeof PortalProdManagerNotificationsRoute
   '/_portal/prod-manager/reports': typeof PortalProdManagerReportsRoute
   '/_portal/production/dashboard': typeof PortalProductionDashboardRoute
@@ -660,6 +679,7 @@ export interface FileRouteTypes {
     | '/admin/jobs'
     | '/admin/leave'
     | '/admin/loss-report'
+    | '/admin/machines'
     | '/admin/master-library'
     | '/admin/masters'
     | '/admin/notifications'
@@ -695,6 +715,7 @@ export interface FileRouteTypes {
     | '/field/payments'
     | '/prod-manager/assign'
     | '/prod-manager/dashboard'
+    | '/prod-manager/machines'
     | '/prod-manager/notifications'
     | '/prod-manager/reports'
     | '/production/dashboard'
@@ -728,6 +749,7 @@ export interface FileRouteTypes {
     | '/admin/jobs'
     | '/admin/leave'
     | '/admin/loss-report'
+    | '/admin/machines'
     | '/admin/master-library'
     | '/admin/masters'
     | '/admin/notifications'
@@ -763,6 +785,7 @@ export interface FileRouteTypes {
     | '/field/payments'
     | '/prod-manager/assign'
     | '/prod-manager/dashboard'
+    | '/prod-manager/machines'
     | '/prod-manager/notifications'
     | '/prod-manager/reports'
     | '/production/dashboard'
@@ -797,6 +820,7 @@ export interface FileRouteTypes {
     | '/_portal/admin/jobs'
     | '/_portal/admin/leave'
     | '/_portal/admin/loss-report'
+    | '/_portal/admin/machines'
     | '/_portal/admin/master-library'
     | '/_portal/admin/masters'
     | '/_portal/admin/notifications'
@@ -832,6 +856,7 @@ export interface FileRouteTypes {
     | '/_portal/field/payments'
     | '/_portal/prod-manager/assign'
     | '/_portal/prod-manager/dashboard'
+    | '/_portal/prod-manager/machines'
     | '/_portal/prod-manager/notifications'
     | '/_portal/prod-manager/reports'
     | '/_portal/production/dashboard'
@@ -999,6 +1024,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/loss-report'
       fullPath: '/admin/loss-report'
       preLoaderRoute: typeof PortalAdminLossReportRouteImport
+      parentRoute: typeof PortalRoute
+    }
+    '/_portal/admin/machines': {
+      id: '/_portal/admin/machines'
+      path: '/admin/machines'
+      fullPath: '/admin/machines'
+      preLoaderRoute: typeof PortalAdminMachinesRouteImport
       parentRoute: typeof PortalRoute
     }
     '/_portal/admin/master-library': {
@@ -1246,6 +1278,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PortalProdManagerDashboardRouteImport
       parentRoute: typeof PortalRoute
     }
+    '/_portal/prod-manager/machines': {
+      id: '/_portal/prod-manager/machines'
+      path: '/prod-manager/machines'
+      fullPath: '/prod-manager/machines'
+      preLoaderRoute: typeof PortalProdManagerMachinesRouteImport
+      parentRoute: typeof PortalRoute
+    }
     '/_portal/prod-manager/notifications': {
       id: '/_portal/prod-manager/notifications'
       path: '/prod-manager/notifications'
@@ -1344,6 +1383,7 @@ interface PortalRouteChildren {
   PortalAdminJobsRoute: typeof PortalAdminJobsRoute
   PortalAdminLeaveRoute: typeof PortalAdminLeaveRoute
   PortalAdminLossReportRoute: typeof PortalAdminLossReportRoute
+  PortalAdminMachinesRoute: typeof PortalAdminMachinesRoute
   PortalAdminMasterLibraryRoute: typeof PortalAdminMasterLibraryRoute
   PortalAdminMastersRoute: typeof PortalAdminMastersRoute
   PortalAdminNotificationsRoute: typeof PortalAdminNotificationsRoute
@@ -1379,6 +1419,7 @@ interface PortalRouteChildren {
   PortalFieldPaymentsRoute: typeof PortalFieldPaymentsRoute
   PortalProdManagerAssignRoute: typeof PortalProdManagerAssignRoute
   PortalProdManagerDashboardRoute: typeof PortalProdManagerDashboardRoute
+  PortalProdManagerMachinesRoute: typeof PortalProdManagerMachinesRoute
   PortalProdManagerNotificationsRoute: typeof PortalProdManagerNotificationsRoute
   PortalProdManagerReportsRoute: typeof PortalProdManagerReportsRoute
   PortalProductionDashboardRoute: typeof PortalProductionDashboardRoute
@@ -1410,6 +1451,7 @@ const PortalRouteChildren: PortalRouteChildren = {
   PortalAdminJobsRoute: PortalAdminJobsRoute,
   PortalAdminLeaveRoute: PortalAdminLeaveRoute,
   PortalAdminLossReportRoute: PortalAdminLossReportRoute,
+  PortalAdminMachinesRoute: PortalAdminMachinesRoute,
   PortalAdminMasterLibraryRoute: PortalAdminMasterLibraryRoute,
   PortalAdminMastersRoute: PortalAdminMastersRoute,
   PortalAdminNotificationsRoute: PortalAdminNotificationsRoute,
@@ -1445,6 +1487,7 @@ const PortalRouteChildren: PortalRouteChildren = {
   PortalFieldPaymentsRoute: PortalFieldPaymentsRoute,
   PortalProdManagerAssignRoute: PortalProdManagerAssignRoute,
   PortalProdManagerDashboardRoute: PortalProdManagerDashboardRoute,
+  PortalProdManagerMachinesRoute: PortalProdManagerMachinesRoute,
   PortalProdManagerNotificationsRoute: PortalProdManagerNotificationsRoute,
   PortalProdManagerReportsRoute: PortalProdManagerReportsRoute,
   PortalProductionDashboardRoute: PortalProductionDashboardRoute,
