@@ -174,7 +174,15 @@ export function OrderDetail({ order, actions, related, userRole, currentUserId }
           {item.remarks_other_text && <div className="text-muted-foreground mt-0.5 whitespace-pre-wrap max-w-[200px] truncate" title={item.remarks_other_text}>{item.remarks_other_text}</div>}
         </div>
       )}
-      {!item.is_flagged && !item.remarks && (
+      {item.rate_requested != null && (
+        <div className="text-xs">
+          <span className="inline-flex items-center rounded-md bg-amber-500/10 px-2 py-0.5 font-medium text-amber-700 dark:text-amber-300">
+            Rate ₹{Number(item.rate_requested)} asked
+          </span>
+          <div className="mt-0.5 text-muted-foreground">billed at the rate card until approved</div>
+        </div>
+      )}
+      {!item.is_flagged && !item.remarks && item.rate_requested == null && (
         <span className="text-muted-foreground">-</span>
       )}
     </div>

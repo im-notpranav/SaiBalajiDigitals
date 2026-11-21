@@ -141,6 +141,8 @@ model User {
   assignmentsMade      OrderItemAssignment[] @relation("AssignmentAssigner")
   followUps            PaymentFollowUp[]     @relation("FollowUpAuthor")
   orderNotes           OrderNote[]           @relation("OrderNoteAuthor")
+  rateCardsCreated     RateCard[]            @relation("RateCardCreator")
+  rateCardsDecided     RateCard[]            @relation("RateCardDecider")
   changeRequests       ChangeRequest[]       @relation("ChangeRequester")
   changesDecided       ChangeRequest[]       @relation("ChangeDecider")
   workJobsFlagged      WorkJob[]             @relation("WorkJobFieldFlagger")
@@ -253,6 +255,9 @@ model OrderItem {
   adjustment_amount       Decimal?              @db.Decimal(10, 2)
   /// Revised only: what the line came to before the admin first corrected it.
   original_amount         Decimal?              @db.Decimal(10, 2)
+  /// A CSM typed a rate other than the rate card's: the line is billed at the card rate until an
+  /// admin approves this one (a RATE_CHANGE request on the order).
+  rate_requested          Decimal?              @db.Decimal(10, 2)
   remarks_set_at          DateTime?
   remarks_set_by          Int?
   remarksSetter           User?                 @relation("ItemRemarkSetter", fields: [remarks_set_by], references: [id], onDelete: SetNull)
@@ -509,23 +514,57 @@ model EmailRecipient {
 
 /// Master Library: only the admin adds names. CSMs pick from the active ones.
 model Client {
-  id         Int      @id @default(autoincrement())
-  name       String   @unique
+  id         Int        @id @default(autoincrement())
+  name       String     @unique
   /// Tracking code, not used anywhere else. Optional until the business hands them out.
-  code       String?  @unique
+  code       String?    @unique
   /// Archived names stay on old orders but leave the pick-lists.
-  is_active  Boolean  @default(true)
-  created_at DateTime @default(now())
-  updated_at DateTime @default(now()) @updatedAt
+  is_active  Boolean    @default(true)
+  created_at DateTime   @default(now())
+  updated_at DateTime   @default(now()) @updatedAt
+  rateCards  RateCard[]
 }
 
 /// Media / line-item names. Master Library: admin-owned, like Client.
 model Media {
-  id         Int      @id @default(autoincrement())
-  name       String   @unique
-  is_active  Boolean  @default(true)
-  created_at DateTime @default(now())
-  updated_at DateTime @default(now()) @updatedAt
+  id         Int        @id @default(autoincrement())
+  name       String     @unique
+  is_active  Boolean    @default(true)
+  created_at DateTime   @default(now())
+  updated_at DateTime   @default(now()) @updatedAt
+  rateCards  RateCard[]
+}
+
+enum RateCardStatus {
+  /// A CSM asked for it; it does not price anything until an admin approves.
+  PENDING
+  ACTIVE
+  REJECTED
+}
+
+/// The agreed rate for one client and one line item, from a date. An order line takes the
+/// rate valid on the order's date; later entries for the same pair replace it from their date.
+model RateCard {
+  id             Int            @id @default(autoincrement())
+  client_id      Int
+  client         Client         @relation(fields: [client_id], references: [id], onDelete: Cascade)
+  media_id       Int
+  media          Media          @relation(fields: [media_id], references: [id], onDelete: Cascade)
+  rate           Decimal        @db.Decimal(10, 2)
+  effective_from DateTime       @db.Date
+  status         RateCardStatus @default(ACTIVE)
+  note           String?
+  created_by     Int?
+  creator        User?          @relation("RateCardCreator", fields: [created_by], references: [id], onDelete: SetNull)
+  decided_by     Int?
+  decider        User?          @relation("RateCardDecider", fields: [decided_by], references: [id], onDelete: SetNull)
+  decided_at     DateTime?
+  decision_note  String?
+  created_at     DateTime       @default(now())
+  updated_at     DateTime       @updatedAt
+
+  @@index([client_id, media_id, effective_from])
+  @@index([status])
 }
 
 enum MasterKind {

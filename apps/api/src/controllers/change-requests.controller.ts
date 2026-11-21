@@ -7,6 +7,7 @@ import { checkMasterNames, missingNamesBody } from "../utils/lookups";
 import { recomputeOrderStatus } from "../utils/order-derive";
 import { serializeDecimals } from "../utils/serialize";
 import { invokeHandler } from "../utils/invoke-handler";
+import { approveRateChange, rejectRateChange as rejectRateCardChange } from "../utils/rate-card";
 import { addStore, updateOrder, updateOrderDetails, updateStore } from "./orders.controller";
 
 /* ------------------------------------------------------------------ input shapes */
@@ -602,13 +603,6 @@ async function combineOrders(target: OrderForRequest, other: OrderForRequest, ad
   });
 }
 
-/* Rate changes are wired in by the rate card module; these keep the approve path whole. */
-let rateChangeHooks: { approve: (payload: any, admin: Actor) => Promise<void>; reject: (payload: any) => Promise<void> } = {
-  approve: async () => {},
-  reject: async () => {},
-};
-export const setRateChangeHooks = (h: typeof rateChangeHooks) => {
-  rateChangeHooks = h;
-};
-const applyRateChange = (payload: any, admin: Actor) => rateChangeHooks.approve(payload, admin);
-const rejectRateChange = (payload: any) => rateChangeHooks.reject(payload);
+/* Rate changes: the rate card module moves the lines between the card rate and the asked rate. */
+const applyRateChange = (payload: any, admin: Actor) => approveRateChange(payload, admin);
+const rejectRateChange = (payload: any) => rejectRateCardChange(payload);

@@ -46,6 +46,7 @@ app.use(cookieParser());
 import whatsappRoutes, { webhookRouter } from "./routes/whatsapp.routes";
 import reportsRoutes from "./routes/reports.routes";
 import changeRequestsRoutes from "./routes/change-requests.routes";
+import rateCardsRoutes from "./routes/rate-cards.routes";
 app.use("/api/webhooks", webhookRouter);
 
 // Global rate limit: 300 requests per minute per signed-in person, and per address for everyone
@@ -105,5 +106,6 @@ app.use("/api/my", myRoutes);
 app.use("/api/whatsapp", whatsappRoutes);
 app.use("/api/reports", reportsRoutes);
 app.use("/api/change-requests", changeRequestsRoutes);
+app.use("/api/rate-cards", rateCardsRoutes);
 
 export default app;

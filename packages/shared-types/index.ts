@@ -58,6 +58,8 @@ export interface OrderItem {
   adjustment_amount?: number | null;
   /** Revised only: the line amount before the admin first corrected it. */
   original_amount?: number | null;
+  /** A CSM's rate other than the rate card's, waiting for the admin; the line bills at `rate` till then. */
+  rate_requested?: number | null;
   remarks_set_at?: string | null;
   remarks_set_by?: number | null;
   remarks_confirmed?: boolean;

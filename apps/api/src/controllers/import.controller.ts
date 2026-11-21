@@ -6,6 +6,7 @@ import { generateOrderId, isOrderNumbersUsedUp, previewOrderNumbers } from "../u
 import { amountOf, buildOrderTemplate, parseOrderTemplate, sftOf } from "../utils/order-template";
 import { bulkOrdersSchema } from "../utils/validators";
 import { sanitizeZodErrors } from "../utils/sanitize-errors";
+import { holdRateDeviations } from "../utils/rate-card";
 
 /** GET /api/orders/template — the company's order sheet, ready to fill in. */
 export const orderTemplate = async (_req: Request, res: Response) => {
@@ -140,6 +141,8 @@ export const createBulkOrders = async (req: Request, res: Response) => {
     }, { timeout: 120000 });
 
     for (const o of created) {
+      // A CSM's own sheet: rates other than the rate card wait for the admin.
+      await holdRateDeviations(o.id, user);
       await notifyRole("PRODUCTION", `New order ${o.order_no} created`, `Client: ${o.client_name}`, "info", o.id);
       if (o.created_by !== user.id) {
         await notifyUser(o.created_by, `New order ${o.order_no} for you`, `Client: ${o.client_name}. Uploaded by ${user.username}.`, "info", o.id).catch(() => {});

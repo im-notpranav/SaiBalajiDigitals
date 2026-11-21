@@ -37,6 +37,7 @@ import { Route as PortalAdminOrdersRouteImport } from './routes/_portal.admin.or
 import { Route as PortalAdminOverdueRouteImport } from './routes/_portal.admin.overdue'
 import { Route as PortalAdminOvertimeRouteImport } from './routes/_portal.admin.overtime'
 import { Route as PortalAdminPaymentsRouteImport } from './routes/_portal.admin.payments'
+import { Route as PortalAdminRateCardsRouteImport } from './routes/_portal.admin.rate-cards'
 import { Route as PortalAdminReportsRouteImport } from './routes/_portal.admin.reports'
 import { Route as PortalAdminSettingsRouteImport } from './routes/_portal.admin.settings'
 import { Route as PortalAdminSheetRouteImport } from './routes/_portal.admin.sheet'
@@ -54,6 +55,7 @@ import { Route as PortalEmployeeNewOrderRouteImport } from './routes/_portal.emp
 import { Route as PortalEmployeeNotificationsRouteImport } from './routes/_portal.employee.notifications'
 import { Route as PortalEmployeeOrdersRouteImport } from './routes/_portal.employee.orders'
 import { Route as PortalEmployeePaymentsRouteImport } from './routes/_portal.employee.payments'
+import { Route as PortalEmployeeRateCardsRouteImport } from './routes/_portal.employee.rate-cards'
 import { Route as PortalEmployeeSheetRouteImport } from './routes/_portal.employee.sheet'
 import { Route as PortalEmployeeUploadOrdersRouteImport } from './routes/_portal.employee.upload-orders'
 import { Route as PortalFieldDashboardRouteImport } from './routes/_portal.field.dashboard'
@@ -219,6 +221,11 @@ const PortalAdminPaymentsRoute = PortalAdminPaymentsRouteImport.update({
   path: '/admin/payments',
   getParentRoute: () => PortalRoute,
 } as any)
+const PortalAdminRateCardsRoute = PortalAdminRateCardsRouteImport.update({
+  id: '/admin/rate-cards',
+  path: '/admin/rate-cards',
+  getParentRoute: () => PortalRoute,
+} as any)
 const PortalAdminReportsRoute = PortalAdminReportsRouteImport.update({
   id: '/admin/reports',
   path: '/admin/reports',
@@ -306,6 +313,11 @@ const PortalEmployeeOrdersRoute = PortalEmployeeOrdersRouteImport.update({
 const PortalEmployeePaymentsRoute = PortalEmployeePaymentsRouteImport.update({
   id: '/employee/payments',
   path: '/employee/payments',
+  getParentRoute: () => PortalRoute,
+} as any)
+const PortalEmployeeRateCardsRoute = PortalEmployeeRateCardsRouteImport.update({
+  id: '/employee/rate-cards',
+  path: '/employee/rate-cards',
   getParentRoute: () => PortalRoute,
 } as any)
 const PortalEmployeeSheetRoute = PortalEmployeeSheetRouteImport.update({
@@ -447,6 +459,7 @@ export interface FileRoutesByFullPath {
   '/admin/overdue': typeof PortalAdminOverdueRoute
   '/admin/overtime': typeof PortalAdminOvertimeRoute
   '/admin/payments': typeof PortalAdminPaymentsRoute
+  '/admin/rate-cards': typeof PortalAdminRateCardsRoute
   '/admin/reports': typeof PortalAdminReportsRoute
   '/admin/settings': typeof PortalAdminSettingsRoute
   '/admin/sheet': typeof PortalAdminSheetRoute
@@ -464,6 +477,7 @@ export interface FileRoutesByFullPath {
   '/employee/notifications': typeof PortalEmployeeNotificationsRoute
   '/employee/orders': typeof PortalEmployeeOrdersRoute
   '/employee/payments': typeof PortalEmployeePaymentsRoute
+  '/employee/rate-cards': typeof PortalEmployeeRateCardsRoute
   '/employee/sheet': typeof PortalEmployeeSheetRoute
   '/employee/upload-orders': typeof PortalEmployeeUploadOrdersRoute
   '/field/dashboard': typeof PortalFieldDashboardRoute
@@ -513,6 +527,7 @@ export interface FileRoutesByTo {
   '/admin/overdue': typeof PortalAdminOverdueRoute
   '/admin/overtime': typeof PortalAdminOvertimeRoute
   '/admin/payments': typeof PortalAdminPaymentsRoute
+  '/admin/rate-cards': typeof PortalAdminRateCardsRoute
   '/admin/reports': typeof PortalAdminReportsRoute
   '/admin/settings': typeof PortalAdminSettingsRoute
   '/admin/sheet': typeof PortalAdminSheetRoute
@@ -530,6 +545,7 @@ export interface FileRoutesByTo {
   '/employee/notifications': typeof PortalEmployeeNotificationsRoute
   '/employee/orders': typeof PortalEmployeeOrdersRoute
   '/employee/payments': typeof PortalEmployeePaymentsRoute
+  '/employee/rate-cards': typeof PortalEmployeeRateCardsRoute
   '/employee/sheet': typeof PortalEmployeeSheetRoute
   '/employee/upload-orders': typeof PortalEmployeeUploadOrdersRoute
   '/field/dashboard': typeof PortalFieldDashboardRoute
@@ -581,6 +597,7 @@ export interface FileRoutesById {
   '/_portal/admin/overdue': typeof PortalAdminOverdueRoute
   '/_portal/admin/overtime': typeof PortalAdminOvertimeRoute
   '/_portal/admin/payments': typeof PortalAdminPaymentsRoute
+  '/_portal/admin/rate-cards': typeof PortalAdminRateCardsRoute
   '/_portal/admin/reports': typeof PortalAdminReportsRoute
   '/_portal/admin/settings': typeof PortalAdminSettingsRoute
   '/_portal/admin/sheet': typeof PortalAdminSheetRoute
@@ -598,6 +615,7 @@ export interface FileRoutesById {
   '/_portal/employee/notifications': typeof PortalEmployeeNotificationsRoute
   '/_portal/employee/orders': typeof PortalEmployeeOrdersRoute
   '/_portal/employee/payments': typeof PortalEmployeePaymentsRoute
+  '/_portal/employee/rate-cards': typeof PortalEmployeeRateCardsRoute
   '/_portal/employee/sheet': typeof PortalEmployeeSheetRoute
   '/_portal/employee/upload-orders': typeof PortalEmployeeUploadOrdersRoute
   '/_portal/field/dashboard': typeof PortalFieldDashboardRoute
@@ -649,6 +667,7 @@ export interface FileRouteTypes {
     | '/admin/overdue'
     | '/admin/overtime'
     | '/admin/payments'
+    | '/admin/rate-cards'
     | '/admin/reports'
     | '/admin/settings'
     | '/admin/sheet'
@@ -666,6 +685,7 @@ export interface FileRouteTypes {
     | '/employee/notifications'
     | '/employee/orders'
     | '/employee/payments'
+    | '/employee/rate-cards'
     | '/employee/sheet'
     | '/employee/upload-orders'
     | '/field/dashboard'
@@ -715,6 +735,7 @@ export interface FileRouteTypes {
     | '/admin/overdue'
     | '/admin/overtime'
     | '/admin/payments'
+    | '/admin/rate-cards'
     | '/admin/reports'
     | '/admin/settings'
     | '/admin/sheet'
@@ -732,6 +753,7 @@ export interface FileRouteTypes {
     | '/employee/notifications'
     | '/employee/orders'
     | '/employee/payments'
+    | '/employee/rate-cards'
     | '/employee/sheet'
     | '/employee/upload-orders'
     | '/field/dashboard'
@@ -782,6 +804,7 @@ export interface FileRouteTypes {
     | '/_portal/admin/overdue'
     | '/_portal/admin/overtime'
     | '/_portal/admin/payments'
+    | '/_portal/admin/rate-cards'
     | '/_portal/admin/reports'
     | '/_portal/admin/settings'
     | '/_portal/admin/sheet'
@@ -799,6 +822,7 @@ export interface FileRouteTypes {
     | '/_portal/employee/notifications'
     | '/_portal/employee/orders'
     | '/_portal/employee/payments'
+    | '/_portal/employee/rate-cards'
     | '/_portal/employee/sheet'
     | '/_portal/employee/upload-orders'
     | '/_portal/field/dashboard'
@@ -1026,6 +1050,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PortalAdminPaymentsRouteImport
       parentRoute: typeof PortalRoute
     }
+    '/_portal/admin/rate-cards': {
+      id: '/_portal/admin/rate-cards'
+      path: '/admin/rate-cards'
+      fullPath: '/admin/rate-cards'
+      preLoaderRoute: typeof PortalAdminRateCardsRouteImport
+      parentRoute: typeof PortalRoute
+    }
     '/_portal/admin/reports': {
       id: '/_portal/admin/reports'
       path: '/admin/reports'
@@ -1143,6 +1174,13 @@ declare module '@tanstack/react-router' {
       path: '/employee/payments'
       fullPath: '/employee/payments'
       preLoaderRoute: typeof PortalEmployeePaymentsRouteImport
+      parentRoute: typeof PortalRoute
+    }
+    '/_portal/employee/rate-cards': {
+      id: '/_portal/employee/rate-cards'
+      path: '/employee/rate-cards'
+      fullPath: '/employee/rate-cards'
+      preLoaderRoute: typeof PortalEmployeeRateCardsRouteImport
       parentRoute: typeof PortalRoute
     }
     '/_portal/employee/sheet': {
@@ -1313,6 +1351,7 @@ interface PortalRouteChildren {
   PortalAdminOverdueRoute: typeof PortalAdminOverdueRoute
   PortalAdminOvertimeRoute: typeof PortalAdminOvertimeRoute
   PortalAdminPaymentsRoute: typeof PortalAdminPaymentsRoute
+  PortalAdminRateCardsRoute: typeof PortalAdminRateCardsRoute
   PortalAdminReportsRoute: typeof PortalAdminReportsRoute
   PortalAdminSettingsRoute: typeof PortalAdminSettingsRoute
   PortalAdminSheetRoute: typeof PortalAdminSheetRoute
@@ -1330,6 +1369,7 @@ interface PortalRouteChildren {
   PortalEmployeeNotificationsRoute: typeof PortalEmployeeNotificationsRoute
   PortalEmployeeOrdersRoute: typeof PortalEmployeeOrdersRoute
   PortalEmployeePaymentsRoute: typeof PortalEmployeePaymentsRoute
+  PortalEmployeeRateCardsRoute: typeof PortalEmployeeRateCardsRoute
   PortalEmployeeSheetRoute: typeof PortalEmployeeSheetRoute
   PortalEmployeeUploadOrdersRoute: typeof PortalEmployeeUploadOrdersRoute
   PortalFieldDashboardRoute: typeof PortalFieldDashboardRoute
@@ -1377,6 +1417,7 @@ const PortalRouteChildren: PortalRouteChildren = {
   PortalAdminOverdueRoute: PortalAdminOverdueRoute,
   PortalAdminOvertimeRoute: PortalAdminOvertimeRoute,
   PortalAdminPaymentsRoute: PortalAdminPaymentsRoute,
+  PortalAdminRateCardsRoute: PortalAdminRateCardsRoute,
   PortalAdminReportsRoute: PortalAdminReportsRoute,
   PortalAdminSettingsRoute: PortalAdminSettingsRoute,
   PortalAdminSheetRoute: PortalAdminSheetRoute,
@@ -1394,6 +1435,7 @@ const PortalRouteChildren: PortalRouteChildren = {
   PortalEmployeeNotificationsRoute: PortalEmployeeNotificationsRoute,
   PortalEmployeeOrdersRoute: PortalEmployeeOrdersRoute,
   PortalEmployeePaymentsRoute: PortalEmployeePaymentsRoute,
+  PortalEmployeeRateCardsRoute: PortalEmployeeRateCardsRoute,
   PortalEmployeeSheetRoute: PortalEmployeeSheetRoute,
   PortalEmployeeUploadOrdersRoute: PortalEmployeeUploadOrdersRoute,
   PortalFieldDashboardRoute: PortalFieldDashboardRoute,

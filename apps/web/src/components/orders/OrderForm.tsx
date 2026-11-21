@@ -16,6 +16,8 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { downloadOrderTemplate } from "@/api/orders";
+import { lookupRates } from "@/api/rateCards";
+import { useQuery } from "@tanstack/react-query";
 import { inr } from "@/lib/format";
 import {
   LOSS_REMARK_TYPES,
@@ -307,6 +309,30 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
   const addStoreBlock = () => setStores((ss) => [...ss, blankStore()]);
   const removeStoreBlock = (storeId: string) =>
     setStores((ss) => (ss.length > 1 ? ss.filter((s) => s.id !== storeId) : ss));
+
+  // The client's rate card on the order's day: fills the rate when a line item is picked.
+  const orderDay = (defaultValues?.created_at ? new Date(defaultValues.created_at) : new Date()).toISOString().slice(0, 10);
+  const { data: cardData } = useQuery({
+    queryKey: ["rate-card-lookup", clientName.trim().toLowerCase(), orderDay],
+    queryFn: () => lookupRates(clientName.trim(), orderDay),
+    enabled: !!clientName.trim() && (userRole === "CSM" || userRole === "ADMIN"),
+    staleTime: 60_000,
+  });
+  const cardRates = useMemo(() => new Map((cardData?.rates ?? []).map((r) => [r.media.toLowerCase(), r.rate])), [cardData]);
+  const cardFor = (media: string) => cardRates.get(media.trim().toLowerCase());
+  // A rate box still empty takes the card rate once the client's card arrives.
+  useEffect(() => {
+    if (cardRates.size === 0) return;
+    setStores((ss) =>
+      ss.map((s) => ({
+        ...s,
+        lines: s.lines.map((l) => {
+          const c = cardRates.get(l.media.trim().toLowerCase());
+          return !l.originalId && !l.rate && c != null ? { ...l, rate: String(c) } : l;
+        }),
+      })),
+    );
+  }, [cardRates]);
 
   const update = (storeId: string, id: string, patch: Partial<Line>) =>
     setStores((ss) => ss.map((s) => (s.id === storeId
@@ -635,7 +661,13 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
                     <MediaCombobox
                       id={`media-${line.id}`}
                       value={line.media}
-                      onChange={(val) => update(store.id, line.id, { media: val })}
+                      onChange={(val) => {
+                        // Take the card rate when the box is empty or still holds the old item's card rate.
+                        const before = cardFor(line.media);
+                        const card = cardFor(val);
+                        const fill = card != null && (!line.rate || (before != null && numOf(line.rate) === before));
+                        update(store.id, line.id, fill ? { media: val, rate: String(card) } : { media: val });
+                      }}
                       className="h-9"
                       disabled={isReadOnlyItem}
                     />
@@ -685,6 +717,19 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
 
                 {/* Line 2: loss remark, then what the line comes to. */}
                 <div className="mt-2 flex flex-wrap items-center gap-2 sm:pl-8">
+                  {(() => {
+                    const card = cardFor(line.media);
+                    if (card == null) return null;
+                    const differs = line.rate !== "" && numOf(line.rate) !== card && !line.originalId;
+                    return (
+                      <span
+                        className={`rounded-md px-1.5 py-0.5 text-[11px] ${differs && !isAdmin ? "bg-amber-500/10 text-amber-700 dark:text-amber-300" : "bg-muted text-muted-foreground"}`}
+                      >
+                        Rate card ₹{card}
+                        {differs ? (isAdmin ? " · other rate typed" : " · other rate needs admin approval") : ""}
+                      </span>
+                    );
+                  })()}
                   {showLoss && (
                     <Select value={line.remarks ?? "none"} onValueChange={(v) => update(store.id, line.id, { remarks: v === "none" ? null : v })}>
                       <SelectTrigger aria-label={lossLabel} title={lossLabel} className="h-8 min-w-0 flex-1 text-xs sm:w-44 sm:flex-none">

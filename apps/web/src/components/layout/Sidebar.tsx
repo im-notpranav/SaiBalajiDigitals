@@ -41,8 +41,10 @@ import {
   Library,
   Map as MapIcon,
   GitPullRequestArrow,
+  Tags,
 } from "lucide-react";
 import { fetchChangeQueueCount } from "@/api/changeRequests";
+import { fetchRateCardCount } from "@/api/rateCards";
 import { type UserRole, useAuth } from "@/lib/auth-store";
 import { cn } from "@/lib/utils";
 import { BrandLockup } from "@/components/brand/Logo";
@@ -74,6 +76,7 @@ const DASHBOARD: NavItem[] = [
 const ORDER_SYSTEM: NavItem[] = (
   [
     { to: "/admin/orders", label: "Orders", icon: Boxes },
+    { to: "/admin/rate-cards", label: "Rate Cards", icon: Tags },
     { to: "/admin/overdue", label: "Overdue Orders", icon: AlarmClock },
     { to: "/admin/loss-report", label: "Loss Report", icon: FileBarChart2 },
     { to: "/admin/reports", label: "Reports", icon: FileBarChart2 },
@@ -128,6 +131,7 @@ const NAV: Record<UserRole, NavItem[]> = {
     { to: "/employee/new-order", label: "New Order", icon: PlusCircle },
     { to: "/employee/upload-orders", label: "Bulk Upload", icon: Upload },
     { to: "/employee/orders", label: "My Orders", icon: ClipboardList },
+    { to: "/employee/rate-cards", label: "Rate Cards", icon: Tags },
     { to: "/employee/grid", label: "Weekly Grid", icon: CalendarRange, group: "Work Allocation" },
     { to: "/employee/board", label: "Daily Board", icon: LayoutGrid, group: "Work Allocation" },
     { to: "/employee/sheet", label: "GS-WAS", icon: FileSpreadsheet, was: "GS", group: "Work Allocation" },
@@ -266,7 +270,16 @@ function SidebarBody({
     enabled: role === "ADMIN",
     refetchInterval: 60_000,
   });
-  const pendingChanges = changeCount?.pending ?? 0;
+  const { data: rateCount } = useQuery({
+    queryKey: ["rate-card-count"],
+    queryFn: fetchRateCardCount,
+    enabled: role === "ADMIN",
+    refetchInterval: 60_000,
+  });
+  const waitingFor: Record<string, number> = {
+    "/admin/change-requests": changeCount?.pending ?? 0,
+    "/admin/rate-cards": rateCount?.pending ?? 0,
+  };
 
   const handleLogout = async () => {
     onNavigate?.();
@@ -328,9 +341,9 @@ function SidebarBody({
                 )}
                 <Icon className="h-[18px] w-[18px] shrink-0" />
                 {item.was ? <WasMark kind={item.was} muted={!active} /> : <span className="truncate">{item.label}</span>}
-                {item.to === "/admin/change-requests" && pendingChanges > 0 && (
+                {(waitingFor[item.to] ?? 0) > 0 && (
                   <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1.5 text-[11px] font-bold text-white">
-                    {pendingChanges > 99 ? "99+" : pendingChanges}
+                    {waitingFor[item.to]! > 99 ? "99+" : waitingFor[item.to]}
                     <span className="sr-only"> waiting</span>
                   </span>
                 )}

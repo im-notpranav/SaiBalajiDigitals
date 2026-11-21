@@ -27,6 +27,7 @@ import {
   type FieldChange,
 } from "../services/email.service";
 import { sanitizeZodErrors } from "../utils/sanitize-errors";
+import { holdRateDeviations } from "../utils/rate-card";
 
 
 const MAX_ORDERS_PER_PAGE = 200;
@@ -503,7 +504,13 @@ export const createOrder = async (req: Request, res: Response) => {
       });
     });
 
-    
+    // A CSM's rate that is not the client's rate card rate waits for the admin.
+    const rateHeld = await holdRateDeviations(order.id, user);
+    if (rateHeld) {
+      const fresh = await prisma.order.findUniqueOrThrow({ where: { id: order.id }, include: { items: true, stores: { orderBy: { s_no: "asc" } } } });
+      order.items = fresh.items;
+    }
+
     await notifyRole(
       "PRODUCTION",
       `New order ${order.order_no} created`,
@@ -841,6 +848,13 @@ export const updateOrder = async (req: Request, res: Response) => {
 
     if (changes.length > 0 && user.role === "CSM") {
       await sendOrderEditEmail(existingOrder.order_no, user.name, changes);
+    }
+
+    // New lines a CSM typed at a rate other than the rate card wait for the admin.
+    const before = new Set(existingOrder.items.map((i) => i.id));
+    const added = (updatedOrder?.items ?? []).filter((i) => !before.has(i.id)).map((i) => i.id);
+    if (added.length > 0 && (await holdRateDeviations(id, user, added)) && updatedOrder) {
+      updatedOrder.items = await prisma.orderItem.findMany({ where: { order_id: id } });
     }
 
     // An order an admin started reaches production only now that it has something to make.
