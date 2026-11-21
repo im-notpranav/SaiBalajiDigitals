@@ -152,6 +152,10 @@ export interface Order {
   status: OrderStatus;
   remarks?: RemarkType | null;
   remarks_other_text?: string | null;
+  /** Optional free remark the CSM added to the order. */
+  order_remark?: string | null;
+  /** How many notes the order's shared thread has; drives the green Notes button. */
+  notes_count?: number;
   created_by?: number;
   creator_name?: string;
   items: OrderItem[];
@@ -248,7 +252,18 @@ export interface CreateOrderInput {
   po_number?: string | null;
   remarks?: RemarkType | null;
   remarks_other_text?: string | null;
+  order_remark?: string | null;
   stores: CreateOrderStoreInput[];
+}
+
+/** One note in an order's shared thread. */
+export interface OrderNote {
+  id: number;
+  body: string;
+  author_id: number | null;
+  author_name: string;
+  author_role: string;
+  created_at: string;
 }
 
 export interface Notification {

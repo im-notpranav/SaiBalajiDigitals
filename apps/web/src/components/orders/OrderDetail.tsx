@@ -1,3 +1,5 @@
+import { OrderNotesButton } from "@/components/orders/OrderNotes";
+import { CsmCodeSuffix } from "@/components/orders/CsmTag";
 import { motion } from "framer-motion";
 import { format } from "date-fns";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -312,7 +314,10 @@ export function OrderDetail({ order, actions, related, userRole, currentUserId }
       >
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Order Details</h2>
-          <OrderStageBadge order={order} />
+          <div className="flex items-center gap-2">
+            <OrderNotesButton orderId={order.id} orderNo={order.order_no} count={order.notes_count} size="sm" />
+            <OrderStageBadge order={order} />
+          </div>
         </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div>
@@ -354,10 +359,19 @@ export function OrderDetail({ order, actions, related, userRole, currentUserId }
               )}
             </div>
           </div>
-          {order.creator && (
+          {(order.creator || order.creator_name) && (
             <div>
-              <div className="text-xs text-muted-foreground uppercase">Created By</div>
-              <div className="font-semibold">{order.creator.name}</div>
+              <div className="text-xs text-muted-foreground uppercase">CSM</div>
+              <div className="font-semibold">
+                {order.creator?.name ?? order.creator_name}
+                <CsmCodeSuffix id={order.created_by} />
+              </div>
+            </div>
+          )}
+          {order.order_remark && (
+            <div className="sm:col-span-2 lg:col-span-4">
+              <div className="text-xs text-muted-foreground uppercase">Order Remark</div>
+              <div className="mt-1 whitespace-pre-wrap text-sm">{order.order_remark}</div>
             </div>
           )}
           {order.remarks && (
@@ -565,7 +579,7 @@ function ProductionCell({ item }: { item: OrderItem }) {
         </span>
       ) : (
         <span className="text-xs text-muted-foreground">
-          {assignments.filter((a) => a.completed).length} of {assignments.length} teams done
+          {assignments.filter((a) => a.completed).length} of {assignments.length} operators done
         </span>
       )}
       <div className="flex flex-wrap gap-1">

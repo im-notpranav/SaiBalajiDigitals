@@ -14,6 +14,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { STAGE_STYLES, type StageKey } from "@/lib/order-stage";
 import { cn } from "@/lib/utils";
+import { useRowLink } from "@/hooks/useRowLink";
+import { CsmTag } from "@/components/orders/CsmTag";
 import type { CsmCompletedOrder, CsmDashboardData, CsmStageOrder } from "@/api/dashboard";
 import {
   AgingBadge,
@@ -200,6 +202,7 @@ export function OrderRowsTable({
   orderRoute: OrderRoutes["order"];
   daysLabel: string;
 }) {
+  const rowProps = useOrderRowProps();
   return (
     <ScrollTable label={label}>
       <table className="w-full text-sm">
@@ -216,9 +219,10 @@ export function OrderRowsTable({
         </thead>
         <tbody>
           {orders.map((o) => (
-            <tr key={o.id} className="border-b transition-colors last:border-0 hover:bg-muted/20">
+            <tr key={o.id} {...rowProps(orderRoute, o.id, "border-b transition-colors last:border-0 hover:bg-muted/20")}>
               <td className="whitespace-nowrap px-4 py-2.5">
                 <OrderLink route={orderRoute} id={o.id} orderNo={o.order_no} />
+                <CsmTag id={o.csm_id} name={o.csm_name} compact className="block" />
               </td>
               <td className="px-4 py-2.5">
                 <div className="text-xs font-medium">{o.client_name}</div>
@@ -239,6 +243,15 @@ export function OrderRowsTable({
       </table>
     </ScrollTable>
   );
+}
+
+/** A click anywhere on a pipeline row opens its order (links and buttons inside keep their own click). */
+function useOrderRowProps() {
+  const linkProps = useRowLink();
+  return (route: OrderRoutes["order"], id: number, className: string) => {
+    const { className: linkClass, ...handlers } = linkProps({ to: route, params: { id: String(id) } });
+    return { ...handlers, className: cn(className, linkClass) };
+  };
 }
 
 function OrderLink({ route, id, orderNo }: { route: OrderRoutes["order"]; id: number; orderNo: string }) {
@@ -276,6 +289,7 @@ function CompletedOrders({
   routes: OrderRoutes;
 }) {
   const sorted = useMemo(() => [...orders].sort((a, b) => b.total_days - a.total_days), [orders]);
+  const rowProps = useOrderRowProps();
 
   if (sorted.length === 0) {
     return (
@@ -334,9 +348,10 @@ function CompletedOrders({
           </thead>
           <tbody>
             {sorted.map((o) => (
-              <tr key={o.id} className="border-b transition-colors last:border-0 hover:bg-muted/20">
+              <tr key={o.id} {...rowProps(routes.order, o.id, "border-b transition-colors last:border-0 hover:bg-muted/20")}>
                 <td className="whitespace-nowrap px-4 py-2.5">
                   <OrderLink route={routes.order} id={o.id} orderNo={o.order_no} />
+                  <CsmTag id={o.csm_id} name={o.csm_name} compact className="block" />
                 </td>
                 <td className="px-4 py-2.5 text-xs">{o.client_name}</td>
                 <td className="px-4 py-2.5 text-right text-xs tabular-nums">

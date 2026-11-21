@@ -1,3 +1,5 @@
+import { OrderNotesButton } from "@/components/orders/OrderNotes";
+
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -197,8 +199,14 @@ function JobCard({ job, highlight, muted }: { job: MyJob; highlight?: boolean; m
               {job.order.client_name}
             </div>
           )}
+
         </div>
-        <JobStatusBadge status={job.status} />
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
+          <JobStatusBadge status={job.status} />
+          {job.order && (
+            <OrderNotesButton orderId={job.order.id} orderNo={job.order.order_no} count={job.order.notes_count} size="sm" className="h-7 px-2 text-xs" />
+          )}
+        </div>
       </div>
 
       <p className="text-sm font-medium">{job.work_details ?? "Work details to follow"}</p>

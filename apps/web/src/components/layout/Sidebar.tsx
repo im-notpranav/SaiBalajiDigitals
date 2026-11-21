@@ -194,7 +194,7 @@ const NAV: Record<UserRole, NavItem[]> = {
 
 const roleLabels: Record<UserRole, string> = {
   CSM: "Client Service Manager",
-  PRODUCTION: "Production Team",
+  PRODUCTION: "Operator",
   ACCOUNTS: "Accountant Portal",
   ADMIN: "Administrator Portal",
   OPERATION_MANAGER: "Operation Manager",

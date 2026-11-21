@@ -284,6 +284,8 @@ export const getCsmDashboard = async (req: Request, res: Response) => {
       stageMap[stageKey].push({
         id: order.id,
         order_no: order.order_no,
+        csm_id: order.created_by,
+        csm_name: order.creator_name,
         client_name: order.client_name,
         store_name: storeLabelOf(order),
         store_count: order.stores?.length ?? 1,
@@ -322,6 +324,8 @@ export const getCsmDashboard = async (req: Request, res: Response) => {
       return {
         id: order.id,
         order_no: order.order_no,
+        csm_id: order.created_by,
+        csm_name: order.creator_name,
         client_name: order.client_name,
         store_name: storeLabelOf(order),
         store_count: order.stores?.length ?? 1,
@@ -477,6 +481,8 @@ export const getProdManagerDashboard = async (req: Request, res: Response) => {
           order_id: order.id,
           item_id: item.id,
           order_no: order.order_no,
+          csm_id: order.created_by,
+          csm_name: order.creator_name,
           client_name: order.client_name,
           item_s_no: item.s_no,
           media: item.media,
@@ -580,6 +586,8 @@ export const getAccountantDashboard = async (req: Request, res: Response) => {
       return {
         id: o.id,
         order_no: o.order_no,
+        csm_id: o.created_by,
+        csm_name: o.creator_name,
         client_name: o.client_name,
         store_name: storeLabelOf(o),
         store_count: o.stores?.length ?? 1,
@@ -598,6 +606,8 @@ export const getAccountantDashboard = async (req: Request, res: Response) => {
       return {
         id: o.id,
         order_no: o.order_no,
+        csm_id: o.created_by,
+        csm_name: o.creator_name,
         client_name: o.client_name,
         store_name: storeLabelOf(o),
         store_count: o.stores?.length ?? 1,
@@ -622,6 +632,8 @@ export const getAccountantDashboard = async (req: Request, res: Response) => {
       return {
         id: o.id,
         order_no: o.order_no,
+        csm_id: o.created_by,
+        csm_name: o.creator_name,
         client_name: o.client_name,
         store_name: storeLabelOf(o),
         store_count: o.stores?.length ?? 1,

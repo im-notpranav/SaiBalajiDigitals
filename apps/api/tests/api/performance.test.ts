@@ -22,7 +22,7 @@ describe("order lists", () => {
     const row = res.body.data.find((o: { id: number }) => o.id === order.id);
     expect(row.total_amount).toBe(1000);
     expect(row.items).toHaveLength(1);
-    expect(Object.keys(row.items[0]).sort()).toEqual(["assignments", "id"]);
+    expect(Object.keys(row.items[0]).sort()).toEqual(["assignments", "id", "production_completed"]);
   });
 
   it("give production and the Assign Work page the whole rows", async () => {

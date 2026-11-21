@@ -1,3 +1,4 @@
+import { CsmTag } from "@/components/orders/CsmTag";
 import React from "react";
 import type { ReactNode } from "react";
 import {
@@ -76,7 +77,10 @@ export function ProductionQueueTable({
             {sorted.map((o) => (
               <React.Fragment key={o.id}>
                 <TableRow className="group bg-muted/10">
-                  <TableCell className="font-mono text-xs font-semibold text-primary">{o.order_no}</TableCell>
+                  <TableCell>
+                    <span className="block font-mono text-xs font-semibold text-primary">{o.order_no}</span>
+                    <CsmTag id={o.created_by} name={o.creator_name} compact />
+                  </TableCell>
                   <TableCell className="font-medium">{o.client_name}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{storeLabel(o)}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{storeSubLabel(o) || "—"}</TableCell>

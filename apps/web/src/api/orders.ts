@@ -136,6 +136,7 @@ export interface OrderDetailsPatch {
   po_number?: string | null;
   remarks?: string | null;
   remarks_other_text?: string | null;
+  order_remark?: string | null;
 }
 
 export async function updateOrderDetails(id: number, data: OrderDetailsPatch) {
@@ -442,4 +443,16 @@ export async function emailExport(payload: EmailExportPayload) {
 export async function getRecentRecipients(q?: string) {
   const qs = q ? `?q=${encodeURIComponent(q)}` : "";
   return apiFetch<string[]>(`/orders/export/recipients${qs}`);
+}
+
+/** The order's shared notes thread, oldest first. */
+export async function fetchOrderNotes(orderId: number) {
+  return apiFetch<{ notes: import("@sb-oms/shared-types").OrderNote[] }>(`/orders/${orderId}/notes`);
+}
+
+export async function addOrderNote(orderId: number, body: string) {
+  return apiFetch<{ note: import("@sb-oms/shared-types").OrderNote }>(`/orders/${orderId}/notes`, {
+    method: "POST",
+    data: { body },
+  });
 }

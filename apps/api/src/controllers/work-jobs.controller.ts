@@ -43,7 +43,7 @@ class HttpError extends Error {
 }
 
 const jobInclude = {
-  order: { select: { id: true, order_no: true, client_name: true, status: true, created_by: true, creator_name: true } },
+  order: { select: { id: true, order_no: true, client_name: true, status: true, created_by: true, creator_name: true, _count: { select: { notes: true } } } },
   area: { select: { id: true, name: true, locality: true } },
   csmUser:{ select: { id: true, name: true } },
   csmCode: { select: { id: true, code: true, kind: true, label: true, user: { select: { id: true, name: true } } } },
@@ -74,7 +74,7 @@ export function serializeJob(job: JobRow) {
     instructions: job.instructions,
     allow_double_booking: job.allow_double_booking,
     label: gridLabel(job),
-    order: job.order,
+    order: job.order ? (({ _count, ...o }) => ({ ...o, notes_count: _count.notes }))(job.order) : null,
     area: job.area,
     csm: job.csmUser,
     csm_code: job.csmCode,
@@ -874,7 +874,7 @@ export const myJobs = async (req: Request, res: Response) => {
         const csmId = csmUserOf(j);
         return {
           ...s,
-          order: j.order ? { order_no: j.order.order_no, client_name: j.order.client_name } : null,
+          order: j.order ? { id: j.order.id, order_no: j.order.order_no, client_name: j.order.client_name, notes_count: j.order._count.notes } : null,
           csm: csmId ? (csmById.get(csmId) ?? null) : null,
         };
       }),

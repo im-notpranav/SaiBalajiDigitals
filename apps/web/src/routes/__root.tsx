@@ -58,7 +58,8 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <Outlet />
-      <Toaster richColors position="top-right" />
+      {/* Bottom-right and short-lived, so a toast never sits over the account menu (Sign out). */}
+      <Toaster richColors closeButton position="bottom-right" duration={2500} visibleToasts={3} />
     </QueryClientProvider>
   );
 }

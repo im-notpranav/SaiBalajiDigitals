@@ -115,6 +115,7 @@ model User {
   assignments          OrderItemAssignment[] @relation("AssignmentAssignee")
   assignmentsMade      OrderItemAssignment[] @relation("AssignmentAssigner")
   followUps            PaymentFollowUp[]     @relation("FollowUpAuthor")
+  orderNotes           OrderNote[]           @relation("OrderNoteAuthor")
   installedStores      OrderStore[]          @relation("StoreInstaller")
   invoicePayments      Invoice[]             @relation("InvoicePaymentReceiver")
   csmCodes             CsmCode[]
@@ -167,6 +168,10 @@ model Order {
   creator_name        String
   remarks             RemarkType?
   remarks_other_text  String?
+  /// Optional free remark the CSM adds when creating the order (not a closing remark).
+  order_remark        String?
+  /// Running notes thread anyone working on the order can add to.
+  notes               OrderNote[]
   items               OrderItem[]
   stores              OrderStore[]
   invoices            Invoice[]
@@ -395,6 +400,23 @@ model Notification {
   created_at DateTime @default(now())
 
   @@index([user_id, created_at])
+}
+
+/// One note in an order's shared thread. Anyone who can open the order sees every note and
+/// may add one; nobody edits another person's note. Name and role are copied so the thread
+/// still reads right after a person is renamed or deleted.
+model OrderNote {
+  id          Int      @id @default(autoincrement())
+  order_id    Int
+  order       Order    @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  body        String
+  author_id   Int?
+  author      User?    @relation("OrderNoteAuthor", fields: [author_id], references: [id], onDelete: SetNull)
+  author_name String
+  author_role Role
+  created_at  DateTime @default(now())
+
+  @@index([order_id, created_at])
 }
 
 model PaymentFollowUp {

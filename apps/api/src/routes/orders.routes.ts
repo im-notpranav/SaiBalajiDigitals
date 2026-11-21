@@ -38,6 +38,7 @@ import {
   getRecentRecipients,
 } from "../controllers/orders.controller";
 import { orderTemplate, previewBulkOrders, createBulkOrders } from "../controllers/import.controller";
+import { getOrderNotes, addOrderNote } from "../controllers/order-notes.controller";
 import { authenticate, authorize, requireSuperAdmin , denyReadOnlyMutations } from "../middlewares/auth.middleware";
 import { OMS_ROLES } from "../utils/roles";
 
@@ -52,6 +53,11 @@ const emailExportLimiter = rateLimit({
 });
 
 router.use(authenticate);
+// The notes thread is for everyone working on an order, field staff and the Operation
+// Manager included, so it sits ahead of the OMS-only and read-only rules. The controller
+// checks each person is on the order.
+router.get("/:id/notes", getOrderNotes);
+router.post("/:id/notes", addOrderNote);
 // Order data (amounts, clients, invoices) is for OMS roles only. Field staff and the Cost
 // Control Manager get the order details they need through their own portals.
 router.use(authorize(...OMS_ROLES));

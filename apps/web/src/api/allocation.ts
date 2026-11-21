@@ -194,6 +194,8 @@ export interface WorkJob {
     status: string;
     created_by: number | null;
     creator_name: string | null;
+    /** Entries in the order's shared notes thread. */
+    notes_count?: number;
   } | null;
   area: { id: number; name: string; locality: AreaLocality } | null;
   csm: { id: number; name: string } | null;
@@ -316,7 +318,7 @@ export interface GridJob {
 }
 
 export interface MyJob extends Omit<WorkJob, "order" | "csm"> {
-  order: { order_no: string; client_name: string } | null;
+  order: { id: number; order_no: string; client_name: string; notes_count?: number } | null;
   csm: { id: number; name: string; phone: string | null } | null;
 }
 

@@ -54,7 +54,10 @@ function EmployeeDashboard() {
 
   const today = todayIST();
   const weekEnd = addDays(today, 6);
-  const liveJobs = (jobsData?.jobs ?? []).filter((j) => j.status !== "CANCELLED" && j.status !== "COMPLETED");
+  // Old field jobs (already ended) stay off the dashboard: only today's and upcoming ones count.
+  const liveJobs = (jobsData?.jobs ?? []).filter(
+    (j) => j.status !== "CANCELLED" && j.status !== "COMPLETED" && j.end_date >= today,
+  );
   const jobsThisWeek = liveJobs.filter((j) => j.start_date <= weekEnd && j.end_date >= today).length;
   const jobsNeedingDetails = liveJobs.filter((j) => !j.work_details).length;
 

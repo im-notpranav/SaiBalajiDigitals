@@ -17,17 +17,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import { REMARK_TYPES } from "@/lib/constants";
+import { CloseRemarkFields, EMPTY_CLOSE_REMARK, closeRemarkReady, type CloseRemark } from "@/components/orders/CloseRemarkFields";
 import { toast } from "sonner";
-import type { Order, RemarkType } from "@sb-oms/shared-types";
+import { friendlyError } from "@/lib/friendly-error";
+import type { Order } from "@sb-oms/shared-types";
 import { useAuth, isReadOnlyRole } from "@/lib/auth-store";
 import { EmailExportDialog } from "@/components/orders/EmailExportDialog";
 import { StartOrderDialog } from "@/components/orders/StartOrderDialog";
@@ -47,11 +40,8 @@ function AdminOrders() {
 
   const [starting, setStarting] = useState(false);
   const [closingOrder, setClosingOrder] = useState<Order | null>(null);
-  const [remark, setRemark] = useState<RemarkType | "Other">(REMARK_TYPES[0]!.value);
-  const [custom, setCustom] = useState("");
-
-  const isCustom = remark === "Other";
-  const canSubmitClose = !isCustom || custom.trim().length > 0;
+  const [closeRemark, setCloseRemark] = useState<CloseRemark>(EMPTY_CLOSE_REMARK);
+  const canSubmitClose = closeRemarkReady(closeRemark);
 
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["orders", "admin", params],
@@ -68,17 +58,16 @@ function AdminOrders() {
     if (!closingOrder) return;
     try {
       await closeOrder(closingOrder.id, {
-        remarks: remark,
-        remarks_other_text: isCustom ? custom : undefined,
+        remarks: closeRemark.remarks,
+        remarks_other_text: closeRemark.text.trim(),
       });
       toast.success(`Order ${closingOrder.order_no} closed (Admin Override)`);
       queryClient.invalidateQueries({ queryKey: ["orders"] });
     } catch (e: any) {
-      toast.error(`Failed to close ${closingOrder.order_no}`, { description: e.message });
+      toast.error(`Failed to close ${closingOrder.order_no}`, { description: friendlyError(e) });
     } finally {
       setClosingOrder(null);
-      setCustom("");
-      setRemark(REMARK_TYPES[0]!.value);
+      setCloseRemark(EMPTY_CLOSE_REMARK);
     }
   };
 
@@ -161,28 +150,8 @@ function AdminOrders() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           
-          <div className="py-4 space-y-4">
-            <div>
-              <label className="mb-1.5 block text-xs font-semibold">Closure remark type</label>
-              <Select value={remark} onValueChange={(v) => setRemark(v as RemarkType | "Other")}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {REMARK_TYPES.map((t) => (
-                    <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
-                  ))}
-                  <SelectItem value="Other">Other (Custom)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            {isCustom && (
-              <div className="animate-pop-in">
-                <label className="mb-1.5 block text-xs font-semibold">
-                  Custom reason * <span className="text-destructive">(required)</span>
-                </label>
-                <Textarea rows={3} value={custom} onChange={(e) => setCustom(e.target.value)} placeholder="Explain the custom closure reason…" />
-                {!custom.trim() && <p className="mt-1 text-xs text-destructive">Free-text reason is required for Custom Reason.</p>}
-              </div>
-            )}
+          <div className="py-4">
+            <CloseRemarkFields value={closeRemark} onChange={setCloseRemark} idPrefix="list-close" />
           </div>
 
           <AlertDialogFooter>

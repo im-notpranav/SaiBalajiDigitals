@@ -4,20 +4,12 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { OrderDetail } from "@/components/orders/OrderDetail";
 import { OrderLinkedWork } from "@/components/orders/OrderLinkedWork";
 import { fetchOrder, forceCloseOrder, closeOrder } from "@/api/orders";
-import { Loader2, AlertOctagon, Lock, Pencil } from "lucide-react";
+import { Loader2, AlertOctagon, Lock, Pencil, Plus } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { useState } from "react";
-import { REMARK_TYPES } from "@/lib/constants";
-import type { RemarkType } from "@sb-oms/shared-types";
 import { toast } from "sonner";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
+import { CloseRemarkFields, EMPTY_CLOSE_REMARK, closeRemarkReady, type CloseRemark } from "@/components/orders/CloseRemarkFields";
+import { friendlyError } from "@/lib/friendly-error";
 import { useAuth, isReadOnlyRole } from "@/lib/auth-store";
 
 export const Route = createFileRoute("/_portal/admin/orders_/$id")({
@@ -36,30 +28,28 @@ function OrderDetailAdmin() {
     queryFn: () => fetchOrder(Number(id)),
   });
 
-  const [remark, setRemark] = useState<RemarkType | "Other">(REMARK_TYPES[0]!.value);
-  const [custom, setCustom] = useState("");
-
-  const isCustom = remark === "Other";
-  const canSubmitClose = !isCustom || custom.trim().length > 0;
+  const [closeRemark, setCloseRemark] = useState<CloseRemark>(EMPTY_CLOSE_REMARK);
+  const canSubmitClose = closeRemarkReady(closeRemark);
+  const closeBody = () => ({ remarks: closeRemark.remarks, remarks_other_text: closeRemark.text.trim() });
 
   const forceCloseMutation = useMutation({
-    mutationFn: () => forceCloseOrder(Number(id), { remarks: remark, remarks_other_text: isCustom ? custom : undefined }),
+    mutationFn: () => forceCloseOrder(Number(id), closeBody()),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["order", id] });
       queryClient.invalidateQueries({ queryKey: ["orders"] });
       toast.success("Order force closed");
     },
-    onError: (err: any) => toast.error("Failed to force close", { description: err.message }),
+    onError: (err: any) => toast.error("Failed to force close", { description: friendlyError(err) }),
   });
 
   const closeMutation = useMutation({
-    mutationFn: () => closeOrder(Number(id), { remarks: remark, remarks_other_text: isCustom ? custom : undefined }),
+    mutationFn: () => closeOrder(Number(id), closeBody()),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["order", id] });
       queryClient.invalidateQueries({ queryKey: ["orders"] });
       toast.success("Order closed successfully");
     },
-    onError: (err: any) => toast.error("Failed to close", { description: err.message }),
+    onError: (err: any) => toast.error("Failed to close", { description: friendlyError(err) }),
   });
 
   if (isLoading) {
@@ -77,28 +67,8 @@ function OrderDetailAdmin() {
           <Lock className="w-4 h-4 text-warning" /> Close Order
         </h3>
         
-        <div className="space-y-4 max-w-lg mb-6">
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold">Closure remark type</label>
-            <Select value={remark} onValueChange={(v) => setRemark(v as RemarkType | "Other")}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {REMARK_TYPES.map((t) => (
-                  <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
-                ))}
-                <SelectItem value="Other">Other (Custom)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          {isCustom && (
-            <div className="animate-pop-in">
-              <label className="mb-1.5 block text-xs font-semibold">
-                Custom reason * <span className="text-destructive">(required)</span>
-              </label>
-              <Textarea rows={3} value={custom} onChange={(e) => setCustom(e.target.value)} placeholder="Explain the custom closure reason…" />
-              {!custom.trim() && <p className="mt-1 text-xs text-destructive">Free-text reason is required for Custom Reason.</p>}
-            </div>
-          )}
+        <div className="max-w-lg mb-6">
+          <CloseRemarkFields value={closeRemark} onChange={setCloseRemark} idPrefix="detail-close" />
         </div>
 
         {data.order.status === "Pending" && (
@@ -119,7 +89,7 @@ function OrderDetailAdmin() {
         </h3>
         <p className="text-xs text-muted-foreground mb-4">
           Force closing an order bypasses all standard workflow checks and transitions it immediately to Completed.
-          It uses the same remark selected above.
+          It uses the same remark written above, which is required.
         </p>
         <Button 
           variant="destructive" 
@@ -145,9 +115,19 @@ function OrderDetailAdmin() {
         crumbs={[{ label: "Automated System" }, { label: "Orders", to: "/admin/orders" }, { label: "Details" }]}
         actions={
           !isReadOnlyRole(user?.role) && data.order.status !== "Completed" ? (
-            <Link to="/admin/edit-order/$id" params={{ id: String(data.order.id) }} className={buttonVariants({ variant: "outline" })}>
-              <Pencil className="mr-2 h-4 w-4" aria-hidden /> Edit order
-            </Link>
+            <div className="flex flex-wrap gap-2">
+              <Link
+                to="/admin/edit-order/$id"
+                params={{ id: String(data.order.id) }}
+                search={{ addLine: true }}
+                className={buttonVariants({ variant: "outline" })}
+              >
+                <Plus className="mr-2 h-4 w-4" aria-hidden /> Add Line Item
+              </Link>
+              <Link to="/admin/edit-order/$id" params={{ id: String(data.order.id) }} className={buttonVariants({ variant: "outline" })}>
+                <Pencil className="mr-2 h-4 w-4" aria-hidden /> Edit order
+              </Link>
+            </div>
           ) : undefined
         }
       />

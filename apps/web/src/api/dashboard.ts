@@ -42,6 +42,8 @@ export interface CsmStageSummary {
 export interface CsmStageOrder {
   id: number;
   order_no: string;
+  csm_id?: number | null;
+  csm_name?: string;
   client_name: string;
   store_name: string;
   store_count?: number;
@@ -55,6 +57,8 @@ export interface CsmStageOrder {
 export interface CsmCompletedOrder {
   id: number;
   order_no: string;
+  csm_id?: number | null;
+  csm_name?: string;
   client_name: string;
   store_name: string;
   store_count?: number;
@@ -103,6 +107,8 @@ export interface ProdPendingItem {
   order_id: number;
   item_id: number;
   order_no: string;
+  csm_id?: number | null;
+  csm_name?: string;
   client_name: string;
   item_s_no: number;
   media: string;
@@ -135,6 +141,8 @@ export async function fetchProdManagerDashboard() {
 export interface AcctBillingItem {
   id: number;
   order_no: string;
+  csm_id?: number | null;
+  csm_name?: string;
   client_name: string;
   store_name: string;
   store_count?: number;
@@ -147,6 +155,8 @@ export interface AcctBillingItem {
 export interface AcctPaymentItem {
   id: number;
   order_no: string;
+  csm_id?: number | null;
+  csm_name?: string;
   client_name: string;
   store_name: string;
   store_count?: number;
@@ -162,6 +172,8 @@ export interface AcctPaymentItem {
 export interface AcctCompletedItem {
   id: number;
   order_no: string;
+  csm_id?: number | null;
+  csm_name?: string;
   client_name: string;
   store_name: string;
   store_count?: number;
@@ -205,6 +217,8 @@ export async function fetchOverdueReport(days = 5) {
     orders: Array<{
       id: number;
       order_no: string;
+      csm_id?: number | null;
+      csm_name?: string;
       client_name: string;
       store_name: string;
       location: string;

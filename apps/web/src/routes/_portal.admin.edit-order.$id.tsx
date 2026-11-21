@@ -13,11 +13,15 @@ import { friendlyError } from "@/lib/friendly-error";
 
 export const Route = createFileRoute("/_portal/admin/edit-order/$id")({
   head: () => ({ meta: [{ title: "Edit Order — SB OMS" }] }),
+  // ?addLine=1 comes from an "Add Line Item" shortcut: open with a blank line ready.
+  validateSearch: (search: Record<string, unknown>): { addLine?: boolean } =>
+    search.addLine === true || search.addLine === 1 || search.addLine === "1" || search.addLine === "true" ? { addLine: true } : {},
   component: EditOrderAdmin,
 });
 
 function EditOrderAdmin() {
   const { id } = Route.useParams();
+  const { addLine } = Route.useSearch();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -42,6 +46,7 @@ function EditOrderAdmin() {
       const headerPatch: Record<string, unknown> = {};
       if (payload.client_name !== order.client_name) headerPatch.client_name = payload.client_name;
       if ((payload.po_number || "") !== (order.po_number || "")) headerPatch.po_number = payload.po_number || null;
+      if ((payload.order_remark || "") !== (order.order_remark || "")) headerPatch.order_remark = payload.order_remark || null;
       if (Object.keys(headerPatch).length > 0) await updateOrderDetails(orderId, headerPatch);
 
       const existingById = new Map((order.stores ?? []).map((s) => [s.id, s]));
@@ -107,7 +112,7 @@ function EditOrderAdmin() {
         crumbs={[{ label: "Automated System" }, { label: "Orders", to: "/admin/orders" }, { label: "Edit" }]}
       />
 
-      <OrderForm defaultValues={order} onSubmit={submit} isSubmitting={saving} userRole={user?.role} />
+      <OrderForm defaultValues={order} onSubmit={submit} isSubmitting={saving} userRole={user?.role} startWithNewLine={!!addLine} />
     </>
   );
 }

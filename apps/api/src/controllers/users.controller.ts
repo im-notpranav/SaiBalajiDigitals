@@ -568,3 +568,32 @@ export const updateUser = async (req: Request, res: Response) => {
     return res.status(500).json({ message: "Internal server error" });
   }
 };
+
+/**
+ * GET /api/users/csm-directory — every person who can own an order (CSMs and admins), with
+ * their CSM code, so any screen can show "CSM name" beside an order number, or the short code
+ * where space is tight. Deleted people stay listed so old orders keep a name.
+ */
+export const getCsmDirectory = async (_req: Request, res: Response) => {
+  try {
+    const users = await prisma.user.findMany({
+      where: { role: { in: ["CSM", "ADMIN"] } },
+      select: {
+        id: true,
+        name: true,
+        username: true,
+        csmCodes: { select: { code: true, is_active: true }, orderBy: { id: "asc" } },
+      },
+      orderBy: { name: "asc" },
+    });
+    const directory = users.map((u) => {
+      const code = u.csmCodes.find((c) => c.is_active)?.code ?? u.csmCodes[0]?.code ?? null;
+      return { id: u.id, name: u.name, username: u.username, code };
+    });
+    res.set("Cache-Control", "private, max-age=300");
+    return res.json({ directory });
+  } catch (error) {
+    console.error("getCsmDirectory error:", error);
+    return res.status(500).json({ message: "Could not load the CSM list." });
+  }
+};

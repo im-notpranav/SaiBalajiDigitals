@@ -87,7 +87,7 @@ function ProdManagerAssignPage() {
     <>
       <PageHeader
         title="Assign Work"
-        description="Tick items, pick teams, assign in one go."
+        description="Tick items, pick operators, assign in one go."
         crumbs={[{ label: "Production Manager", to: "/prod-manager/dashboard" }, { label: "Assign Work" }]}
       />
 

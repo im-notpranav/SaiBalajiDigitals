@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getUsers, createUser, deleteUser, updateMe, checkUsername, toggleUserStatus, updateUser, getProductionStaff, resetUserPassword, uploadUserPhoto, removeUserPhoto, getUserPhoto, MAX_PHOTO_BYTES } from "../controllers/users.controller";
+import { getCsmDirectory, getUsers, createUser, deleteUser, updateMe, checkUsername, toggleUserStatus, updateUser, getProductionStaff, resetUserPassword, uploadUserPhoto, removeUserPhoto, getUserPhoto, MAX_PHOTO_BYTES } from "../controllers/users.controller";
 import { authenticate, authorize, requireSuperAdmin , denyReadOnlyMutations } from "../middlewares/auth.middleware";
 import { rawUpload } from "../middlewares/raw-upload";
 
@@ -13,6 +13,8 @@ router.get("/me", (req, res) => res.status(200).json(req.user)); // Should be in
 // there is no self-upload.
 router.put("/me", updateMe);
 router.get("/:id/photo", getUserPhoto);
+// Every signed-in role shows "CSM name / code" beside order numbers, so this is open to all.
+router.get("/csm-directory", getCsmDirectory);
 
 router.use(denyReadOnlyMutations);
 

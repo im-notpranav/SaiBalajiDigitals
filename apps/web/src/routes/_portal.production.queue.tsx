@@ -1,3 +1,4 @@
+import { CsmTag } from "@/components/orders/CsmTag";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -198,6 +199,7 @@ function ProductionQueue() {
                         {order.order_no}
                       </Link>
                     </h3>
+                    <CsmTag id={order.created_by} name={order.creator_name} withIcon className="text-xs" />
                     <p className="mt-0.5 text-sm text-muted-foreground">
                       {order.client_name} · {storeLabel(order as any)}{storeSubLabel(order as any) ? ` (${storeSubLabel(order as any)})` : ""}
                     </p>

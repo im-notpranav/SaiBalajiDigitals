@@ -170,7 +170,7 @@ export const getOrders = async (req: Request, res: Response) => {
             : { select: { id: true, amount: true, remarks: true, remarks_confirmed: true, adjustment_amount: true, original_amount: true, production_completed: true, assignments: { select: { id: true } } } },
           stores: { select: { id: true, s_no: true, store_name: true, location: true, installed_at: true, invoice_id: true }, orderBy: { s_no: "asc" } },
           adjustments: { where: { status: "Approved" }, select: { type: true, amount: true, status: true } },
-          _count: { select: { stores: true } },
+          _count: { select: { stores: true, notes: true } },
         },
       }),
       prisma.order.count({ where }),
@@ -186,6 +186,10 @@ export const getOrders = async (req: Request, res: Response) => {
         location: storeLocationOf(o),
         stores: o.stores,
         store_count: o._count.stores,
+        notes_count: o._count.notes,
+        // The order's CSM, shown beside the number so an operator knows whom to ask.
+        created_by: o.created_by,
+        creator_name: o.creator_name,
         status: o.status,
         date: o.date,
         items: o.items
@@ -219,6 +223,7 @@ export const getOrders = async (req: Request, res: Response) => {
         ...rest,
         items: fullItems ? items : items.map((i: any) => ({ id: i.id, assignments: i.assignments, production_completed: i.production_completed })),
         store_count: _count.stores,
+        notes_count: _count.notes,
         total_amount,
         loss_amount,
         adjustment_amount,
@@ -257,10 +262,12 @@ export const getOrder = async (req: Request, res: Response) => {
           },
           orderBy: { created_at: "asc" },
         },
+        _count: { select: { notes: true } },
       },
     });
 
     if (!order) return res.status(404).json({ message: "Order not found" });
+    const notes_count = order._count.notes;
 
     // A CSM may open any order, not just their own: header fields (store, location, PO)
     // are editable by any active CSM, and a stand-in cannot enter a PO on an order they
@@ -284,6 +291,9 @@ export const getOrder = async (req: Request, res: Response) => {
         store_name: storeLabelOf(order),
         location: storeLocationOf(order),
         stores: order.stores.map((s: any) => ({ id: s.id, s_no: s.s_no, store_name: s.store_name, location: s.location })),
+        created_by: order.created_by,
+        creator_name: order.creator_name,
+        notes_count,
         status: order.status,
         date: order.date,
         items: myItems.map((i: any) => ({
@@ -313,7 +323,8 @@ export const getOrder = async (req: Request, res: Response) => {
       ...s,
       ...computeTotals(s.items, order.adjustments.filter((a: any) => a.order_store_id === s.id)),
     }));
-    return res.status(200).json(serializeDecimals({ ...order, stores, total_amount, loss_amount, adjustment_amount }));
+    const { _count, ...orderOut } = order;
+    return res.status(200).json(serializeDecimals({ ...orderOut, stores, total_amount, loss_amount, adjustment_amount, notes_count }));
   } catch (err) {
     return res.status(500).json({ message: "Internal server error" });
   }
@@ -378,7 +389,7 @@ export const createOrder = async (req: Request, res: Response) => {
     if (!parseResult.success) {
       return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parseResult.error) });
     }
-    const { client_name, po_number, stores, remarks, remarks_other_text } = parseResult.data;
+    const { client_name, po_number, stores, remarks, remarks_other_text, order_remark } = parseResult.data;
     const user = req.user!;
     const isAdmin = user.role === "ADMIN";
 
@@ -456,6 +467,7 @@ export const createOrder = async (req: Request, res: Response) => {
           status: "Active",
           remarks,
           remarks_other_text,
+          order_remark: order_remark || null,
           stores: {
             create: stores.map((s, index) => ({
               s_no: index + 1,
@@ -885,7 +897,7 @@ export const updateOrderDetails = async (req: Request, res: Response) => {
     if (!parseResult.success) {
       return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parseResult.error) });
     }
-    const { client_name, po_number, remarks, remarks_other_text } = parseResult.data;
+    const { client_name, po_number, remarks, remarks_other_text, order_remark } = parseResult.data;
     const user = req.user!;
     const isAdmin = user.role === "ADMIN";
 
@@ -921,6 +933,7 @@ export const updateOrderDetails = async (req: Request, res: Response) => {
     if (clientName !== undefined) log("Client Name", order.client_name, clientName);
     // undefined leaves the PO alone; an explicit null clears it.
     if (po_number !== undefined) log("PO Number", order.po_number || "", po_number || "");
+    if (order_remark !== undefined) log("Order Remark", order.order_remark || "", order_remark || "");
 
     const updated = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT set_config('app.current_user_id', ${user.id.toString()}, true)`;
@@ -931,6 +944,7 @@ export const updateOrderDetails = async (req: Request, res: Response) => {
           po_number: po_number !== undefined ? po_number : undefined,
           remarks: remarks !== undefined ? remarks : undefined,
           remarks_other_text: remarks_other_text !== undefined ? remarks_other_text : undefined,
+          order_remark: order_remark !== undefined ? order_remark || null : undefined,
         },
       });
       await recordHeaderChanges(tx, id, user, changes);
@@ -2071,7 +2085,7 @@ export const bulkAssignOrderItems = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "The same line item appears more than once." });
     }
     if (mode === "add" && assignments.some((a) => a.user_ids.length === 0)) {
-      return res.status(400).json({ message: "Pick at least one team to add." });
+      return res.status(400).json({ message: "Pick at least one operator to add." });
     }
 
     const order = await prisma.order.findUnique({ where: { id: orderId } });

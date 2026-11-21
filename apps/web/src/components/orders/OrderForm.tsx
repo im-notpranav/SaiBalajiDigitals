@@ -109,6 +109,9 @@ const blankLine = (): Line => ({
   remarks: null, remarks_other_text: null, adjustment_amount: "", lessMode: "discount",
 });
 
+/** Id of the blank line an "Add Line Item" shortcut opens the form with. */
+const NEW_LINE_ID = "shortcut-new-line";
+
 const blankStore = (): StoreBlock => ({
   id: crypto.randomUUID(), store_name: "", location: "", po_number: "", lines: [blankLine()],
 });
@@ -197,12 +200,27 @@ export interface OrderFormProps {
   userRole?: UserRole | string;
   /** Billing has started: header fields stay open, line items freeze. */
   lineItemsLocked?: boolean;
+  /** Opened from an "Add Line Item" shortcut: start with a blank line on the last store, in view. */
+  startWithNewLine?: boolean;
 }
 
-export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userRole, lineItemsLocked = false }: OrderFormProps) {
+export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userRole, lineItemsLocked = false, startWithNewLine = false }: OrderFormProps) {
   const [clientName, setClientName] = useState(defaultValues?.client_name || "");
   const [poNumber, setPoNumber] = useState(defaultValues?.po_number || "");
-  const [stores, setStores] = useState<StoreBlock[]>(() => storeBlocksOf(defaultValues));
+  const [orderRemark, setOrderRemark] = useState(defaultValues?.order_remark || "");
+  const [stores, setStores] = useState<StoreBlock[]>(() => {
+    const blocks = storeBlocksOf(defaultValues);
+    if (!startWithNewLine || lineItemsLocked || !defaultValues) return blocks;
+    const last = blocks[blocks.length - 1]!;
+    return [...blocks.slice(0, -1), { ...last, lines: [...last.lines, { ...blankLine(), id: NEW_LINE_ID }] }];
+  });
+  // Bring the shortcut's new line into view once, and put the cursor in its line item box.
+  useEffect(() => {
+    if (!startWithNewLine) return;
+    const row = document.querySelector<HTMLElement>(`[data-line-id="${NEW_LINE_ID}"]`);
+    row?.scrollIntoView({ behavior: "smooth", block: "center" });
+    row?.querySelector<HTMLElement>("input, button")?.focus({ preventScroll: true });
+  }, [startWithNewLine]);
 
   const isAdmin = userRole === "ADMIN";
   const getSft = (l: Line) => (numOf(l.width_inches) * numOf(l.height_inches)) / 144;
@@ -414,6 +432,7 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
       client_name: clientName,
       date: defaultValues?.created_at ? new Date(defaultValues.created_at).toISOString().split("T")[0] : new Date().toISOString().split("T")[0],
       po_number: poNumber || undefined,
+      order_remark: orderRemark.trim() || null,
       stores: stores.map((s) => ({
         id: s.originalId,
         store_name: s.store_name,
@@ -501,6 +520,18 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
                 className="mt-1 h-9"
               />
             </div>
+            <div className="sm:col-span-3">
+              <Label htmlFor="orderRemark" className={fieldLabel}>Order remark</Label>
+              <Textarea
+                id="orderRemark"
+                value={orderRemark}
+                onChange={(e) => setOrderRemark(e.target.value)}
+                placeholder="Optional: anything the team should know about this order"
+                maxLength={1000}
+                rows={2}
+                className="mt-1 resize-none"
+              />
+            </div>
           </div>
         </motion.section>
 
@@ -582,7 +613,7 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
               const lineTotal = getLineTotal(line);
 
               return (
-              <div key={line.id} className="rounded-xl border bg-background/60 p-2.5">
+              <div key={line.id} data-line-id={line.id} className="rounded-xl border bg-background/60 p-2.5">
                 {/* Line 1: what is being made. */}
                 <div className="grid grid-cols-4 gap-2 sm:grid-cols-[1.5rem_minmax(0,1fr)_repeat(4,5.5rem)] sm:items-center">
                   <span className="hidden text-center text-xs tabular-nums text-muted-foreground sm:block" aria-hidden>
@@ -743,7 +774,7 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
           <div className="mt-2 flex min-h-8 items-center justify-between gap-2">
             {!lineItemsLocked ? (
               <Button type="button" size="sm" variant="ghost" onClick={() => addLine(store.id)} className="h-8 text-xs text-primary">
-                <Plus className="mr-1 h-3.5 w-3.5" /> Add item
+                <Plus className="mr-1 h-3.5 w-3.5" /> Add Line Item
               </Button>
             ) : (
               <span />

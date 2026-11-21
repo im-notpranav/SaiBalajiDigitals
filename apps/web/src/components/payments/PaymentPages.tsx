@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { CsmTag } from "@/components/orders/CsmTag";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, Paperclip, Plus, Search, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -153,6 +154,7 @@ export function MyPaymentRequests({ crumbs }: { crumbs: Crumbs }) {
                   <span className={cn("font-mono font-semibold", overdueText(r.overdue))}>
                     {r.order.order_no}
                   </span>
+                  <CsmTag id={r.order.created_by} name={r.order.creator_name} compact />
                   <PaymentStatusBadge status={r.status} />
                 </div>
                 <span className="text-lg font-semibold tabular-nums">{formatRupees(r.amount)}</span>
@@ -410,6 +412,7 @@ export function PaymentReviewQueue({
                     <span className={cn("font-mono font-semibold", overdueText(r.overdue))}>
                       {r.order.order_no}
                     </span>
+                    <CsmTag id={r.order.created_by} name={r.order.creator_name} compact />
                     <PaymentStatusBadge status={r.status} />
                   </div>
                   <span className="text-lg font-semibold tabular-nums">{formatRupees(r.amount)}</span>
@@ -501,6 +504,7 @@ export function PaymentReviewQueue({
                     >
                       {r.order.order_no}
                     </div>
+                    <CsmTag id={r.order.created_by} name={r.order.creator_name} compact className="block" />
                     <div
                       className="max-w-[12rem] truncate text-xs text-muted-foreground"
                       title={r.order.client_name}

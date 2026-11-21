@@ -1,3 +1,4 @@
+import { CsmTag } from "@/components/orders/CsmTag";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowRight, CheckCircle2, Factory, Flag, Ruler, Workflow } from "lucide-react";
 import { format } from "date-fns";
@@ -166,7 +167,10 @@ function ProductionDashboard() {
                         className="group grid gap-2 rounded-xl border bg-card p-4 transition-[color,background-color,border-color,box-shadow,opacity,transform] hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                       >
                         <span className="flex items-center justify-between gap-2">
-                          <span className="font-mono text-xs font-semibold text-primary">{o.order_no}</span>
+                          <span className="flex min-w-0 items-baseline gap-2">
+                            <span className="font-mono text-xs font-semibold text-primary">{o.order_no}</span>
+                            <CsmTag id={o.created_by} name={o.creator_name} compact />
+                          </span>
                           {held ? (
                             <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-[11px] font-medium text-destructive">
                               <Flag className="h-3 w-3" aria-hidden /> On hold

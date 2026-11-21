@@ -1,3 +1,4 @@
+import { CsmTag } from "@/components/orders/CsmTag";
 import type { ReactNode } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -13,7 +14,7 @@ import { STAGE_ORDER, orderStage } from "@/lib/order-stage";
 import { inr } from "@/lib/format";
 import type { Order } from "@sb-oms/shared-types";
 import { formatDistanceToNow } from "date-fns";
-import { PackageSearch } from "lucide-react";
+import { NotebookPen, PackageSearch } from "lucide-react";
 import { SortableHead, useSortableTable } from "@/hooks/useSortableTable";
 import { storeLabel, storeSubLabel } from "@/lib/stores";
 import { EmptyState, ErrorState, LoadingState, TableStateRow } from "@/components/layout/PageStates";
@@ -50,6 +51,21 @@ const created = (o: Order) =>
 /** Allotted by an admin and not filled yet: no stores and no items (the API's ?waiting=1). */
 const isWaitingForCsm = (o: Pick<Order, "store_count" | "stores" | "items">) =>
   (o.store_count ?? o.stores?.length ?? 0) === 0 && (o.items?.length ?? 0) === 0;
+
+/** A green notes marker beside the order number when the order's notes thread has entries. */
+function NotesDot({ count }: { count?: number }) {
+  if (!count) return null;
+  return (
+    <span
+      className="ml-1.5 inline-flex items-center gap-0.5 rounded-full bg-emerald-500/15 px-1.5 py-px align-middle font-sans text-[10px] font-semibold text-emerald-700 dark:text-emerald-300"
+      title={`${count} ${count === 1 ? "note" : "notes"} on this order`}
+    >
+      <NotebookPen className="h-2.5 w-2.5" aria-hidden />
+      {count}
+      <span className="sr-only"> {count === 1 ? "note" : "notes"}</span>
+    </span>
+  );
+}
 
 /** Sits in the store's place, so a waiting row is no taller than any other. */
 function WaitingBadge({ label }: { label: string }) {
@@ -139,7 +155,8 @@ export function OrdersTable({
                 <div className="flex items-start justify-between gap-2">
                   {selection && <div className="w-5 shrink-0 pt-0.5">{tickBox(o)}</div>}
                   <div className="min-w-0 flex-1">
-                    <div className="font-mono text-sm font-semibold text-primary">{o.order_no}</div>
+                    <div className="font-mono text-sm font-semibold text-primary">{o.order_no}<NotesDot count={o.notes_count} /></div>
+                    {!showCreator && <CsmTag id={o.created_by} name={o.creator_name} compact />}
                     <div className="truncate font-medium">{o.client_name}</div>
                   </div>
                   <OrderStageBadge order={o} />
@@ -163,7 +180,7 @@ export function OrdersTable({
                       {inr(o.total_amount ?? 0)}
                     </span>
                   )}
-                  {showCreator && o.creator_name && <span>by {o.creator_name}</span>}
+                  {showCreator && o.creator_name && <span>CSM {o.creator_name}</span>}
                   <span>{created(o)}</span>
                 </div>
                 {action && <div className="-mx-1 border-t pt-2">{action(o)}</div>}
@@ -200,7 +217,7 @@ export function OrdersTable({
                 </TableHead>
                 {showCreator && (
                   <TableHead>
-                    <SortableHead label="Created by" column="creator_name" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
+                    <SortableHead label="CSM" column="creator_name" sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} />
                   </TableHead>
                 )}
                 <TableHead>
@@ -239,7 +256,10 @@ export function OrdersTable({
                     {...rowProps(o, "group")}
                   >
                     {selection && <TableCell>{tickBox(o)}</TableCell>}
-                    <TableCell className="whitespace-nowrap font-mono text-xs font-semibold text-primary">{o.order_no}</TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      <span className="block font-mono text-xs font-semibold text-primary">{o.order_no}<NotesDot count={o.notes_count} /></span>
+                      {!showCreator && <CsmTag id={o.created_by} name={o.creator_name} compact />}
+                    </TableCell>
                     <TableCell className="font-medium">{o.client_name}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {isWaitingForCsm(o) ? (

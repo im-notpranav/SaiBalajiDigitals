@@ -1,3 +1,4 @@
+import { CsmTag } from "@/components/orders/CsmTag";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ProductionCompleteDialog } from "@/components/orders/ProductionCompleteDialog";
@@ -118,7 +119,7 @@ function ProdManagerDashboard() {
           <strong>SFT</strong> means square feet, the size of the print work. Pending SFT is assigned and not finished.
         </p>
         <p>
-          <strong>Team workload:</strong> click a person to see only the items they still have to finish.
+          <strong>Operator workload:</strong> click a person to see only the items they still have to finish.
         </p>
         <p>
           <strong>Pending items:</strong> click an order number to open it on the Assign Work page and change who does
@@ -178,7 +179,7 @@ function ProdManagerDashboard() {
             <section id={TEAM_SECTION} className="mt-8 scroll-mt-20" aria-labelledby="team-heading">
               <SectionHeading
                 id="team-heading"
-                title="Team workload"
+                title="Operator workload"
                 description="Most pending first. Click a person to see their work."
               />
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -275,6 +276,7 @@ function ProdManagerDashboard() {
                                 {item.order_no}
                               </Link>
                               <span className="ml-1.5 text-[11px] text-muted-foreground">item {item.item_s_no}</span>
+                              <CsmTag id={item.csm_id} name={item.csm_name} compact className="block" />
                             </td>
                             <td className="px-4 py-2.5 text-xs">{item.client_name}</td>
                             <td className="px-4 py-2.5 text-xs">

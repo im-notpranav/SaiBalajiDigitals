@@ -24,6 +24,15 @@ export const REMARK_TYPES: { value: RemarkType; label: string }[] = [
   { value: "Other", label: "Other" },
 ];
 
+/** Remarks offered when closing an order (normal or forced). A written remark is always required. */
+export const CLOSE_REMARK_TYPES: { value: RemarkType; label: string }[] = [
+  { value: "Reprint", label: "Reprint" },
+  { value: "Sample", label: "Sample" },
+  { value: "UnderWarranty", label: "Under Warranty" },
+  { value: "FreeOfCost", label: "Free of Cost" },
+  { value: "Other", label: "Other" },
+];
+
 /** Remarks that take the whole line off the bill. */
 export const LOSS_REMARK_TYPES: { value: RemarkType; label: string }[] = [
   { value: "Reprint", label: "Reprint" },
@@ -74,9 +83,9 @@ export const ROLES: { value: string; label: string; description: string }[] = [
   { value: "DRIVER", label: "Driver", description: "Field staff: sees own jobs and vehicle trips" },
   { value: "HELPER", label: "Helper", description: "Field staff (Sub-Paster / Ast. Paster): sees own jobs" },
   { value: "OPERATION_MANAGER", label: "Operation Manager", description: "Views the admin portal; manages field staff and allocation masters" },
+  { value: "PRODUCTION", label: "Operator", description: "Runs a machine and completes the line items given to them" },
   { value: "PASTER", label: "Paster", description: "Field staff: sees own jobs" },
-  { value: "PRODUCTION_MANAGER", label: "Production Manager", description: "Assigns line items to production teams" },
-  { value: "PRODUCTION", label: "Production Team", description: "Completes work assigned to them" },
+  { value: "PRODUCTION_MANAGER", label: "Production Manager", description: "Assigns line items to operators" },
 ];
 
 export const roleLabel = (value?: string | null) =>

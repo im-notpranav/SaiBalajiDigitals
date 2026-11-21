@@ -224,14 +224,14 @@ export function AssignOrderSection({
             size="sm"
             className="h-9 w-full justify-between text-xs font-normal md:h-8"
             disabled={busy || closed}
-            aria-label={`Assign teams to item ${item.s_no}, ${item.media}`}
+            aria-label={`Assign operators to item ${item.s_no}, ${item.media}`}
           >
             <span className="flex items-center gap-1.5 truncate">
               <Users className="h-3.5 w-3.5 shrink-0 opacity-60" />
               {assignedCount(item) === 0 ? (
                 <span className="text-muted-foreground italic">Unassigned</span>
               ) : (
-                plural(assignedCount(item), "team")
+                plural(assignedCount(item), "operator")
               )}
             </span>
             <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
@@ -239,7 +239,7 @@ export function AssignOrderSection({
         </PopoverTrigger>
         <PopoverContent align="start" className="w-56 p-2">
           <p className="px-1 pb-2 text-[11px] text-muted-foreground">
-            Assign one or more teams. All must finish before the item is complete.
+            Assign one or more operators. All must finish before the item is complete.
           </p>
           <div className="space-y-1">
             {staff.map((s) => {
@@ -368,7 +368,7 @@ export function AssignOrderSection({
       {/* Phones: one row per item instead of a seven-column table per order. */}
       {visibleItems.length === 0 && (
         <p className="p-6 text-center text-sm text-muted-foreground">
-          {view === "assigned" ? "No item on this order has a team yet." : "Every item on this order has a team."}
+          {view === "assigned" ? "No item on this order has an operator yet." : "Every item on this order has an operator."}
         </p>
       )}
       <ul className="divide-y md:hidden">
@@ -438,7 +438,7 @@ export function AssignOrderSection({
       {selected.size > 0 && (
         <div
           role="region"
-          aria-label={`Assign teams to ${plural(selected.size, "selected item")}`}
+          aria-label={`Assign operators to ${plural(selected.size, "selected item")}`}
           // Fixed, not sticky: the page scrolls the document, and main (overflow-y-auto) would
           // otherwise be the sticky container, so the bar would sit below the last row.
           className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-40 mx-auto flex max-w-5xl flex-wrap items-center gap-2 rounded-xl border bg-popover p-2.5 shadow-lg md:left-[calc(16rem+1.5rem)] md:right-6 lg:left-[calc(18rem+2rem)] lg:right-8"
@@ -449,7 +449,7 @@ export function AssignOrderSection({
           <div
             className="-mx-1 flex min-w-0 flex-1 basis-full items-center gap-1.5 overflow-x-auto px-1 sm:mx-0 sm:basis-0 sm:flex-wrap sm:overflow-visible sm:px-0"
             role="group"
-            aria-label="Teams"
+            aria-label="Operators"
           >
             {staff.map((s) => {
               const on = teams.has(s.id);
@@ -498,7 +498,7 @@ export function AssignOrderSection({
               size="sm"
               disabled={busy || teams.size === 0}
               onClick={() => applyBulk("add")}
-              title="Keep the teams already on these items and add the ones picked"
+              title="Keep the operators already on these items and add the ones picked"
             >
               Add
             </Button>
@@ -509,11 +509,11 @@ export function AssignOrderSection({
               onClick={() => applyBulk("replace")}
               title={
                 teams.size === 0
-                  ? "Take every team off these items"
-                  : "These items get exactly the teams picked"
+                  ? "Take every operator off these items"
+                  : "These items get exactly the operators picked"
               }
             >
-              {teams.size === 0 ? "Clear teams" : "Replace"}
+              {teams.size === 0 ? "Clear operators" : "Replace"}
             </Button>
             <Button
               size="icon"
@@ -661,7 +661,7 @@ function SuggestButton({
         ) : (
           <div className="space-y-3">
             <p className="text-xs text-muted-foreground">
-              Based on which teams usually get each media. Only unassigned items change.
+              Based on which operators usually get each line item. Only unassigned items change.
             </p>
             <ul className="space-y-1.5 text-sm">
               {groups.map((g) => (

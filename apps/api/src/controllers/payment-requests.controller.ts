@@ -94,7 +94,7 @@ type Actor = { id: number; role: string; name?: string };
 /* ------------------------------------------------------------------ shapes */
 
 const requestInclude = {
-  order: { select: { id: true, order_no: true, client_name: true, status: true } },
+  order: { select: { id: true, order_no: true, client_name: true, status: true, created_by: true, creator_name: true } },
   workJob: { select: { id: true, work_details: true, start_date: true } },
   requester: { select: { id: true, name: true, role: true, phone: true, emp_code: true } },
   payer: { select: { id: true, name: true } },
@@ -1010,7 +1010,7 @@ export const dashboard = async (req: Request, res: Response) => {
           status_changed_at: true,
           created_at: true,
           requester: { select: { id: true, name: true, role: true } },
-          order: { select: { id: true, order_no: true, client_name: true } },
+          order: { select: { id: true, order_no: true, client_name: true, created_by: true, creator_name: true } },
           _count: { select: { attachments: { where: { deleted_at: null, kind: "BILL" } } } },
         },
         orderBy: { status_changed_at: "asc" },

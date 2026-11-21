@@ -91,6 +91,8 @@ export const createOrderSchema = z.object({
   po_number: z.string().max(50).optional().nullable(),
   remarks: remarkEnum.optional().nullable(),
   remarks_other_text: z.string().max(500).optional().nullable(),
+  /** Optional free remark the CSM adds to the order (not a closing remark). */
+  order_remark: z.string().trim().max(1000).optional().nullable(),
   stores: z.array(createOrderStoreSchema).min(1).max(50),
 })
   .refine(remarksTextRefine, { message: "A reason is required for this remark type.", path: ["remarks_other_text"] })
@@ -145,6 +147,7 @@ export const updateOrderDetailsSchema = z.object({
   po_number: z.string().max(50).optional().nullable(),
   remarks: remarkEnum.optional().nullable(),
   remarks_other_text: z.string().max(500).optional().nullable(),
+  order_remark: z.string().trim().max(1000).optional().nullable(),
 }).refine(remarksTextRefine, { message: "A reason is required for this remark type.", path: ["remarks_other_text"] });
 
 /** Store header fields. Same null-clears-it convention on po_number. */
@@ -185,15 +188,19 @@ export const followUpSchema = z.object({
   note: z.string().min(1).max(1000),
 });
 
-export const closeOrderSchema = z.object({
-  remarks: remarkEnum,
-  remarks_other_text: z.string().max(500).optional().nullable(),
-}).refine(remarksTextRefine, { message: "Text is required for this remark type.", path: ["remarks_other_text"] });
-
-export const forceCloseOrderSchema = z.object({
-  remarks: remarkEnum,
-  remarks_other_text: z.string().max(500).optional().nullable(),
-}).refine(remarksTextRefine, { message: "Text is required for this remark type.", path: ["remarks_other_text"] });
+/**
+ * Closing (normal or forced) always needs a written remark. Revised / Extra / Less belong to
+ * lines and to the order's money, not to closing, so they are refused here.
+ */
+const closeRemarkEnum = z.enum(["Reprint", "Sample", "UnderWarranty", "FreeOfCost", "Other"], {
+  errorMap: () => ({ message: "Pick a closing remark: Reprint, Sample, Under Warranty, Free of Cost or Other." }),
+});
+const closeShape = z.object({
+  remarks: closeRemarkEnum,
+  remarks_other_text: z.string().trim().min(3, "Write a remark for closing this order.").max(500),
+});
+export const closeOrderSchema = closeShape;
+export const forceCloseOrderSchema = closeShape;
 
 /**
  * Admin sets, confirms or clears a line remark. Clearing a CSM's proposal rejects it, and

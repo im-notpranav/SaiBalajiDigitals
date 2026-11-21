@@ -58,7 +58,7 @@ export type UpiMethod = "UPI_ID" | "MOBILE";
 /** A request has no number of its own; it goes by its order's number. */
 export interface PaymentRequest {
   id: number;
-  order: { id: number; order_no: string; client_name: string; status: string };
+  order: { id: number; order_no: string; client_name: string; status: string; created_by?: number | null; creator_name?: string };
   work_job: { id: number; work_details: string | null; start_date: string } | null;
   requester: {
     id: number;
@@ -200,7 +200,7 @@ export interface OverdueItem {
   amount: number;
   status: PaymentStatus;
   requester: { id: number; name: string; role: string };
-  order: { id: number; order_no: string; client_name: string };
+  order: { id: number; order_no: string; client_name: string; created_by?: number | null; creator_name?: string };
   timer: PaymentTimer;
 }
 

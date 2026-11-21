@@ -1,4 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { LinkRow } from "@/components/orders/LinkRow";
+import { CsmTag } from "@/components/orders/CsmTag";
 import { useState } from "react";
 import {
   AlertTriangle,
@@ -289,7 +291,7 @@ function AccountantDashboard() {
   );
 }
 
-function OrderCell({ id, orderNo }: { id: number; orderNo: string }) {
+function OrderCell({ id, orderNo, csmId, csmName }: { id: number; orderNo: string; csmId?: number | null; csmName?: string }) {
   return (
     <td className="whitespace-nowrap px-4 py-2.5">
       <Link
@@ -299,6 +301,7 @@ function OrderCell({ id, orderNo }: { id: number; orderNo: string }) {
       >
         {orderNo}
       </Link>
+      <CsmTag id={csmId} name={csmName} compact className="block" />
     </td>
   );
 }
@@ -350,8 +353,8 @@ function BillingTable({ items }: { items: AcctBillingItem[] }) {
         </thead>
         <tbody>
           {items.map((item) => (
-            <tr key={item.id} className="border-b transition-colors last:border-0 hover:bg-muted/20">
-              <OrderCell id={item.id} orderNo={item.order_no} />
+            <LinkRow to="/accountant/billing/$id" params={{ id: String(item.id) }} key={item.id} className="border-b transition-colors last:border-0 hover:bg-muted/20">
+              <OrderCell id={item.id} orderNo={item.order_no} csmId={item.csm_id} csmName={item.csm_name} />
               <td className="px-4 py-2.5 text-xs">{item.client_name}</td>
               <td className="px-4 py-2.5 text-xs text-muted-foreground">{item.store_name}</td>
               <td className="px-4 py-2.5 text-right text-xs font-medium tabular-nums">
@@ -365,7 +368,7 @@ function BillingTable({ items }: { items: AcctBillingItem[] }) {
               ) : (
                 <ActionCell id={item.id} orderNo={item.order_no} label="Invoice" icon={Receipt} />
               )}
-            </tr>
+            </LinkRow>
           ))}
         </tbody>
       </table>
@@ -400,14 +403,16 @@ function PaymentTable({
         </thead>
         <tbody>
           {items.map((item) => (
-            <tr
+            <LinkRow
+              to="/accountant/billing/$id"
+              params={{ id: String(item.id) }}
               key={item.id}
               className={cn(
                 "border-b transition-colors last:border-0",
                 isOverdue ? "hover:bg-red-500/5" : "hover:bg-muted/20",
               )}
             >
-              <OrderCell id={item.id} orderNo={item.order_no} />
+              <OrderCell id={item.id} orderNo={item.order_no} csmId={item.csm_id} csmName={item.csm_name} />
               <td className="px-4 py-2.5 text-xs">{item.client_name}</td>
               <td className="px-4 py-2.5 text-xs text-muted-foreground">{item.invoice_no || "—"}</td>
               <td className="px-4 py-2.5 text-right text-xs font-medium tabular-nums">
@@ -418,7 +423,7 @@ function PaymentTable({
                 <AgingBadge days={item.days_since_billed} thresholds={thresholds} />
               </td>
               <ActionCell id={item.id} orderNo={item.order_no} label="Record payment" icon={IndianRupee} />
-            </tr>
+            </LinkRow>
           ))}
         </tbody>
       </table>
@@ -445,8 +450,8 @@ function CompletedTable({ items }: { items: AcctCompletedItem[] }) {
         </thead>
         <tbody>
           {items.map((item) => (
-            <tr key={item.id} className="border-b transition-colors last:border-0 hover:bg-muted/20">
-              <OrderCell id={item.id} orderNo={item.order_no} />
+            <LinkRow to="/accountant/billing/$id" params={{ id: String(item.id) }} key={item.id} className="border-b transition-colors last:border-0 hover:bg-muted/20">
+              <OrderCell id={item.id} orderNo={item.order_no} csmId={item.csm_id} csmName={item.csm_name} />
               <td className="px-4 py-2.5 text-xs">{item.client_name}</td>
               <td className="px-4 py-2.5 text-xs text-muted-foreground">{item.invoice_no || "—"}</td>
               <td className="px-4 py-2.5 text-right text-xs font-medium tabular-nums">
@@ -475,7 +480,7 @@ function CompletedTable({ items }: { items: AcctCompletedItem[] }) {
                 {format(new Date(item.paid_at), "dd MMM yyyy")}
               </td>
               <ActionCell id={item.id} orderNo={item.order_no} label="Open" icon={ArrowRight} />
-            </tr>
+            </LinkRow>
           ))}
         </tbody>
       </table>
