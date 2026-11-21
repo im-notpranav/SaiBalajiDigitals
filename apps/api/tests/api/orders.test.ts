@@ -173,11 +173,11 @@ describe("names come from the Master Library", () => {
     await prisma.area.update({ where: { name: place }, data: { is_active: false } });
     await prisma.media.update({ where: { name: media }, data: { is_active: false } });
 
-    // Unchanged names save; the PO and a new line go in.
+    // Unchanged names save; the PO goes in, and an admin can still add a line beside the old name.
     expect((await as(csm).patch(`/api/orders/${order.id}/details`).send({ client_name: client, po_number: "PO-1" })).status).toBe(200);
     expect((await as(csm).patch(`/api/orders/${order.id}/stores/${store.id}`).send({ location: place, po_number: "S-1" })).status).toBe(200);
     const keep = { ...line, id: saved!.id };
-    expect((await as(csm).put(`/api/orders/${order.id}`).send({ items: [keep, { ...line, media: "Vinyl" }] })).status).toBe(200);
+    expect((await as(admin).put(`/api/orders/${order.id}`).send({ items: [keep, { ...line, media: "Vinyl" }] })).status).toBe(200);
 
     // Picking the archived name again elsewhere is refused.
     const { body: other } = await start({ order_no: customNo() });

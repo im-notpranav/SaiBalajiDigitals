@@ -202,9 +202,14 @@ export interface OrderFormProps {
   lineItemsLocked?: boolean;
   /** Opened from an "Add Line Item" shortcut: start with a blank line on the last store, in view. */
   startWithNewLine?: boolean;
+  /**
+   * A CSM editing a saved order: saved lines open for change and removal, and the page sends
+   * the essentials (rate, size, qty, lines, client, store, location) to the admin for approval.
+   */
+  requestMode?: boolean;
 }
 
-export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userRole, lineItemsLocked = false, startWithNewLine = false }: OrderFormProps) {
+export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userRole, lineItemsLocked = false, startWithNewLine = false, requestMode = false }: OrderFormProps) {
   const [clientName, setClientName] = useState(defaultValues?.client_name || "");
   const [poNumber, setPoNumber] = useState(defaultValues?.po_number || "");
   const [orderRemark, setOrderRemark] = useState(defaultValues?.order_remark || "");
@@ -604,11 +609,17 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
               Billing has started, so line items are locked.
             </p>
           )}
+          {requestMode && !lineItemsLocked && (
+            <p className="mb-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
+              Change or remove any line. Rates, sizes, quantities and line items go to the admin for approval.
+            </p>
+          )}
 
           <div className="space-y-2">
             {store.lines.map((line, idx) => {
-              const isReadOnlyItem = lineItemsLocked || (userRole === "CSM" && !!line.originalId);
-              const showLoss = !line.originalId || isAdmin;
+              const isReadOnlyItem = lineItemsLocked || (userRole === "CSM" && !!line.originalId && !requestMode);
+              // Line remarks are asked for from Request Change on the order page, not here.
+              const showLoss = !requestMode && (!line.originalId || isAdmin);
               const lossLabel = isAdmin ? "Remark (optional)" : "Propose a remark (needs admin approval)";
               const lineTotal = getLineTotal(line);
 
@@ -688,8 +699,11 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
                         <SelectGroup>
                           <SelectLabel className="text-[10px] uppercase tracking-wider text-muted-foreground">Amount change</SelectLabel>
                           {ADJUSTMENT_REMARK_TYPES
-                            // Revised corrects a saved line, and only an admin does that.
-                            .filter((r) => r.value !== "Revised" || (isAdmin && !!line.originalId) || line.remarks === "Revised")
+                            // Revised corrects a saved line, and only an admin does that. Extra / Less
+                            // belong to the whole order now; a line keeps one only if it already had it.
+                            .filter((r) =>
+                              r.value === line.remarks || (r.value === "Revised" && isAdmin && !!line.originalId),
+                            )
                             .map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
                         </SelectGroup>
                       </SelectContent>
@@ -733,7 +747,8 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
                       // A saved line can't be deleted from here (the API only adds and updates
                       // lines), so removing it would look done and quietly come back. Mark it
                       // with a remark instead.
-                      disabled={store.lines.length === 1 || isReadOnlyItem || !!line.originalId}
+                      // In request mode the removal goes to the admin with the rest of the changes.
+                      disabled={store.lines.length === 1 || isReadOnlyItem || (!!line.originalId && !requestMode)}
                       aria-label={`Remove item ${idx + 1}`}
                     >
                       <Trash2 className="h-4 w-4 text-destructive" />
@@ -827,7 +842,8 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
           </div>
           <div className="p-4">
             <Button type="submit" size="lg" className="w-full rounded-xl" disabled={isSubmitting}>
-              <Send className="mr-2 h-4 w-4" /> {isSubmitting ? "Submitting…" : defaultValues ? "Save Changes" : "Submit Order"}
+              <Send className="mr-2 h-4 w-4" />{" "}
+              {isSubmitting ? "Submitting…" : requestMode ? "Save / Send for approval" : defaultValues ? "Save Changes" : "Submit Order"}
             </Button>
           </div>
         </div>

@@ -213,10 +213,14 @@ export const itemLossRemarkSchema = z.object({
   decision_note: z.string().max(500).optional().nullable(),
 }).superRefine(refineItemRemark);
 
-/** A CSM asks for an Extra / Less Amount on a line that is already saved. */
+/**
+ * A CSM asks for Reprint, Sample, Under Warranty, Free of Cost or Other on a saved line (via
+ * Request Change). Extra / Less are still accepted by the schema only so the handler can
+ * answer that they belong to the whole order.
+ */
 export const itemAdjustmentRequestSchema = z.object({
-  type: amountAdjustmentEnum,
-  amount: z.coerce.number().positive(),
+  type: z.enum(["Reprint", "Sample", "UnderWarranty", "FreeOfCost", "Other", "ExtraAmount", "LessAmount"]),
+  amount: z.coerce.number().positive().optional().nullable(),
   reason: z.string().trim().min(1, "A reason is required.").max(500),
 });
 
@@ -626,9 +630,22 @@ export const overtimeDecisionSchema = z
   .refine((d) => d.status !== "REJECTED" || !!d.reason, { message: "Give a reason for rejecting", path: ["reason"] });
 
 /** What field staff may do to their own job from My Work. */
-export const myJobStatusSchema = z.object({
-  status: z.enum(["STARTED", "COMPLETED"]),
-  note: z.string().trim().max(500).optional().nullable(),
+export const myJobStatusSchema = z
+  .object({
+    /** HOLD / CANCELLED / REJECTED are asks: the job goes on hold and the OM decides. */
+    status: z.enum(["STARTED", "COMPLETED", "HOLD", "CANCELLED", "REJECTED"]),
+    note: z.string().trim().max(500).optional().nullable(),
+  })
+  .refine((v) => v.status === "STARTED" || v.status === "COMPLETED" || (v.note ?? "").trim().length >= 3, {
+    message: "Give a reason.",
+    path: ["note"],
+  });
+
+/** A CSM (or the OM / admin) sends the team back to a completed job. */
+export const sendBackJobSchema = z.object({
+  reason: z.string().trim().min(3, "Say what needs redoing.").max(500),
+  /** The day the team should go back; today if left out. */
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
 /* ---------------------------------------------------------------- payment requests */

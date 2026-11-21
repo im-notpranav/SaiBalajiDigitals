@@ -6,6 +6,7 @@ import {
   csmOrderOptions,
   csmWeeklyGrid,
   updateCsmJob,
+  sendBackJob,
 } from "../controllers/work-jobs.controller";
 import { authenticate, authorize } from "../middlewares/auth.middleware";
 
@@ -24,5 +25,6 @@ router.get("/grid", csmWeeklyGrid);
 router.get("/board", csmDailyBoard);
 router.get("/:id/details", csmJobDetails);
 router.patch("/:id", updateCsmJob);
+router.post("/:id/send-back", sendBackJob);
 
 export default router;

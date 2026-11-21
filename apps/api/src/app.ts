@@ -45,6 +45,7 @@ app.use(cookieParser());
 // of the per-IP limiter. It needs no login; a shared secret guards it instead.
 import whatsappRoutes, { webhookRouter } from "./routes/whatsapp.routes";
 import reportsRoutes from "./routes/reports.routes";
+import changeRequestsRoutes from "./routes/change-requests.routes";
 app.use("/api/webhooks", webhookRouter);
 
 // Global rate limit: 300 requests per minute per signed-in person, and per address for everyone
@@ -103,5 +104,6 @@ app.use("/api/zone-board", zoneBoardRoutes);
 app.use("/api/my", myRoutes);
 app.use("/api/whatsapp", whatsappRoutes);
 app.use("/api/reports", reportsRoutes);
+app.use("/api/change-requests", changeRequestsRoutes);
 
 export default app;

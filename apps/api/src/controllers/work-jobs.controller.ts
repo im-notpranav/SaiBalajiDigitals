@@ -1,10 +1,10 @@
 import { Request, Response } from "express";
 import type { Prisma, WorkJobStatus } from "@prisma/client";
 import { prisma } from "../utils/prisma";
-import { csmJobSchema, workJobSchema, workJobStatusSchema, myJobStatusSchema, dayQuery } from "../utils/validators";
+import { csmJobSchema, workJobSchema, workJobStatusSchema, myJobStatusSchema, sendBackJobSchema, dayQuery } from "../utils/validators";
 import { sanitizeZodErrors } from "../utils/sanitize-errors";
 import { FIELD_ROLES, isFieldRole } from "../utils/roles";
-import { notifyUser } from "../services/notifications.service";
+import { notifyRole, notifyUser } from "../services/notifications.service";
 import { queueWhatsAppAfter } from "../services/whatsapp/outbox";
 import {
   EDITABLE_STATUSES,
@@ -89,6 +89,13 @@ export function serializeJob(job: JobRow) {
     completion_note: job.completion_note,
     cancelled_at: job.cancelled_at,
     cancel_reason: job.cancel_reason,
+    /** A team member's hold / cancel / reject ask, waiting for the OM. */
+    field_flag: job.field_flag,
+    field_flag_reason: job.field_flag_reason,
+    field_flag_at: job.field_flag_at,
+    sent_back_reason: job.sent_back_reason,
+    sent_back_at: job.sent_back_at,
+    sent_back_count: job.sent_back_count,
     created_at: job.created_at,
     updated_at: job.updated_at,
   };
@@ -459,7 +466,8 @@ export const setJobStatus = async (req: Request, res: Response) => {
         throw new HttpError(400, `A job that is ${current.status.toLowerCase()} cannot be moved to ${status.toLowerCase()}.`);
       }
       const now = new Date();
-      const data: Prisma.WorkJobUncheckedUpdateInput = { status };
+      // A manager's decision settles whatever the team asked for.
+      const data: Prisma.WorkJobUncheckedUpdateInput = { status, field_flag: null, field_flag_reason: null, field_flag_at: null, field_flag_by: null };
       if (status === "STARTED" && !current.started_at) {
         data.started_at = now;
         data.started_by = req.user!.id;
@@ -909,6 +917,31 @@ export const myJobStatus = async (req: Request, res: Response) => {
     const { status, note } = parsed.data;
     const me = req.user!.id;
 
+    // Hold / Cancel / Reject: the team member asks, the job waits on hold, the OM decides.
+    if (status === "HOLD" || status === "CANCELLED" || status === "REJECTED") {
+      const asked = await withAudit(me, async (tx) => {
+        await lockRows(tx, "WorkJob", [id]);
+        const current = await tx.workJob.findFirst({ where: { id, members: { some: { user_id: me } } } });
+        if (!current) throw new HttpError(404, "Job not found");
+        if (current.status !== "ASSIGNED" && current.status !== "STARTED" && !(current.status === "HOLD" && !current.field_flag)) {
+          throw new HttpError(400, `This job is ${current.status.toLowerCase()}, so it cannot be changed from here.`);
+        }
+        return tx.workJob.update({
+          where: { id },
+          data: { status: "HOLD", field_flag: status, field_flag_reason: note!.trim(), field_flag_at: new Date(), field_flag_by: me },
+          include: jobInclude,
+        });
+      });
+      const who = asked.members.find((m) => m.user_id === me)?.user.name ?? "A team member";
+      const word = status === "HOLD" ? "put on hold" : status === "CANCELLED" ? "asked to cancel" : "rejected";
+      const title = `Job${onOrder(asked)} ${word} by ${who}`;
+      const body = `${jobSummary(asked)}. Reason: ${note}. The Operation Manager decides what happens next.`;
+      await notifyRole("OPERATION_MANAGER", title, body, "warning", asked.order?.id ?? null, jobLink(asked)).catch(() => {});
+      const tell = [...new Set([csmUserOf(asked), asked.created_by].filter((u): u is number => !!u && u !== me))];
+      await Promise.all(tell.map((u) => notifyUser(u, title, body, "warning", asked.order?.id ?? null, jobLink(asked)).catch(() => {})));
+      return res.status(200).json(serializeJob(asked));
+    }
+
     const job = await withAudit(me, async (tx) => {
       await lockRows(tx, "WorkJob", [id]);
       const current = await tx.workJob.findFirst({ where: { id, members: { some: { user_id: me } } } });
@@ -1056,6 +1089,67 @@ export const updateCsmJob = async (req: Request, res: Response) => {
     if (detailsChanged) {
       await notifyPeople(job.members.map((m) => m.user_id), `Work details updated${onOrder(job)}`, jobSummary(job), "info", jobLink(job));
     }
+    return res.status(200).json(serializeJob(job));
+  } catch (err) {
+    return sendError(res, err);
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Send back: the CSM sends the team back to a completed job (rework)
+// ---------------------------------------------------------------------------
+
+/**
+ * POST /api/csm-jobs/:id/send-back and /api/work-jobs/:id/send-back — a completed job goes
+ * back to Assigned for the same team on a new day, with the reason. The job's CSM may do it
+ * on their own jobs; the OM and admins on any. The team and the OM are told.
+ */
+export const sendBackJob = async (req: Request, res: Response) => {
+  try {
+    const id = parseId(req.params.id);
+    const parsed = sendBackJobSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ message: parsed.error.issues[0]?.message ?? "Invalid input", errors: sanitizeZodErrors(parsed.error) });
+    const user = req.user!;
+    const day = parsed.data.date ?? todayIST();
+    if (day < todayIST()) return res.status(400).json({ message: "Pick today or a later day." });
+
+    const job = await withAudit(user.id, async (tx) => {
+      await lockRows(tx, "WorkJob", [id]);
+      const current = await tx.workJob.findUnique({ where: { id }, include: jobInclude });
+      if (!current) throw new HttpError(404, "Job not found");
+      if (user.role === "CSM" && !isCsmsJob(current as any, user.id)) throw new HttpError(403, "Only the job's CSM can send the team back.");
+      if (current.status !== "COMPLETED") throw new HttpError(400, "Only a completed job can be sent back.");
+      const members = current.members.map((m) => m.user_id);
+      if (!current.allow_double_booking && members.length) {
+        const conflicts = await findConflicts(tx, { userIds: members, start: day, end: day, excludeJobId: id });
+        if (conflicts.length) throw new HttpError(409, "Someone on this team is booked elsewhere that day. Pick another day.", { conflicts });
+      }
+      await tx.workJobMember.updateMany({
+        where: { job_id: id },
+        data: { start_date: parseDay(day), end_date: parseDay(day), blocks_calendar: !current.allow_double_booking },
+      });
+      return tx.workJob.update({
+        where: { id },
+        data: {
+          status: "ASSIGNED",
+          start_date: parseDay(day),
+          end_date: parseDay(day),
+          completed_at: null,
+          completed_by: null,
+          completion_note: null,
+          sent_back_reason: parsed.data.reason,
+          sent_back_at: new Date(),
+          sent_back_by: user.id,
+          sent_back_count: { increment: 1 },
+        },
+        include: jobInclude,
+      });
+    });
+
+    const title = `Sent back to the job${onOrder(job)}`;
+    const body = `${jobSummary(job)}. Go back on ${day}. Reason: ${parsed.data.reason}`;
+    await notifyPeople(job.members.map((m) => m.user_id), title, body, "warning", jobLink(job));
+    await notifyRole("OPERATION_MANAGER", `${user.name} sent the team back${onOrder(job)}`, body, "warning", job.order?.id ?? null, jobLink(job)).catch(() => {});
     return res.status(200).json(serializeJob(job));
   } catch (err) {
     return sendError(res, err);

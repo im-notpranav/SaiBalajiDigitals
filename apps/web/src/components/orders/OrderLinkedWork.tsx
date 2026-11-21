@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { HardHat, Plus, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { JobDialog } from "@/components/allocation/JobDialog";
-import { JobStatusBadge, LocalityTag } from "@/components/allocation/JobBits";
+import { JobStatusBadge, LocalityTag, SendBackButton } from "@/components/allocation/JobBits";
 import { PaymentStatusBadge } from "@/components/payments/PaymentBits";
 import { PaymentRequestSheet } from "@/components/payments/PaymentRequestSheet";
 import {
@@ -96,7 +96,7 @@ export function OrderLinkedWork({
                       <span className="text-sm font-medium">
                         {formatJobDates(j.start_date, j.end_date)}
                       </span>
-                      <JobStatusBadge status={j.status} />
+                      <JobStatusBadge status={j.status} flag={j.field_flag} flagReason={j.field_flag_reason} />
                     </div>
                     <div className="break-words text-sm">{j.work_details}</div>
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
@@ -105,7 +105,20 @@ export function OrderLinkedWork({
                       </span>
                       <span>· {teamCounts(j.members) || "No team"}</span>
                     </div>
+                    {j.status === "HOLD" && j.field_flag && j.field_flag_reason && (
+                      <div className="text-xs text-destructive">Team says: {j.field_flag_reason}</div>
+                    )}
+                    {!!j.sent_back_count && (
+                      <div className="text-xs text-blue-700 dark:text-blue-300">
+                        Sent back {j.sent_back_count}×{j.sent_back_reason ? `: ${j.sent_back_reason}` : ""}
+                      </div>
+                    )}
                   </button>
+                  {j.status === "COMPLETED" && (
+                    <div className="mt-1 flex justify-end">
+                      <SendBackButton job={j} asCsm={false} />
+                    </div>
+                  )}
                 </li>
               );
             })}

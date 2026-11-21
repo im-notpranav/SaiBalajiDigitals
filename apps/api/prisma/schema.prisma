@@ -42,6 +42,31 @@ enum WorkJobStatus {
 }
 
 /// Overtime entries wait for an Admin's decision.
+/// What a field team member asked for on a job (with a reason). The OM decides.
+enum FieldJobFlag {
+  HOLD
+  CANCELLED
+  REJECTED
+}
+
+enum ChangeRequestKind {
+  /// Essential order edits: rate, size, qty, media, add/remove lines, client, store, location.
+  LINE_EDIT
+  /// Combine another order of the same client into this one.
+  COMBINE_ORDERS
+  /// A line or new rate that differs from the client's rate card.
+  RATE_CHANGE
+  /// Anything else, in words; the admin acts on it by hand.
+  OTHER
+}
+
+enum ChangeRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
 enum OvertimeStatus {
   PENDING
   APPROVED
@@ -116,6 +141,10 @@ model User {
   assignmentsMade      OrderItemAssignment[] @relation("AssignmentAssigner")
   followUps            PaymentFollowUp[]     @relation("FollowUpAuthor")
   orderNotes           OrderNote[]           @relation("OrderNoteAuthor")
+  changeRequests       ChangeRequest[]       @relation("ChangeRequester")
+  changesDecided       ChangeRequest[]       @relation("ChangeDecider")
+  workJobsFlagged      WorkJob[]             @relation("WorkJobFieldFlagger")
+  workJobsSentBack     WorkJob[]             @relation("WorkJobSentBackBy")
   installedStores      OrderStore[]          @relation("StoreInstaller")
   invoicePayments      Invoice[]             @relation("InvoicePaymentReceiver")
   csmCodes             CsmCode[]
@@ -172,6 +201,12 @@ model Order {
   order_remark        String?
   /// Running notes thread anyone working on the order can add to.
   notes               OrderNote[]
+  /// "Request Change" requests a CSM raised on this order.
+  changeRequests      ChangeRequest[]   @relation("ChangeRequestOrder")
+  /// Set when an admin merged this order into another one (Combine orders). The order is
+  /// closed and its number is never reused.
+  merged_into_id      Int?
+  merged_into_no      String?
   items               OrderItem[]
   stores              OrderStore[]
   invoices            Invoice[]
@@ -402,6 +437,37 @@ model Notification {
   @@index([user_id, created_at])
 }
 
+/// A CSM's "Request Change": an essential edit, a combine, a rate change or anything else,
+/// with a reason. An admin approves (the change is applied then) or rejects with a note.
+/// Extra / Less Amounts use OrderAdjustment and line Reprint / Sample / Warranty / Free of
+/// Cost use the line remark proposal, so all three show in one admin queue.
+model ChangeRequest {
+  id             Int                 @id @default(autoincrement())
+  order_id       Int
+  order          Order               @relation("ChangeRequestOrder", fields: [order_id], references: [id], onDelete: Cascade)
+  kind           ChangeRequestKind
+  status         ChangeRequestStatus @default(PENDING)
+  reason         String
+  /// Plain-language list of what would change, for the admin's queue and the CSM's view.
+  summary        String
+  /// The proposed edit, applied as the admin on approval (shape depends on kind).
+  payload        Json?
+  /// COMBINE_ORDERS: the order to fold into this one.
+  other_order_id Int?
+  requested_by   Int?
+  requester      User?               @relation("ChangeRequester", fields: [requested_by], references: [id], onDelete: SetNull)
+  decided_by     Int?
+  decider        User?               @relation("ChangeDecider", fields: [decided_by], references: [id], onDelete: SetNull)
+  decided_at     DateTime?
+  decision_note  String?
+  created_at     DateTime            @default(now())
+  updated_at     DateTime            @updatedAt
+
+  @@index([order_id])
+  @@index([status, created_at])
+  @@index([requested_by])
+}
+
 /// One note in an order's shared thread. Anyone who can open the order sees every note and
 /// may add one; nobody edits another person's note. Name and role are copied so the thread
 /// still reads right after a person is renamed or deleted.
@@ -593,6 +659,19 @@ model WorkJob {
   completion_note      String?
   cancelled_at         DateTime?
   cancel_reason        String?
+  /// A field team member asked to hold, cancel or reject the job. The job is put on HOLD and
+  /// waits for the Operation Manager, who decides; any manager status change clears it.
+  field_flag           FieldJobFlag?
+  field_flag_reason    String?
+  field_flag_at        DateTime?
+  field_flag_by        Int?
+  fieldFlagger         User?            @relation("WorkJobFieldFlagger", fields: [field_flag_by], references: [id], onDelete: SetNull)
+  /// The CSM sent the team back to a completed job (rework). The latest reason is kept.
+  sent_back_reason     String?
+  sent_back_at         DateTime?
+  sent_back_by         Int?
+  sentBackBy           User?            @relation("WorkJobSentBackBy", fields: [sent_back_by], references: [id], onDelete: SetNull)
+  sent_back_count      Int              @default(0)
   created_by           Int?
   creator              User?            @relation("WorkJobCreator", fields: [created_by], references: [id], onDelete: SetNull)
   members              WorkJobMember[]

@@ -178,8 +178,8 @@ export function OrderAdjustmentsPanel({
     <div className="border-t px-4 py-4 sm:px-6">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Whole-order amount changes</h3>
-          <p className="text-xs text-muted-foreground">Extra or Less Amount on the whole order. Each is billed on the chosen store's invoice.</p>
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Extra / Less Amount</h3>
+          <p className="text-xs text-muted-foreground">Raises or lowers the whole order value, never a line. Each is billed on the chosen store's invoice.</p>
         </div>
         {canAdd && <AddOrderAdjustmentDialog order={order} isAdmin={isAdmin} />}
       </div>
@@ -258,12 +258,12 @@ function AddOrderAdjustmentDialog({ order, isAdmin }: { order: any; isAdmin: boo
     <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o) { setValue(""); setReason(""); } }}>
       <DialogTrigger asChild>
         <Button size="sm" variant="outline" className="rounded-lg">
-          <BadgeIndianRupee className="mr-1 h-3.5 w-3.5" /> {isAdmin ? "Add amount change" : "Ask for amount change"}
+          <BadgeIndianRupee className="mr-1 h-3.5 w-3.5" /> {isAdmin ? "Add Extra / Less" : "Ask for Extra / Less"}
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{isAdmin ? "Whole-order amount change" : "Ask for a whole-order amount change"}</DialogTitle>
+          <DialogTitle>{isAdmin ? "Extra / Less Amount on the order" : "Ask for Extra / Less Amount on the order"}</DialogTitle>
           <DialogDescription>
             {isAdmin
               ? "Applied now. If the store is already invoiced, the order goes to Pending until Accounts corrects the invoice."

@@ -40,7 +40,9 @@ import {
   FileSpreadsheet,
   Library,
   Map as MapIcon,
+  GitPullRequestArrow,
 } from "lucide-react";
+import { fetchChangeQueueCount } from "@/api/changeRequests";
 import { type UserRole, useAuth } from "@/lib/auth-store";
 import { cn } from "@/lib/utils";
 import { BrandLockup } from "@/components/brand/Logo";
@@ -180,6 +182,7 @@ const NAV: Record<UserRole, NavItem[]> = {
   ADMIN: [
     ...DASHBOARD,
     ...ORDER_SYSTEM,
+    { to: "/admin/change-requests", label: "Change Requests", icon: GitPullRequestArrow, group: "Automated System" },
     { to: "/admin/import", label: "Bulk Import", icon: Upload, group: "Automated System" },
     { to: "/admin/users", label: "Users", icon: Users, group: "Automated System" },
     { to: "/admin/master-library", label: "Master Library", icon: Library, group: "Automated System" },
@@ -256,6 +259,14 @@ function SidebarBody({
   const { user, logout } = useAuth();
   const items = useNavItems(role);
   const home = items[0]!.to;
+  // The admin's waiting Request Change asks, shown as a count on their nav item.
+  const { data: changeCount } = useQuery({
+    queryKey: ["change-requests", "count"],
+    queryFn: fetchChangeQueueCount,
+    enabled: role === "ADMIN",
+    refetchInterval: 60_000,
+  });
+  const pendingChanges = changeCount?.pending ?? 0;
 
   const handleLogout = async () => {
     onNavigate?.();
@@ -317,6 +328,12 @@ function SidebarBody({
                 )}
                 <Icon className="h-[18px] w-[18px] shrink-0" />
                 {item.was ? <WasMark kind={item.was} muted={!active} /> : <span className="truncate">{item.label}</span>}
+                {item.to === "/admin/change-requests" && pendingChanges > 0 && (
+                  <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500 px-1.5 text-[11px] font-bold text-white">
+                    {pendingChanges > 99 ? "99+" : pendingChanges}
+                    <span className="sr-only"> waiting</span>
+                  </span>
+                )}
               </Link>
             </motion.div>
           );

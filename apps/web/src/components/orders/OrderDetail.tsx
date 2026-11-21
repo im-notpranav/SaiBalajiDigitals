@@ -17,7 +17,9 @@ import { remarkLabel, LOSS_REMARK_TYPES, isLossRemark, isAmountRemark, remarkNee
 import type { Order, OrderItem, RemarkType } from "@sb-oms/shared-types";
 import { flagOrderItem, setItemLossRemark, markStoreInstalled, updateStore, updateOrderDetails, type ItemRemarkPayload } from "@/api/orders";
 import { Textarea } from "@/components/ui/textarea";
-import { AdjustmentFigure, figureOf, OrderAdjustmentsPanel, RequestLineAdjustmentDialog } from "./OrderAdjustments";
+import { AdjustmentFigure, figureOf, OrderAdjustmentsPanel } from "./OrderAdjustments";
+import { ChangeRequestsPanel } from "./RequestChange";
+import { Link } from "@tanstack/react-router";
 import { storeRef } from "@/lib/stores";
 import { useQueryClient } from "@tanstack/react-query";
 import { friendlyError } from "@/lib/friendly-error";
@@ -206,9 +208,7 @@ export function OrderDetail({ order, actions, related, userRole, currentUserId }
           isSubmitting={isSubmitting}
         />
       )}
-      {userRole === "CSM" && isCreator && hasFinancials && !item.remarks && order.status !== "Completed" && (
-        <RequestLineAdjustmentDialog orderId={order.id} item={item} />
-      )}
+
     </div>
   );
 
@@ -307,6 +307,21 @@ export function OrderDetail({ order, actions, related, userRole, currentUserId }
 
   return (
     <div className="space-y-6">
+      {order.merged_into_no && (
+        <div className="rounded-xl border border-blue-500/30 bg-blue-500/5 p-4 text-sm">
+          <span className="font-semibold">Merged into {order.merged_into_no}.</span>{" "}
+          <span className="text-muted-foreground">Its stores, lines and work moved there. This number stays closed.</span>
+          {order.merged_into_id && userRole && (
+            <Link
+              to={userRole === "CSM" ? "/employee/orders/$id" : "/admin/orders/$id"}
+              params={{ id: String(order.merged_into_id) }}
+              className="ml-2 font-medium text-primary underline-offset-2 hover:underline"
+            >
+              Open {order.merged_into_no}
+            </Link>
+          )}
+        </div>
+      )}
       <motion.section
         initial={false}
         animate={{ opacity: 1, y: 0 }}
@@ -498,6 +513,10 @@ export function OrderDetail({ order, actions, related, userRole, currentUserId }
 
       {related}
 
+      {(userRole === "ADMIN" || userRole === "CSM" || userRole === "OPERATION_MANAGER") && (
+        <ChangeRequestsPanel orderId={order.id} currentUserId={currentUserId} />
+      )}
+
       {actions && (
         <motion.section
           initial={false}
@@ -683,8 +702,8 @@ function RemarkDialog({ item, onSave, isSubmitting }: { item: OrderItem, onSave:
   const picked = remark === "none" ? null : remark;
   const options = [
     ...LOSS_REMARK_TYPES,
-    { value: "ExtraAmount" as RemarkType, label: "Extra Amount" },
-    { value: "LessAmount" as RemarkType, label: "Less Amount" },
+    // Extra / Less belong to the whole order; kept here only for a line that already has one.
+    ...(isAmountRemark(item.remarks) ? [{ value: item.remarks as RemarkType, label: remarkLabel(item.remarks as RemarkType) }] : []),
     // Kept visible only when the line is already Revised.
     ...(item.remarks === "Revised" ? [{ value: "Revised" as RemarkType, label: "Revised" }] : []),
   ];

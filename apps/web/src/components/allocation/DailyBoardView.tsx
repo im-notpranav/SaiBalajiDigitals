@@ -236,7 +236,7 @@ export function DailyBoardView({
                     </button>
                     <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
                       {j.mine && <MineTag />}
-                      {manage ? <JobStatusMenu job={j} /> : <JobStatusBadge status={j.status} />}
+                      {manage ? <JobStatusMenu job={j} /> : <JobStatusBadge status={j.status} flag={j.field_flag} flagReason={j.field_flag_reason} />}
                     </div>
                   </div>
                   <p className="line-clamp-2 text-sm">{j.work_details}</p>

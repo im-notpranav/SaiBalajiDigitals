@@ -610,7 +610,7 @@ function DayPanel({
                   </button>
                   <div className="flex flex-wrap items-center gap-1.5">
                     {j.mine && <MineTag />}
-                    {manage ? <JobStatusMenu job={j} /> : <JobStatusBadge status={j.status} />}
+                    {manage ? <JobStatusMenu job={j} /> : <JobStatusBadge status={j.status} flag={j.field_flag} flagReason={j.field_flag_reason} />}
                   </div>
                 </div>
                 {j.work_details && <p className="break-words text-sm">{j.work_details}</p>}

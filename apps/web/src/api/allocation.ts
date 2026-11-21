@@ -139,6 +139,8 @@ export function apiErrorMessage(err: any, fallback: string): string {
 // --- Work jobs -------------------------------------------------------------
 
 export type WorkJobStatus = "ASSIGNED" | "STARTED" | "COMPLETED" | "HOLD" | "CANCELLED";
+export type FieldJobFlag = "HOLD" | "CANCELLED" | "REJECTED";
+export const FIELD_FLAG_LABEL: Record<FieldJobFlag, string> = { HOLD: "Hold", CANCELLED: "Cancel", REJECTED: "Rejected" };
 
 export const JOB_STATUS_LABELS: Record<WorkJobStatus, string> = {
   ASSIGNED: "Assigned",
@@ -213,6 +215,14 @@ export interface WorkJob {
   completion_note: string | null;
   cancelled_at: string | null;
   cancel_reason: string | null;
+  /** A team member asked to hold, cancel or reject; the job is on hold until the OM decides. */
+  field_flag?: FieldJobFlag | null;
+  field_flag_reason?: string | null;
+  field_flag_at?: string | null;
+  /** The CSM sent the team back to this job after it was completed. */
+  sent_back_reason?: string | null;
+  sent_back_at?: string | null;
+  sent_back_count?: number;
   created_at: string;
   updated_at: string;
 }
@@ -414,8 +424,11 @@ export const fetchMyJobs = () => apiFetch<{ today: string; jobs: MyJob[] }>("/my
 export const fetchMyWeeklyGrid = (from?: string, days = 7) =>
   apiFetch<WeeklyGrid>(`/my/work-jobs/grid${qs({ from, days: String(days) })}`);
 /** Field staff: mark their own job started, or completed with an optional note. */
-export const setMyJobStatus = (id: number, status: "STARTED" | "COMPLETED", note?: string) =>
+export const setMyJobStatus = (id: number, status: "STARTED" | "COMPLETED" | FieldJobFlag, note?: string) =>
   apiFetch<WorkJob>(`/my/work-jobs/${id}/status`, { method: "PUT", data: { status, note } });
+/** Send the team back to a completed job: the CSM on his own jobs, or a manager on any. */
+export const sendBackJob = (id: number, data: { reason: string; date?: string }, asCsm: boolean) =>
+  apiFetch<WorkJob>(`/${asCsm ? "csm-jobs" : "work-jobs"}/${id}/send-back`, { method: "POST", data });
 
 /** Today in India as YYYY-MM-DD, matching the API's todayIST(). */
 export function todayIST(): string {

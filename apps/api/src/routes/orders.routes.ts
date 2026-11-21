@@ -39,6 +39,7 @@ import {
 } from "../controllers/orders.controller";
 import { orderTemplate, previewBulkOrders, createBulkOrders } from "../controllers/import.controller";
 import { getOrderNotes, addOrderNote } from "../controllers/order-notes.controller";
+import { combineOptions, createChangeRequest, listOrderChangeRequests } from "../controllers/change-requests.controller";
 import { authenticate, authorize, requireSuperAdmin , denyReadOnlyMutations } from "../middlewares/auth.middleware";
 import { OMS_ROLES } from "../utils/roles";
 
@@ -105,6 +106,10 @@ router.put("/:orderId/items/:itemId/remark", authorize("ADMIN"), setItemLossRema
 // Extra / Less Amount: the order's CSM requests, an admin decides. Whole-order ones sit on a store.
 router.post("/:orderId/items/:itemId/adjustment-request", authorize("CSM"), requestItemAdjustment);
 router.post("/:id/adjustments", authorize("CSM", "ADMIN"), createOrderAdjustment);
+// Request Change: essential edits, combining orders, anything else — the admin decides.
+router.get("/:id/change-requests", listOrderChangeRequests);
+router.get("/:id/combine-options", authorize("CSM", "ADMIN"), combineOptions);
+router.post("/:id/change-requests", authorize("CSM", "ADMIN"), createChangeRequest);
 router.patch("/:orderId/adjustments/:adjustmentId", authorize("ADMIN"), decideOrderAdjustment);
 router.patch("/:orderId/items/:itemId/assign", authorize("PRODUCTION_MANAGER", "ADMIN"), assignOrderItem);
 router.patch("/:orderId/items/assign", authorize("PRODUCTION_MANAGER", "ADMIN"), bulkAssignOrderItems);

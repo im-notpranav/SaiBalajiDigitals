@@ -13,6 +13,7 @@ import { formatDistanceToNow } from "date-fns";
 import type { OrderItem } from "@sb-oms/shared-types";
 import { billingRollup, installedAt } from "@/lib/stores";
 import { friendlyError } from "@/lib/friendly-error";
+import { RequestChangeButton } from "@/components/orders/RequestChange";
 
 /** Statuses the edit page opens for (header always; line items only while Active or Installed). */
 const EDITABLE = ["Active", "Installed", "BillingCompleted", "Pending"];
@@ -186,8 +187,9 @@ function OrderDetailEmployee() {
         crumbs={[{ label: "Employee" }, { label: "Orders", to: "/employee/orders" }, { label: "Details" }]}
         actions={
           // An order with no line items has its own "Add Line Items" button just below.
-          !needsStores && EDITABLE.includes(order.status) ? (
+          !needsStores && EDITABLE.includes(order.status) && !order.merged_into_no ? (
             <div className="flex flex-wrap gap-2">
+              {order.created_by === user?.id && <RequestChangeButton order={order} />}
               {LINES_EDITABLE.includes(order.status) && order.created_by === user?.id && (
                 <Button asChild variant="outline">
                   <Link to="/employee/edit-order/$id" params={{ id: String(order.id) }} search={{ addLine: true }}>

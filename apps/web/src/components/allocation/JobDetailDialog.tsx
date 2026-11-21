@@ -84,7 +84,7 @@ export function JobDetailDialog({
         ) : (
           <div className="grid gap-4">
             <div className="flex flex-wrap items-center gap-2">
-              {csm ? <JobStatusBadge status={job.status} /> : <JobStatusMenu job={job} />}
+              {csm ? <JobStatusBadge status={job.status} flag={job.field_flag} flagReason={job.field_flag_reason} /> : <JobStatusMenu job={job} />}
               {csm && job.mine && <MineTag />}
             </div>
             <dl className="grid gap-1.5 rounded-xl border p-3">

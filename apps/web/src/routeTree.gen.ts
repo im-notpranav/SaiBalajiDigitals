@@ -22,6 +22,7 @@ import { Route as PortalAccountantOrdersRouteImport } from './routes/_portal.acc
 import { Route as PortalAccountantReportsRouteImport } from './routes/_portal.accountant.reports'
 import { Route as PortalAdminAuditRouteImport } from './routes/_portal.admin.audit'
 import { Route as PortalAdminBoardRouteImport } from './routes/_portal.admin.board'
+import { Route as PortalAdminChangeRequestsRouteImport } from './routes/_portal.admin.change-requests'
 import { Route as PortalAdminDashboardRouteImport } from './routes/_portal.admin.dashboard'
 import { Route as PortalAdminFieldStaffRouteImport } from './routes/_portal.admin.field-staff'
 import { Route as PortalAdminGridRouteImport } from './routes/_portal.admin.grid'
@@ -140,6 +141,12 @@ const PortalAdminBoardRoute = PortalAdminBoardRouteImport.update({
   path: '/admin/board',
   getParentRoute: () => PortalRoute,
 } as any)
+const PortalAdminChangeRequestsRoute =
+  PortalAdminChangeRequestsRouteImport.update({
+    id: '/admin/change-requests',
+    path: '/admin/change-requests',
+    getParentRoute: () => PortalRoute,
+  } as any)
 const PortalAdminDashboardRoute = PortalAdminDashboardRouteImport.update({
   id: '/admin/dashboard',
   path: '/admin/dashboard',
@@ -425,6 +432,7 @@ export interface FileRoutesByFullPath {
   '/accountant/reports': typeof PortalAccountantReportsRoute
   '/admin/audit': typeof PortalAdminAuditRoute
   '/admin/board': typeof PortalAdminBoardRoute
+  '/admin/change-requests': typeof PortalAdminChangeRequestsRoute
   '/admin/dashboard': typeof PortalAdminDashboardRoute
   '/admin/field-staff': typeof PortalAdminFieldStaffRoute
   '/admin/grid': typeof PortalAdminGridRoute
@@ -490,6 +498,7 @@ export interface FileRoutesByTo {
   '/accountant/reports': typeof PortalAccountantReportsRoute
   '/admin/audit': typeof PortalAdminAuditRoute
   '/admin/board': typeof PortalAdminBoardRoute
+  '/admin/change-requests': typeof PortalAdminChangeRequestsRoute
   '/admin/dashboard': typeof PortalAdminDashboardRoute
   '/admin/field-staff': typeof PortalAdminFieldStaffRoute
   '/admin/grid': typeof PortalAdminGridRoute
@@ -557,6 +566,7 @@ export interface FileRoutesById {
   '/_portal/accountant/reports': typeof PortalAccountantReportsRoute
   '/_portal/admin/audit': typeof PortalAdminAuditRoute
   '/_portal/admin/board': typeof PortalAdminBoardRoute
+  '/_portal/admin/change-requests': typeof PortalAdminChangeRequestsRoute
   '/_portal/admin/dashboard': typeof PortalAdminDashboardRoute
   '/_portal/admin/field-staff': typeof PortalAdminFieldStaffRoute
   '/_portal/admin/grid': typeof PortalAdminGridRoute
@@ -624,6 +634,7 @@ export interface FileRouteTypes {
     | '/accountant/reports'
     | '/admin/audit'
     | '/admin/board'
+    | '/admin/change-requests'
     | '/admin/dashboard'
     | '/admin/field-staff'
     | '/admin/grid'
@@ -689,6 +700,7 @@ export interface FileRouteTypes {
     | '/accountant/reports'
     | '/admin/audit'
     | '/admin/board'
+    | '/admin/change-requests'
     | '/admin/dashboard'
     | '/admin/field-staff'
     | '/admin/grid'
@@ -755,6 +767,7 @@ export interface FileRouteTypes {
     | '/_portal/accountant/reports'
     | '/_portal/admin/audit'
     | '/_portal/admin/board'
+    | '/_portal/admin/change-requests'
     | '/_portal/admin/dashboard'
     | '/_portal/admin/field-staff'
     | '/_portal/admin/grid'
@@ -906,6 +919,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/board'
       fullPath: '/admin/board'
       preLoaderRoute: typeof PortalAdminBoardRouteImport
+      parentRoute: typeof PortalRoute
+    }
+    '/_portal/admin/change-requests': {
+      id: '/_portal/admin/change-requests'
+      path: '/admin/change-requests'
+      fullPath: '/admin/change-requests'
+      preLoaderRoute: typeof PortalAdminChangeRequestsRouteImport
       parentRoute: typeof PortalRoute
     }
     '/_portal/admin/dashboard': {
@@ -1278,6 +1298,7 @@ interface PortalRouteChildren {
   PortalAccountantReportsRoute: typeof PortalAccountantReportsRoute
   PortalAdminAuditRoute: typeof PortalAdminAuditRoute
   PortalAdminBoardRoute: typeof PortalAdminBoardRoute
+  PortalAdminChangeRequestsRoute: typeof PortalAdminChangeRequestsRoute
   PortalAdminDashboardRoute: typeof PortalAdminDashboardRoute
   PortalAdminFieldStaffRoute: typeof PortalAdminFieldStaffRoute
   PortalAdminGridRoute: typeof PortalAdminGridRoute
@@ -1341,6 +1362,7 @@ const PortalRouteChildren: PortalRouteChildren = {
   PortalAccountantReportsRoute: PortalAccountantReportsRoute,
   PortalAdminAuditRoute: PortalAdminAuditRoute,
   PortalAdminBoardRoute: PortalAdminBoardRoute,
+  PortalAdminChangeRequestsRoute: PortalAdminChangeRequestsRoute,
   PortalAdminDashboardRoute: PortalAdminDashboardRoute,
   PortalAdminFieldStaffRoute: PortalAdminFieldStaffRoute,
   PortalAdminGridRoute: PortalAdminGridRoute,

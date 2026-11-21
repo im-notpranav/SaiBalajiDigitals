@@ -13,6 +13,10 @@ import {
   PlayCircle,
   Store,
   Users,
+  PauseCircle,
+  XCircle,
+  Ban,
+  RotateCcw,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -42,8 +46,17 @@ import {
   jobPlace,
   setMyJobStatus,
   todayIST,
+  FIELD_FLAG_LABEL,
+  type FieldJobFlag,
   type MyJob,
 } from "@/api/allocation";
+
+/** What the team can raise on a job, each with a reason; the job waits on hold for the OM. */
+const FLAG_CHOICES: { flag: FieldJobFlag; label: string; icon: typeof PauseCircle; hint: string }[] = [
+  { flag: "HOLD", label: "Hold", icon: PauseCircle, hint: "Can't carry on for now, e.g. store closed" },
+  { flag: "CANCELLED", label: "Cancel", icon: XCircle, hint: "The work is no longer wanted" },
+  { flag: "REJECTED", label: "Reject", icon: Ban, hint: "The job can't be done as given, e.g. wrong address" },
+];
 
 export const Route = createFileRoute("/_portal/field/dashboard")({
   head: () => ({ meta: [{ title: "My Work — SB OMS" }] }),
@@ -202,7 +215,7 @@ function JobCard({ job, highlight, muted }: { job: MyJob; highlight?: boolean; m
 
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1.5">
-          <JobStatusBadge status={job.status} />
+          <JobStatusBadge status={job.status} flag={job.field_flag} flagReason={job.field_flag_reason} />
           {job.order && (
             <OrderNotesButton orderId={job.order.id} orderNo={job.order.order_no} count={job.order.notes_count} size="sm" className="h-7 px-2 text-xs" />
           )}
@@ -285,26 +298,40 @@ const fmtTime = (iso: string) =>
 
 /**
  * Start / complete buttons for the person's own job. Starting opens on the job's first
- * day; completing needs the job started. Hold, cancel and reopen stay with managers.
+ * day; completing needs the job started. Hold, Cancel and Reject each take a reason and put
+ * the job on hold for the Operations Manager to decide.
  */
 function JobActions({ job }: { job: MyJob }) {
   const qc = useQueryClient();
   const [completing, setCompleting] = useState(false);
+  const [flagging, setFlagging] = useState<FieldJobFlag | null>(null);
   const [note, setNote] = useState("");
+  const [flagNote, setFlagNote] = useState("");
   const today = todayIST();
 
   const mutation = useMutation({
-    mutationFn: (v: { status: "STARTED" | "COMPLETED"; note?: string }) =>
+    mutationFn: (v: { status: "STARTED" | "COMPLETED" | FieldJobFlag; note?: string }) =>
       setMyJobStatus(job.id, v.status, v.note),
-    onSuccess: (saved) => {
+    onSuccess: (saved, v) => {
       const on = saved.order ? ` on ${saved.order.order_no}` : "";
-      toast.success(saved.status === "STARTED" ? `Job${on} started` : `Job${on} marked completed`);
+      toast.success(
+        v.status === "STARTED"
+          ? `Job${on} started`
+          : v.status === "COMPLETED"
+            ? `Job${on} marked completed`
+            : `${FIELD_FLAG_LABEL[v.status]} sent${on}`,
+        v.status !== "STARTED" && v.status !== "COMPLETED" ? { description: "The Operations Manager decides what happens next." } : undefined,
+      );
       setCompleting(false);
+      setFlagging(null);
       setNote("");
+      setFlagNote("");
       qc.invalidateQueries({ queryKey: ["my", "work-jobs"] });
     },
     onError: (err) => toast.error(apiErrorMessage(err, "Could not update the job")),
   });
+  const canFlag = job.status === "ASSIGNED" || job.status === "STARTED" || (job.status === "HOLD" && !job.field_flag);
+  const picked = FLAG_CHOICES.find((c) => c.flag === flagging);
 
   return (
     <div className="grid gap-2 border-t pt-3">
@@ -356,11 +383,71 @@ function JobActions({ job }: { job: MyJob }) {
         </Button>
       )}
 
-      {job.status === "HOLD" && (
-        <div className="text-xs text-warning-foreground">
-          On hold. Wait for the Operations Manager before carrying on.
+      {job.sent_back_reason && job.status !== "COMPLETED" && (
+        <div className="flex items-start gap-1.5 rounded-lg bg-blue-500/10 px-2.5 py-1.5 text-xs text-blue-700 dark:text-blue-300">
+          <RotateCcw className="mt-px h-3.5 w-3.5 shrink-0" />
+          <span>
+            Sent back by the CSM{job.sent_back_count && job.sent_back_count > 1 ? ` (${job.sent_back_count} times)` : ""}: {job.sent_back_reason}
+          </span>
         </div>
       )}
+
+      {job.status === "HOLD" && (
+        <div className="text-xs text-warning-foreground">
+          {job.field_flag ? (
+            <>
+              <span className="font-semibold">{FIELD_FLAG_LABEL[job.field_flag]} asked:</span> {job.field_flag_reason}. Waiting for the Operations Manager.
+            </>
+          ) : (
+            "On hold. Wait for the Operations Manager before carrying on."
+          )}
+        </div>
+      )}
+
+      {canFlag && (
+        <div className="grid grid-cols-3 gap-2">
+          {FLAG_CHOICES.map((c) => (
+            <Button key={c.flag} variant="outline" size="sm" className="h-9 rounded-xl text-xs" onClick={() => { setFlagNote(""); setFlagging(c.flag); }}>
+              <c.icon className="mr-1 h-3.5 w-3.5" /> {c.label}
+            </Button>
+          ))}
+        </div>
+      )}
+
+      <Dialog open={!!flagging} onOpenChange={(o) => !o && setFlagging(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {picked?.label} the job{job.order ? ` on ${job.order.order_no}` : ""}?
+            </DialogTitle>
+            <DialogDescription>{picked?.hint}. The job goes on hold and the Operations Manager decides.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2">
+            <Label htmlFor={`flag-note-${job.id}`}>Reason *</Label>
+            <Textarea
+              id={`flag-note-${job.id}`}
+              rows={3}
+              maxLength={500}
+              value={flagNote}
+              onChange={(e) => setFlagNote(e.target.value)}
+              placeholder="What happened?"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFlagging(null)}>
+              Back
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={mutation.isPending || flagNote.trim().length < 3}
+              onClick={() => flagging && mutation.mutate({ status: flagging, note: flagNote.trim() })}
+            >
+              {mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Send {picked?.label}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={completing} onOpenChange={setCompleting}>
         <DialogContent>

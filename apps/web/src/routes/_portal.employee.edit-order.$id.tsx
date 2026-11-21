@@ -10,6 +10,73 @@ import type { CreateOrderInput } from "@sb-oms/shared-types";
 import { useAuth } from "@/lib/auth-store";
 import { Loader2 } from "lucide-react";
 import { friendlyError } from "@/lib/friendly-error";
+import { createChangeRequest, type LineEditPayload } from "@/api/changeRequests";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+
+/**
+ * What a CSM's edit asks the admin for: client, store names and locations, changed / new /
+ * removed lines and new stores. Empty when only PO numbers or the order remark changed.
+ */
+function essentialChanges(order: any, payload: CreateOrderInput, includeLines: boolean): LineEditPayload {
+  const out: LineEditPayload = {};
+  if (payload.client_name !== order.client_name) out.client_name = payload.client_name;
+  const prevStores = new Map<number, any>((order.stores ?? []).map((s: any) => [s.id, s]));
+  const prevItems = new Map<number, any>((order.items ?? []).map((i: any) => [i.id, i]));
+  const stores: NonNullable<LineEditPayload["stores"]> = [];
+  const newStores: NonNullable<LineEditPayload["new_stores"]> = [];
+  const items: NonNullable<LineEditPayload["items"]> = [];
+  const kept = new Set<number>();
+  const plain = (it: any) => ({ media: it.media, width_inches: it.width_inches, height_inches: it.height_inches, qty: it.qty, rate: it.rate });
+  for (const s of payload.stores ?? []) {
+    if (!s.id) {
+      if (includeLines) newStores.push({ store_name: s.store_name, location: s.location, po_number: s.po_number || null, items: s.items.map(plain) });
+      continue;
+    }
+    const prev = prevStores.get(s.id);
+    if (prev && (s.store_name !== prev.store_name || s.location !== prev.location)) {
+      stores.push({ id: s.id, store_name: s.store_name, location: s.location });
+    }
+    for (const it of s.items) {
+      if (it.id) kept.add(it.id);
+      if (!includeLines) continue;
+      const was = it.id ? prevItems.get(it.id) : null;
+      const changed =
+        !was ||
+        was.media !== it.media ||
+        Number(was.width_inches) !== it.width_inches ||
+        Number(was.height_inches) !== it.height_inches ||
+        Number(was.qty) !== it.qty ||
+        Number(was.rate) !== it.rate;
+      if (changed) items.push({ ...(it.id ? { id: it.id } : { store_id: s.id }), ...plain(it) });
+    }
+  }
+  if (stores.length) out.stores = stores;
+  if (newStores.length) out.new_stores = newStores;
+  if (items.length) out.items = items;
+  if (includeLines) {
+    const removed = [...prevItems.keys()].filter((itemId) => !kept.has(itemId));
+    if (removed.length) out.remove_item_ids = removed;
+  }
+  return out;
+}
+
+function summarise(p: LineEditPayload | null): string {
+  if (!p) return "";
+  const parts: string[] = [];
+  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+  if (p.client_name) parts.push("client");
+  if (p.stores?.length) parts.push(plural(p.stores.length, "store rename"));
+  if (p.new_stores?.length) parts.push(plural(p.new_stores.length, "new store"));
+  const changed = p.items?.filter((i) => i.id).length ?? 0;
+  const added = (p.items?.length ?? 0) - changed;
+  if (changed) parts.push(plural(changed, "changed line"));
+  if (added) parts.push(plural(added, "new line"));
+  if (p.remove_item_ids?.length) parts.push(plural(p.remove_item_ids.length, "removed line"));
+  return parts.length ? `Changes: ${parts.join(", ")}.` : "";
+}
 
 export const Route = createFileRoute("/_portal/employee/edit-order/$id")({
   head: () => ({ meta: [{ title: "Edit Order — SB OMS" }] }),
@@ -30,6 +97,8 @@ function EditOrderEmployee() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const [saving, setSaving] = useState(false);
+  const [pendingRequest, setPendingRequest] = useState<LineEditPayload | null>(null);
+  const [reason, setReason] = useState("");
 
   const { data: orderData, isLoading, error } = useQuery({
     queryKey: ["order", id],
@@ -42,9 +111,70 @@ function EditOrderEmployee() {
   // Line items stay creator-restricted; header fields do not, so a colleague can enter a
   // PO while the CSM who raised the order is away.
   const lineItemsLocked = !order || !LINE_ITEMS_EDITABLE.includes(order.status) || (!isAdmin && !isCreator);
+  // A saved order's essentials change only with the admin's approval.
+  const requestMode = !!order && !isAdmin && (order.items?.length ?? 0) > 0;
+
+  const done = (message: string, description: string) => {
+    queryClient.invalidateQueries({ queryKey: ["orders"] });
+    queryClient.invalidateQueries({ queryKey: ["order", id] });
+    queryClient.invalidateQueries({ queryKey: ["change-requests"] });
+    toast.success(message, { description });
+    navigate({ to: "/employee/orders/$id", params: { id } });
+  };
+
+  /** Request mode: PO numbers and the order remark save now; the rest waits for approval. */
+  const submitRequest = async (payload: CreateOrderInput) => {
+    if (!order) return;
+    setSaving(true);
+    try {
+      const orderId = Number(id);
+      const headerPatch: Record<string, unknown> = {};
+      if ((payload.po_number || "") !== (order.po_number || "")) headerPatch.po_number = payload.po_number || null;
+      if ((payload.order_remark || "") !== (order.order_remark || "")) headerPatch.order_remark = payload.order_remark || null;
+      if (Object.keys(headerPatch).length > 0) await updateOrderDetails(orderId, headerPatch);
+      let storePo = 0;
+      const prevStores = new Map((order.stores ?? []).map((s) => [s.id, s]));
+      for (const s of payload.stores ?? []) {
+        const prev = s.id ? prevStores.get(s.id) : null;
+        if (prev && (s.po_number || "") !== (prev.po_number || "")) {
+          await updateStore(orderId, s.id!, { po_number: s.po_number || null });
+          storePo++;
+        }
+      }
+      const ask = essentialChanges(order, payload, !lineItemsLocked);
+      if (Object.keys(ask).length === 0) {
+        if (Object.keys(headerPatch).length === 0 && storePo === 0) toast.info("Nothing changed.");
+        else done(`Order ${order.order_no} updated`, "PO and remark saved.");
+        return;
+      }
+      setReason("");
+      setPendingRequest(ask);
+    } catch (err: any) {
+      toast.error("Failed to update order", { description: friendlyError(err) });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const sendRequest = async () => {
+    if (!order || !pendingRequest) return;
+    if (reason.trim().length < 3) return void toast.error("Give a reason for the change.");
+    setSaving(true);
+    try {
+      await createChangeRequest(Number(id), { kind: "LINE_EDIT", reason: reason.trim(), payload: pendingRequest });
+      setPendingRequest(null);
+      done("Sent for approval", "The admin approves the change before it applies.");
+    } catch (err: any) {
+      if (toastMissingNames(err, { isAdmin })) return;
+      toast.error("Not sent", { description: friendlyError(err) });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const submit = async (payload: CreateOrderInput) => {
     if (!order) return;
+    if (requestMode) return submitRequest(payload);
     setSaving(true);
     try {
       const orderId = Number(id);
@@ -138,7 +268,30 @@ function EditOrderEmployee() {
         userRole={user?.role}
         lineItemsLocked={lineItemsLocked}
         startWithNewLine={!!addLine}
+        requestMode={requestMode}
       />
+      <Dialog open={!!pendingRequest} onOpenChange={(o) => !o && setPendingRequest(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Send for approval</DialogTitle>
+            <DialogDescription>
+              {summarise(pendingRequest)} The order stays as it is until the admin approves.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-1.5">
+            <Label htmlFor="edit-reason">Reason *</Label>
+            <Textarea id="edit-reason" rows={3} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why is this change needed?" maxLength={1000} autoFocus />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPendingRequest(null)}>
+              Back to the form
+            </Button>
+            <Button onClick={sendRequest} disabled={saving}>
+              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Send for approval
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

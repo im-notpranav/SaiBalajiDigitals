@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, Loader2 } from "lucide-react";
+import { ChevronDown, Loader2, RotateCcw } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -23,8 +24,12 @@ import {
 import {
   JOB_STATUS_LABELS,
   JOB_STATUS_NEXT,
+  FIELD_FLAG_LABEL,
   apiErrorMessage,
+  sendBackJob,
   setWorkJobStatus,
+  todayIST,
+  type FieldJobFlag,
   type WorkJob,
   type WorkJobStatus,
 } from "@/api/allocation";
@@ -41,22 +46,87 @@ const statusStyles: Record<WorkJobStatus, string> = {
 
 export function JobStatusBadge({
   status,
+  flag,
+  flagReason,
   className,
 }: {
   status: WorkJobStatus;
+  /** The team asked to Hold, Cancel or Reject the job; it waits on hold for the OM. */
+  flag?: FieldJobFlag | null;
+  flagReason?: string | null;
   className?: string;
 }) {
+  const asked = status === "HOLD" && flag;
   return (
     <span
       className={cn(
         "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium",
-        statusStyles[status],
+        asked ? "border-destructive/30 bg-destructive/10 text-destructive" : statusStyles[status],
         className,
       )}
+      title={asked && flagReason ? `${FIELD_FLAG_LABEL[flag]} asked: ${flagReason}` : undefined}
     >
       <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />
       {JOB_STATUS_LABELS[status]}
+      {asked && <span className="font-semibold">· {FIELD_FLAG_LABEL[flag]} asked</span>}
     </span>
+  );
+}
+
+/**
+ * Send the team back to a completed job: same job, a new day, with the reason. The CSM uses
+ * it on their own jobs; the Operations Manager and admin on any.
+ */
+export function SendBackButton({ job, asCsm, size = "sm" }: { job: WorkJob; asCsm: boolean; size?: "sm" | "default" }) {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  const [date, setDate] = useState(todayIST());
+  const mutation = useMutation({
+    mutationFn: () => sendBackJob(job.id, { reason: reason.trim(), date }, asCsm),
+    onSuccess: (saved) => {
+      toast.success(`Team sent back${saved.order ? ` to ${saved.order.order_no}` : ""}`, { description: "The team and the Operations Manager are told." });
+      setOpen(false);
+      setReason("");
+      qc.invalidateQueries({ queryKey: ["work-jobs"] });
+      qc.invalidateQueries({ queryKey: ["csm-jobs"] });
+      qc.invalidateQueries({ queryKey: ["order"] });
+    },
+    onError: (err) => toast.error(apiErrorMessage(err, "Could not send the team back")),
+  });
+  if (job.status !== "COMPLETED") return null;
+  return (
+    <>
+      <Button type="button" variant="outline" size={size} className="h-7 gap-1 px-2 text-xs" onClick={() => { setDate(todayIST()); setOpen(true); }}>
+        <RotateCcw className="h-3.5 w-3.5" /> Send back
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Send the team back{job.order ? ` to ${job.order.order_no}` : ""}</DialogTitle>
+            <DialogDescription>The same job reopens on the day you pick, with the same team.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <div className="grid gap-1.5">
+              <Label htmlFor={`sb-reason-${job.id}`}>Reason *</Label>
+              <Textarea id={`sb-reason-${job.id}`} rows={3} maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Poster peeling at one store" />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor={`sb-date-${job.id}`}>Day</Label>
+              <Input id={`sb-date-${job.id}`} type="date" min={todayIST()} value={date} onChange={(e) => setDate(e.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)}>
+              Back
+            </Button>
+            <Button disabled={mutation.isPending || reason.trim().length < 3 || !date} onClick={() => mutation.mutate()}>
+              {mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Send back
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -109,7 +179,7 @@ export function JobStatusMenu({ job }: { job: WorkJob }) {
     onError: (err) => toast.error(apiErrorMessage(err, "Could not change the status")),
   });
 
-  if (next.length === 0) return <JobStatusBadge status={job.status} />;
+  if (next.length === 0) return <JobStatusBadge status={job.status} flag={job.field_flag} flagReason={job.field_flag_reason} />;
 
   return (
     <>
@@ -120,7 +190,7 @@ export function JobStatusMenu({ job }: { job: WorkJob }) {
             className="inline-flex items-center gap-1 rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             disabled={mutation.isPending}
           >
-            <JobStatusBadge status={job.status} />
+            <JobStatusBadge status={job.status} flag={job.field_flag} flagReason={job.field_flag_reason} />
             {mutation.isPending ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
             ) : (

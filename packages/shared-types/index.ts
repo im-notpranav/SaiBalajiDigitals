@@ -156,6 +156,9 @@ export interface Order {
   order_remark?: string | null;
   /** How many notes the order's shared thread has; drives the green Notes button. */
   notes_count?: number;
+  /** Set when this order was combined into another; the number stays closed. */
+  merged_into_id?: number | null;
+  merged_into_no?: string | null;
   created_by?: number;
   creator_name?: string;
   items: OrderItem[];

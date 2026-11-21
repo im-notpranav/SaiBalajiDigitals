@@ -36,6 +36,12 @@ const REASON_REMARKS = new Set(["Other", "Revised", "ExtraAmount", "LessAmount"]
 /** Line remarks that carry a rupee figure. */
 const AMOUNT_REMARKS = new Set(["ExtraAmount", "LessAmount"]);
 
+/** A CSM's essential change on an order that has lines goes to the admin as a Request Change. */
+const NEEDS_APPROVAL_MESSAGE =
+  "This change needs admin approval. Use Request Change on the order (the edit page sends it for you).";
+const WHOLE_ORDER_AMOUNT_MESSAGE =
+  "Extra and Less Amount apply to the whole order, not a line. Use Request Change → Extra / Less Amount on the order.";
+
 /** The remark columns a submitted line stores: reason and figure only where they apply. */
 const remarkColumns = (item: any) => ({
   remarks: item.remarks ?? null,
@@ -593,6 +599,12 @@ export const updateOrder = async (req: Request, res: Response) => {
       return res.status(403).json({ message: "Only an administrator can set order remarks." });
     }
 
+    // Once an order has lines, a CSM's essential change (a new line too) waits for the admin:
+    // it goes as a Request Change. An allotted order with no lines yet is filled in freely.
+    if (user.role === "CSM" && existingOrder.items.length > 0 && items?.some((it: any) => !it.id)) {
+      return res.status(403).json({ message: NEEDS_APPROVAL_MESSAGE, needs_approval: true });
+    }
+
     // Header fields have their own endpoints. Rejected loudly rather than ignored:
     // silently dropping a header edit is how these changes get lost.
     if (client_name !== undefined || store_name !== undefined || location !== undefined || po_number !== undefined) {
@@ -668,6 +680,11 @@ export const updateOrder = async (req: Request, res: Response) => {
       // Revised only on a saved line, and only by an admin; Less Amount never above its line.
       for (const newItem of items as any[]) {
         const isNew = !(newItem.id && oldItemsById.has(newItem.id));
+        // Extra / Less Amount change the whole order now, never one line. A line that already
+        // carries one keeps it as it is.
+        if (AMOUNT_REMARKS.has(newItem.remarks) && (isNew || (oldItemsById.get(newItem.id) as any)?.remarks !== newItem.remarks)) {
+          return res.status(400).json({ message: WHOLE_ORDER_AMOUNT_MESSAGE });
+        }
         if (newItem.remarks === "Revised" && !isAdmin) {
           return res.status(403).json({ message: "Only an administrator can revise a line." });
         }
@@ -910,6 +927,9 @@ export const updateOrderDetails = async (req: Request, res: Response) => {
       return res.status(403).json({ message: "This order is settled. Ask an administrator to change it." });
     }
 
+    if (!isAdmin && client_name !== undefined && client_name !== order.client_name && (await prisma.orderItem.count({ where: { order_id: id } })) > 0) {
+      return res.status(403).json({ message: NEEDS_APPROVAL_MESSAGE, needs_approval: true });
+    }
     if (!isAdmin && client_name !== undefined && client_name !== order.client_name && isBillingStarted(order.status)) {
       return res.status(403).json({
         message: "The invoice has already been raised against this client. Ask an administrator to change it.",
@@ -1006,6 +1026,10 @@ export const updateStore = async (req: Request, res: Response) => {
         message: "This store has already been invoiced. Ask an administrator to change its name or location.",
       });
     }
+    // A store's name or location is an essential change once the order has lines.
+    if (!isAdmin && identityChange && (await prisma.orderItem.count({ where: { order_id: orderId } })) > 0) {
+      return res.status(403).json({ message: NEEDS_APPROVAL_MESSAGE, needs_approval: true });
+    }
 
     // A changed location must be an active one in Master Library, saved in its spelling; the
     // location already on the store may stay even if archived since.
@@ -1079,6 +1103,9 @@ export const addStore = async (req: Request, res: Response) => {
     // A new store means new line items, so this follows the line-item rule, not the header one.
     if (!isAdmin && !isCsmEditable(order.status)) {
       return res.status(403).json({ message: "Stores can only be added before billing starts." });
+    }
+    if (!isAdmin && (await prisma.orderItem.count({ where: { order_id: order.id } })) > 0) {
+      return res.status(403).json({ message: NEEDS_APPROVAL_MESSAGE, needs_approval: true });
     }
     if (order.stores.length >= 50) {
       return res.status(409).json({ message: "An order can hold at most 50 stores." });
@@ -2616,6 +2643,10 @@ export const setItemLossRemark = async (req: Request, res: Response) => {
     if (remarks === "Revised" && existing.remarks !== "Revised") {
       return res.status(400).json({ message: "To revise a line, edit its size, qty or rate on the order and choose Revised." });
     }
+    // Extra / Less are whole-order now; an older line request can still be decided as it is.
+    if (remarks && AMOUNT_REMARKS.has(remarks) && existing.remarks !== remarks) {
+      return res.status(400).json({ message: WHOLE_ORDER_AMOUNT_MESSAGE });
+    }
     const problem = lineRemarkProblem(parseResult.data, Number(existing.amount), false);
     if (problem) return res.status(400).json({ message: problem });
 
@@ -2672,10 +2703,11 @@ export const requestItemAdjustment = async (req: Request, res: Response) => {
   try {
     const parsed = itemAdjustmentRequestSchema.safeParse(req.body);
     if (!parsed.success) return res.status(400).json({ message: "Invalid input", errors: sanitizeZodErrors(parsed.error) });
-    const { type, amount, reason } = parsed.data;
+    const { type, reason } = parsed.data;
     const itemId = parseInt(req.params.itemId as string, 10);
     const orderId = parseInt(req.params.orderId as string, 10);
     const user = req.user!;
+    if (AMOUNT_REMARKS.has(type)) return res.status(400).json({ message: WHOLE_ORDER_AMOUNT_MESSAGE });
 
     const item = await prisma.orderItem.findUnique({
       where: { id: itemId },
@@ -2693,7 +2725,7 @@ export const requestItemAdjustment = async (req: Request, res: Response) => {
           : `A ${remarkName(item.remarks)} request is already waiting on this line.`,
       });
     }
-    const problem = lineRemarkProblem({ remarks: type, adjustment_amount: amount }, Number(item.amount), false);
+    const problem = lineRemarkProblem({ remarks: type, remarks_other_text: reason }, Number(item.amount), false);
     if (problem) return res.status(400).json({ message: problem });
 
     const updated = await prisma.$transaction(async (tx) => {
@@ -2703,7 +2735,7 @@ export const requestItemAdjustment = async (req: Request, res: Response) => {
         data: {
           remarks: type,
           remarks_other_text: reason,
-          adjustment_amount: amount,
+          adjustment_amount: null,
           original_amount: null,
           remarks_set_at: new Date(),
           remarks_set_by: user.id,
@@ -2714,7 +2746,13 @@ export const requestItemAdjustment = async (req: Request, res: Response) => {
       });
     });
 
-    await notifyAdminsOfAdjustmentRequest(item.order, user, `${remarkName(type)} of ${inr2(amount)} on item #${item.s_no}`);
+    await notifyRole(
+      "ADMIN",
+      `${remarkName(type)} requested on ${item.order.order_no}`,
+      `${user.name} asked for ${remarkName(type)} on item #${item.s_no} (${item.media}): ${reason}`.slice(0, 300),
+      "warning",
+      item.order.id,
+    );
     return res.status(200).json(serializeDecimals(updated));
   } catch (err) {
     console.error(err);

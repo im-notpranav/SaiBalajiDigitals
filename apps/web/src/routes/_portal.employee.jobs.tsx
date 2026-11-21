@@ -5,7 +5,7 @@ import { CalendarDays, HardHat, MapPin, Pencil, Users } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { EmptyState, ErrorState, LoadingState } from "@/components/layout/PageStates";
 import { Button } from "@/components/ui/button";
-import { JobStatusBadge } from "@/components/allocation/JobBits";
+import { JobStatusBadge, SendBackButton } from "@/components/allocation/JobBits";
 import { CsmJobEditDialog } from "@/components/allocation/CsmJobEditDialog";
 import {
   JOB_EDITABLE,
@@ -69,7 +69,7 @@ function JobCard({ job, onEdit }: { job: WorkJob; onEdit: () => void }) {
             </div>
           )}
         </div>
-        <JobStatusBadge status={job.status} />
+        <JobStatusBadge status={job.status} flag={job.field_flag} flagReason={job.field_flag_reason} />
       </div>
       <p className="break-words text-sm">
         {job.work_details ?? <span className="text-muted-foreground">No work details yet.</span>}
@@ -90,11 +90,17 @@ function JobCard({ job, onEdit }: { job: WorkJob; onEdit: () => void }) {
           </span>
         </div>
       </dl>
+      {job.status === "HOLD" && job.field_flag_reason && <p className="text-xs text-destructive">Team says: {job.field_flag_reason}</p>}
       {JOB_EDITABLE.includes(job.status) && (
         <div>
           <Button size="sm" variant="outline" className="rounded-xl" onClick={onEdit}>
             <Pencil className="mr-1.5 h-3.5 w-3.5" /> Update job
           </Button>
+        </div>
+      )}
+      {job.status === "COMPLETED" && (
+        <div>
+          <SendBackButton job={job} asCsm />
         </div>
       )}
     </article>

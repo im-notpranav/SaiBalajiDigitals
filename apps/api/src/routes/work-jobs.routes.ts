@@ -5,6 +5,7 @@ import {
   createJob,
   updateJob,
   setJobStatus,
+  sendBackJob,
   orderOptions,
   dailyBoard,
   weeklyGrid,
@@ -34,5 +35,6 @@ router.get("/:id", getJob);
 router.get("/:id/details", jobDetails);
 router.put("/:id", updateJob);
 router.put("/:id/status", setJobStatus);
+router.post("/:id/send-back", sendBackJob);
 
 export default router;
