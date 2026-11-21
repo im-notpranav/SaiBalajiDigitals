@@ -48,6 +48,7 @@ import reportsRoutes from "./routes/reports.routes";
 import changeRequestsRoutes from "./routes/change-requests.routes";
 import rateCardsRoutes from "./routes/rate-cards.routes";
 import { machinesRouter, productionRouter } from "./routes/machines.routes";
+import orderBlocksRoutes from "./routes/order-blocks.routes";
 app.use("/api/webhooks", webhookRouter);
 
 // Global rate limit: 300 requests per minute per signed-in person, and per address for everyone
@@ -110,5 +111,6 @@ app.use("/api/change-requests", changeRequestsRoutes);
 app.use("/api/rate-cards", rateCardsRoutes);
 app.use("/api/machines", machinesRouter);
 app.use("/api/production", productionRouter);
+app.use("/api/order-blocks", orderBlocksRoutes);
 
 export default app;

@@ -2,6 +2,7 @@ import { Router } from "express";
 import { getCsmDirectory, getUsers, createUser, deleteUser, updateMe, checkUsername, toggleUserStatus, updateUser, getProductionStaff, resetUserPassword, uploadUserPhoto, removeUserPhoto, getUserPhoto, MAX_PHOTO_BYTES } from "../controllers/users.controller";
 import { authenticate, authorize, requireSuperAdmin , denyReadOnlyMutations } from "../middlewares/auth.middleware";
 import { rawUpload } from "../middlewares/raw-upload";
+import { exportUsers, importUsers, userTemplate } from "../controllers/user-import.controller";
 
 const router = Router();
 
@@ -22,6 +23,10 @@ router.get("/production-staff", authorize("PRODUCTION_MANAGER", "ADMIN"), getPro
 router.get("/check", authorize("ADMIN"), checkUsername);
 router.get("/", authorize("ADMIN", "OPERATION_MANAGER"), getUsers);
 router.post("/", authorize("ADMIN"), requireSuperAdmin, createUser);
+// The staff sheet: download the template or every account, and upload to add or update people.
+router.get("/template", authorize("ADMIN"), requireSuperAdmin, userTemplate);
+router.get("/export", authorize("ADMIN"), requireSuperAdmin, exportUsers);
+router.post("/import", authorize("ADMIN"), requireSuperAdmin, rawUpload(5 * 1024 * 1024, "5 MB"), importUsers);
 // Removing or switching off an account is the super admin's, like creating one (D-01).
 // Field staff are managed separately, under /field-staff.
 router.delete("/:id", authorize("ADMIN"), requireSuperAdmin, deleteUser);

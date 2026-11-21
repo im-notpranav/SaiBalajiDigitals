@@ -13,6 +13,8 @@ import { Command, CommandGroup, CommandInput, CommandItem, CommandList, CommandS
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { apiErrorMessage } from "@/api/allocation";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DetailFields, EMPTY_DETAILS, detailsBody, emailBad, type Details } from "@/components/master-library/DetailFields";
 import {
   MASTER_KIND_LABELS,
   REQUEST_SENT,
@@ -228,6 +230,9 @@ export function RequestNameDialog({
 }) {
   const [name, setName] = useState(initialName);
   const [note, setNote] = useState("");
+  const [details, setDetails] = useState<Details>(EMPTY_DETAILS);
+  const [locality, setLocality] = useState<"LOCAL" | "NON_LOCAL" | "">("");
+  const [district, setDistrict] = useState("");
   const [refusal, setRefusal] = useState<{ message: string; existing?: string } | null>(null);
   const label = MASTER_KIND_LABELS[kind];
 
@@ -235,12 +240,22 @@ export function RequestNameDialog({
     if (open) {
       setName(initialName);
       setNote("");
+      setDetails(EMPTY_DETAILS);
+      setLocality("");
+      setDistrict("");
       setRefusal(null);
     }
   }, [open, initialName]);
 
   const send = useMutation({
-    mutationFn: () => requestMasterName({ kind, name: name.trim(), note: note.trim() || undefined }),
+    mutationFn: () => {
+      const extra: Record<string, unknown> = Object.fromEntries(Object.entries(detailsBody(kind, details)).filter(([, v]) => v != null));
+      if (kind === "LOCATION") {
+        if (locality) extra.locality = locality;
+        if (district.trim()) extra.district = district.trim();
+      }
+      return requestMasterName({ kind, name: name.trim(), note: note.trim() || undefined, details: extra });
+    },
     onSuccess: (res) => {
       if (res.status === "sent") {
         toast.success(REQUEST_SENT);
@@ -253,14 +268,14 @@ export function RequestNameDialog({
     onError: (err) => toast.error(apiErrorMessage(err, "Could not send the request. Please try again.")),
   });
 
-  const canSend = name.trim().length > 0 && !send.isPending;
+  const canSend = name.trim().length > 0 && !emailBad(details) && !send.isPending;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Request a {label.toLowerCase()}</DialogTitle>
-          <DialogDescription>The admin adds it to Master Library. You'll be told when it's added.</DialogDescription>
+          <DialogDescription>Fill in what you know. The admin checks it and adds it to Master Library; you'll be told when it's added.</DialogDescription>
         </DialogHeader>
         <form
           className="grid gap-4"
@@ -283,6 +298,26 @@ export function RequestNameDialog({
               }}
             />
           </div>
+          {kind === "LOCATION" && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <Label>Hyderabad / Non-local</Label>
+                <Select value={locality || "UNSURE"} onValueChange={(v) => setLocality(v === "UNSURE" ? "" : (v as "LOCAL" | "NON_LOCAL"))}>
+                  <SelectTrigger aria-label="Hyderabad or Non-local"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="LOCAL">Hyderabad</SelectItem>
+                    <SelectItem value="NON_LOCAL">Non-local</SelectItem>
+                    <SelectItem value="UNSURE">Not sure</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor={`ask-${kind}-district`}>District</Label>
+                <Input id={`ask-${kind}-district`} value={district} maxLength={100} onChange={(e) => setDistrict(e.target.value)} />
+              </div>
+            </div>
+          )}
+          <DetailFields kind={kind} value={details} onChange={setDetails} idPrefix={`ask-${kind}`} />
           <div className="grid gap-2">
             <Label htmlFor={`ask-${kind}-note`}>Note for the admin</Label>
             <Textarea

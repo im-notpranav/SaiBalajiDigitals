@@ -25,6 +25,7 @@ import {
 } from "@/api/masterLibrary";
 import { entriesQuery } from "./MasterListTab";
 import { clashOf, cleanName, lowerKey } from "./names";
+import { DetailFields, EMPTY_DETAILS, detailsBody, detailsOf, emailBad, type Details } from "./DetailFields";
 import { FilterPill } from "./shared";
 
 export const requestsQuery = {
@@ -92,6 +93,7 @@ export function RequestsTab() {
                   {r.status === "REJECTED" && <Badge variant="secondary">Not added</Badge>}
                 </div>
                 {r.note && <p className="mt-1 text-sm text-muted-foreground">"{r.note}"</p>}
+                {detailLine(r.details) && <p className="mt-1 text-xs text-muted-foreground">{detailLine(r.details)}</p>}
                 {r.status === "REJECTED" && r.reject_reason && <p className="mt-1 text-sm">Reason: {r.reject_reason}</p>}
                 <p className="mt-1 text-xs text-muted-foreground">
                   {r.requester?.name ?? "Someone"} · {formatWhen(r.created_at)}
@@ -133,6 +135,26 @@ function useReplaceRequest() {
     );
 }
 
+const DETAIL_LABELS: Record<string, string> = {
+  short_name: "Short name",
+  contact_person: "Contact",
+  contact_number: "Number",
+  email: "Email",
+  csm_name: "CSM",
+  district: "District",
+  state: "State",
+  locality: "Area",
+};
+
+/** What the asker filled in beside the name, in one line. */
+function detailLine(d: Record<string, unknown> | null | undefined) {
+  if (!d) return "";
+  return Object.entries(d)
+    .filter(([k, v]) => DETAIL_LABELS[k] && v != null && v !== "")
+    .map(([k, v]) => `${DETAIL_LABELS[k]}: ${k === "locality" ? (v === "LOCAL" ? "Hyderabad" : "Non-local") : String(v)}`)
+    .join(" · ");
+}
+
 function ApproveDialog({ request, onClose }: { request: NameRequest | null; onClose: () => void }) {
   const qc = useQueryClient();
   const replace = useReplaceRequest();
@@ -140,13 +162,16 @@ function ApproveDialog({ request, onClose }: { request: NameRequest | null; onCl
   const [code, setCode] = useState("");
   const [locality, setLocality] = useState<Locality | "LATER">("LATER");
   const [district, setDistrict] = useState("");
+  const [details, setDetails] = useState<Details>(EMPTY_DETAILS);
   const [openedFor, setOpenedFor] = useState<NameRequest | null>(null);
   if (request && openedFor !== request) {
     setOpenedFor(request);
     setName(request.name);
     setCode("");
-    setLocality("LATER");
-    setDistrict("");
+    const asked = request.details ?? {};
+    setLocality(asked.locality === "LOCAL" || asked.locality === "NON_LOCAL" ? asked.locality : "LATER");
+    setDistrict(typeof asked.district === "string" ? asked.district : "");
+    setDetails(detailsOf(asked));
   } else if (!request && openedFor) {
     setOpenedFor(null);
   }
@@ -162,6 +187,7 @@ function ApproveDialog({ request, onClose }: { request: NameRequest | null; onCl
     mutationFn: () =>
       approveNameRequest(shown!.id, {
         name: clean,
+        ...detailsBody(kind, details),
         ...(kind === "CLIENT" ? { code: code.trim() || null } : {}),
         ...(kind === "LOCATION"
           ? { locality: locality === "LATER" ? undefined : locality, district: district.trim() || null }
@@ -210,7 +236,7 @@ function ApproveDialog({ request, onClose }: { request: NameRequest | null; onCl
           {kind === "CLIENT" && !existing && (
             <div className="grid gap-2">
               <Label htmlFor="rq-code">Code <span className="font-normal text-muted-foreground">(optional)</span></Label>
-              <Input id="rq-code" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} maxLength={30} className="font-mono uppercase" />
+              <Input id="rq-code" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} maxLength={30} className="font-mono uppercase" placeholder="Blank gives the next SBD code" />
               {codeBad && <p className="text-xs text-destructive">Letters, numbers, - and _ only.</p>}
             </div>
           )}
@@ -233,9 +259,10 @@ function ApproveDialog({ request, onClose }: { request: NameRequest | null; onCl
               </div>
             </div>
           )}
+          {!existing && <DetailFields kind={kind} value={details} onChange={setDetails} idPrefix="rq" />}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose} disabled={approve.isPending}>Cancel</Button>
-            <Button type="submit" disabled={!clean || codeBad || approve.isPending}>
+            <Button type="submit" disabled={!clean || codeBad || emailBad(details) || approve.isPending}>
               {approve.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Add
             </Button>

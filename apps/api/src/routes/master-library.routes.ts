@@ -15,7 +15,7 @@ import {
   rejectNameRequest,
   updateMasterEntry,
 } from "../controllers/master-library.controller";
-import { authenticate, authorize } from "../middlewares/auth.middleware";
+import { authenticate, authorize, requireSuperAdmin } from "../middlewares/auth.middleware";
 import { rawUpload } from "../middlewares/raw-upload";
 
 const router = Router();
@@ -34,17 +34,18 @@ router.post("/requests/:id/approve", approveNameRequest);
 router.post("/requests/:id/reject", rejectNameRequest);
 
 router.get("/duplicates", listDuplicates);
-router.post("/duplicates/not-same", markNotSame);
-router.post("/merge", mergeEntries);
+// Changing the lists themselves is the super admin's (NMG); other admins approve requests and look.
+router.post("/duplicates/not-same", requireSuperAdmin, markNotSame);
+router.post("/merge", requireSuperAdmin, mergeEntries);
 
 router.get("/template", masterTemplate);
 router.get("/export", masterExport);
 // The .xlsx arrives as the raw request body; the same file is sent to preview, then to apply.
-router.post("/import/preview", rawUpload(5 * 1024 * 1024, "5 MB"), previewMasterImport);
-router.post("/import", rawUpload(5 * 1024 * 1024, "5 MB"), applyMasterImport);
+router.post("/import/preview", requireSuperAdmin, rawUpload(5 * 1024 * 1024, "5 MB"), previewMasterImport);
+router.post("/import", requireSuperAdmin, rawUpload(5 * 1024 * 1024, "5 MB"), applyMasterImport);
 
 router.get("/:kind(clients|media|locations)", listEntries);
-router.post("/:kind(clients|media|locations)", createMasterEntry);
-router.patch("/:kind(clients|media|locations)/:id", updateMasterEntry);
+router.post("/:kind(clients|media|locations)", requireSuperAdmin, createMasterEntry);
+router.patch("/:kind(clients|media|locations)/:id", requireSuperAdmin, updateMasterEntry);
 
 export default router;

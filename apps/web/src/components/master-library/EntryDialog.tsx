@@ -19,8 +19,9 @@ import {
   type MasterKind,
 } from "@/api/masterLibrary";
 import { byName, cleanName, clashOf, lowerKey, usageText } from "./names";
+import { DetailFields, detailsBody, detailsOf, emailBad, type Details } from "./DetailFields";
 
-type Form = { name: string; code: string; locality: Locality | ""; district: string };
+type Form = { name: string; code: string; locality: Locality | ""; district: string; details: Details };
 
 const formOf = (e: MasterEntry | null): Form => ({
   name: e?.name ?? "",
@@ -28,6 +29,7 @@ const formOf = (e: MasterEntry | null): Form => ({
   // A location still waiting for review has only a placeholder locality: make the admin pick.
   locality: e?.locality && !e.needs_confirmation ? e.locality : "",
   district: e?.district ?? "",
+  details: detailsOf(e as unknown as Record<string, unknown> | null),
 });
 
 const CODE_OK = /^[A-Za-z0-9_-]{0,30}$/;
@@ -68,7 +70,7 @@ export function EntryDialog({
 
   const save = useMutation({
     mutationFn: () => {
-      const body: MasterEntryInput = { name };
+      const body: MasterEntryInput = { name, ...detailsBody(kind, form.details, "default_machine_id") };
       if (kind === "CLIENT") body.code = form.code.trim() || null;
       if (kind === "LOCATION") {
         body.locality = form.locality as Locality;
@@ -94,11 +96,11 @@ export function EntryDialog({
   });
 
   const canSave =
-    !!name && !clash && !codeBad && (kind !== "LOCATION" || !!form.locality) && !save.isPending;
+    !!name && !clash && !codeBad && !emailBad(form.details) && (kind !== "LOCATION" || !!form.locality) && !save.isPending;
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent>
+      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{entry ? `Edit ${label}` : `Add ${label}`}</DialogTitle>
           {entry && <DialogDescription>Used on {usageText(kind, entry).toLowerCase()}.</DialogDescription>}
@@ -134,7 +136,7 @@ export function EntryDialog({
                 id="ml-code"
                 value={form.code}
                 onChange={(e) => set("code", e.target.value.toUpperCase())}
-                placeholder="e.g. BIGC"
+                placeholder={entry ? "e.g. SBD012" : "Blank gives the next SBD code"}
                 maxLength={30}
                 className="font-mono uppercase"
               />
@@ -161,6 +163,8 @@ export function EntryDialog({
               </div>
             </div>
           )}
+
+          <DetailFields kind={kind} value={form.details} onChange={(d) => set("details", d)} idPrefix="ml" />
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>

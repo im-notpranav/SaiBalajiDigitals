@@ -25,16 +25,54 @@ export type Locality = "LOCAL" | "NON_LOCAL";
 export const SHEET_NAMES: Record<MasterKind, string> = { CLIENT: "Clients", MEDIA: "Media", LOCATION: "Locations" };
 
 export const SHEET_HEADERS: Record<MasterKind, string[]> = {
-  CLIENT: ["Name", "Code", "Active"],
-  MEDIA: ["Name", "Active"],
-  LOCATION: ["Name", "Hyderabad / Non-local", "District", "Active"],
+  CLIENT: ["Name", "Code", "Short Name", "Contact Person", "Contact Number", "Email", "CSM Name", "Active"],
+  MEDIA: ["Name", "Default Machine", "Active"],
+  LOCATION: ["Name", "Hyderabad / Non-local", "District", "State", "Active"],
+};
+
+/** Other names the company's own sheets go by (OMS Clients Data, OMS Line Items, ...). */
+const SHEET_ALIASES: Record<MasterKind, string[]> = {
+  CLIENT: ["clients", "omsclientsdata", "clientsdata", "client"],
+  MEDIA: ["media", "omslineitems", "lineitems", "lineitem"],
+  LOCATION: ["locations", "omslocations", "location"],
+};
+
+/**
+ * Columns beyond name, code, locality, district and active, per sheet. Each is optional; a
+ * blank cell leaves the value as it is.
+ */
+export const EXTRAS: Record<MasterKind, { field: string; label: string; aliases: string[]; max: number }[]> = {
+  CLIENT: [
+    { field: "short_name", label: "Short name", aliases: ["short name"], max: 100 },
+    { field: "contact_person", label: "Contact person", aliases: ["contact person", "contact name"], max: 100 },
+    { field: "contact_number", label: "Contact number", aliases: ["contact number", "contact no", "contact no.", "mobile", "mobile number", "phone"], max: 30 },
+    { field: "email", label: "Email", aliases: ["mail id", "email", "email id", "e-mail", "mail"], max: 200 },
+    { field: "csm_name", label: "CSM", aliases: ["csm name", "csm"], max: 100 },
+  ],
+  MEDIA: [{ field: "machine", label: "Default machine", aliases: ["default machine", "machine"], max: 60 }],
+  LOCATION: [{ field: "state", label: "State", aliases: ["state", "state name"], max: 60 }],
 };
 
 /** Lower-case headings each column may go by. */
 const COLUMNS: Record<string, string[]> = {
-  name: ["name", "client name", "client", "media name", "media", "location name", "location", "area name", "area"],
-  code: ["code", "client code"],
-  locality: ["hyderabad / non-local", "hyderabad/non-local", "hyderabad / non local", "hyderabad or non-local", "locality", "local / non-local", "local/non-local"],
+  name: [
+    "name",
+    "client name",
+    "client",
+    "client official registered name",
+    "media name",
+    "media",
+    "sbd oms line items",
+    "line item",
+    "line items",
+    "line item name",
+    "location name",
+    "location",
+    "area name",
+    "area",
+  ],
+  code: ["code", "client code", "sbd code", "sbd client code", "client id"],
+  locality: ["hyderabad / non-local", "hyderabad/non-local", "hyderabad / non local", "hyderabad /non local", "hyderabad/ non local", "hyderabad or non-local", "locality", "local / non-local", "local/non-local"],
   district: ["district", "district / notes"],
   active: ["active", "status"],
 };
@@ -53,6 +91,8 @@ export interface SheetRow {
   locality?: Locality;
   district?: string;
   active?: boolean;
+  /** EXTRAS columns that were filled, by field. */
+  extra?: Record<string, string>;
 }
 
 export interface RowError {
@@ -70,6 +110,7 @@ export interface ParsedSheet {
 }
 
 const text = (v: unknown) => String(v ?? "").trim();
+const heading = (v: unknown) => text(v).toLowerCase().replace(/\s+/g, " ");
 
 /**
  * Reads one sheet given as rows of cells (as sheet_to_json with header: 1 gives them).
@@ -78,12 +119,12 @@ const text = (v: unknown) => String(v ?? "").trim();
 export function parseMasterSheet(kind: MasterKind, rows: unknown[][], firstRowNumber = 1): ParsedSheet {
   const out: ParsedSheet = { found: true, rows: [], errors: [] };
   // The headings may sit under a title row; look a few rows down for them.
-  const headerIndex = rows.slice(0, 10).findIndex((r) => r.some((c) => COLUMNS.name!.includes(text(c).toLowerCase())));
+  const headerIndex = rows.slice(0, 10).findIndex((r) => r.some((c) => COLUMNS.name!.includes(heading(c))));
   if (headerIndex === -1) {
     out.problem = `The ${SHEET_NAMES[kind]} sheet has no Name column.`;
     return out;
   }
-  const headings = rows[headerIndex]!.map((h) => text(h).toLowerCase());
+  const headings = rows[headerIndex]!.map((h) => heading(h));
   const col = (key: string) => headings.findIndex((h) => COLUMNS[key]!.includes(h));
   const at = {
     name: col("name"),
@@ -92,6 +133,7 @@ export function parseMasterSheet(kind: MasterKind, rows: unknown[][], firstRowNu
     district: kind === "LOCATION" ? col("district") : -1,
     active: col("active"),
   };
+  const extraAt = EXTRAS[kind].map((x) => ({ ...x, at: headings.findIndex((h) => x.aliases.includes(h)) })).filter((x) => x.at !== -1);
 
   const data = rows.slice(headerIndex + 1);
   const filled = (r: unknown[]) => r.some((c) => text(c) !== "");
@@ -152,6 +194,13 @@ export function parseMasterSheet(kind: MasterKind, rows: unknown[][], firstRowNu
       entry.active = active;
     }
 
+    for (const x of extraAt) {
+      const v = cell(x.at).replace(/\s+/g, " ");
+      if (!v) continue;
+      if (v.length > x.max) return fail(`${x.label} is longer than ${x.max} letters.`);
+      (entry.extra ??= {})[x.field] = v;
+    }
+
     seen.set(key, { row: rowNo, name });
     out.rows.push(entry);
   });
@@ -186,7 +235,8 @@ export function parseMasterWorkbook(file: Buffer): { sheets: Record<MasterKind, 
   }
   const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, "");
   for (const kind of Object.keys(SHEET_NAMES) as MasterKind[]) {
-    const sheetName = wb.SheetNames.find((n) => norm(n) === norm(SHEET_NAMES[kind]));
+    const sheetName =
+      wb.SheetNames.find((n) => norm(n) === norm(SHEET_NAMES[kind])) ?? wb.SheetNames.find((n) => SHEET_ALIASES[kind].includes(norm(n)));
     if (!sheetName) continue;
     const sheet = wb.Sheets[sheetName]!;
     capColumns(sheet);
@@ -213,12 +263,24 @@ export interface ExistingEntry {
   locality?: Locality;
   district?: string | null;
   needs_confirmation?: boolean;
+  short_name?: string | null;
+  contact_person?: string | null;
+  contact_number?: string | null;
+  email?: string | null;
+  csm_name?: string | null;
+  default_machine_id?: number | null;
+  state?: string | null;
 }
+
+/** Extra fields an add or update writes, by column name. */
+export type ExtraData = Partial<Record<"short_name" | "contact_person" | "contact_number" | "email" | "csm_name" | "state", string | null>> & {
+  default_machine_id?: number | null;
+};
 
 export interface PlannedAdd {
   row: number;
   name: string;
-  data: { name: string; code?: string | null; is_active: boolean; locality?: Locality; district?: string | null; needs_confirmation?: boolean };
+  data: { name: string; code?: string | null; is_active: boolean; locality?: Locality; district?: string | null; needs_confirmation?: boolean } & ExtraData;
   detail: string;
 }
 
@@ -226,7 +288,7 @@ export interface PlannedUpdate {
   row: number;
   id: number;
   name: string;
-  data: { code?: string; is_active?: boolean; locality?: Locality; district?: string; needs_confirmation?: boolean };
+  data: { code?: string; is_active?: boolean; locality?: Locality; district?: string; needs_confirmation?: boolean } & ExtraData;
   detail: string;
 }
 
@@ -240,7 +302,12 @@ export interface SheetPlan {
 const LOC = LOCALITY_SHEET_LABELS;
 
 /** Works out the adds and updates for one parsed sheet. Pure: the caller loads `existing`. */
-export function planSheet(kind: MasterKind, sheet: ParsedSheet, existing: ExistingEntry[]): SheetPlan {
+export function planSheet(
+  kind: MasterKind,
+  sheet: ParsedSheet,
+  existing: ExistingEntry[],
+  ctx: { machines?: Map<string, { id: number; name: string }> } = {},
+): SheetPlan {
   const plan: SheetPlan = { adds: [], updates: [], unchanged: 0, errors: [...sheet.errors] };
   const byLower = new Map<string, ExistingEntry>();
   const byKey = new Map<string, ExistingEntry>();
@@ -279,6 +346,13 @@ export function planSheet(kind: MasterKind, sheet: ParsedSheet, existing: Existi
         notes.push(r.locality ? LOC[r.locality] : "Needs review: Hyderabad or Non-local not given");
         if (r.district) notes.push(r.district);
       }
+      const extras = extrasOf(kind, r, ctx);
+      if (extras.error) {
+        fail(extras.error);
+        continue;
+      }
+      Object.assign(add.data, extras.data);
+      notes.push(...extras.notes);
       if (!active) notes.push("Archived");
       add.detail = notes.join(" · ");
       plan.adds.push(add);
@@ -311,6 +385,18 @@ export function planSheet(kind: MasterKind, sheet: ParsedSheet, existing: Existi
         notes.push(`District ${current.district || "—"} → ${r.district}`);
       }
     }
+    const extras = extrasOf(kind, r, ctx);
+    if (extras.error) {
+      fail(extras.error);
+      continue;
+    }
+    for (const [field, value] of Object.entries(extras.data) as [keyof ExtraData, string | number | null][]) {
+      const was = (current as unknown as Record<string, unknown>)[field] ?? null;
+      if (field === "default_machine_id" ? was === value : String(was ?? "") === String(value ?? "")) continue;
+      (data as Record<string, unknown>)[field] = value;
+      const x = EXTRAS[kind].find((e) => e.field === field || (field === "default_machine_id" && e.field === "machine"));
+      notes.push(`${x?.label ?? field} → ${field === "default_machine_id" ? r.extra?.machine : value}`);
+    }
     if (r.active !== undefined && r.active !== current.is_active) {
       data.is_active = r.active;
       notes.push(r.active ? "Restored" : "Archived");
@@ -325,14 +411,42 @@ export function planSheet(kind: MasterKind, sheet: ParsedSheet, existing: Existi
   return plan;
 }
 
+/** The filled extra columns of one row, as fields; a machine name becomes its id. */
+function extrasOf(kind: MasterKind, r: SheetRow, ctx: { machines?: Map<string, { id: number; name: string }> }) {
+  const data: ExtraData = {};
+  const notes: string[] = [];
+  for (const [field, value] of Object.entries(r.extra ?? {})) {
+    if (field === "machine") {
+      const m = ctx.machines?.get(value.toLowerCase());
+      if (!m) return { data, notes, error: `Machine "${value}" is not in the machine list.` };
+      data.default_machine_id = m.id;
+      notes.push(m.name);
+      continue;
+    }
+    (data as Record<string, string>)[field] = value;
+    if (kind === "CLIENT" && field === "csm_name") notes.push(`CSM ${value}`);
+    if (kind === "LOCATION" && field === "state") notes.push(value);
+  }
+  return { data, notes, error: null as string | null };
+}
+
 // ---------------------------------------------------------------------------
 // Writing the workbook
 // ---------------------------------------------------------------------------
 
 export interface WorkbookData {
-  clients: { name: string; code: string | null; is_active: boolean }[];
-  media: { name: string; is_active: boolean }[];
-  locations: { name: string; locality: Locality; district: string | null; needs_confirmation: boolean; is_active: boolean }[];
+  clients: {
+    name: string;
+    code: string | null;
+    is_active: boolean;
+    short_name?: string | null;
+    contact_person?: string | null;
+    contact_number?: string | null;
+    email?: string | null;
+    csm_name?: string | null;
+  }[];
+  media: { name: string; is_active: boolean; machine?: string | null }[];
+  locations: { name: string; locality: Locality; district: string | null; state?: string | null; needs_confirmation: boolean; is_active: boolean }[];
 }
 
 const yes = (b: boolean) => (b ? "Yes" : "No");
@@ -344,14 +458,23 @@ const yes = (b: boolean) => (b ? "Yes" : "No");
 export function buildMasterWorkbook(data?: WorkbookData): Buffer {
   const template = !data;
   const clients = template
-    ? [["Example: Big C", "BIGC", "Yes"]]
-    : data.clients.map((c) => [c.name, c.code ?? "", yes(c.is_active)]);
-  const media = template ? [["Example: Star Flex", "Yes"]] : data.media.map((m) => [m.name, yes(m.is_active)]);
+    ? [["Example: Big C", "SBD999", "Big C", "Ravi", "9800000000", "accounts@bigc.example", "Sunil", "Yes"]]
+    : data.clients.map((c) => [
+        c.name,
+        c.code ?? "",
+        c.short_name ?? "",
+        c.contact_person ?? "",
+        c.contact_number ?? "",
+        c.email ?? "",
+        c.csm_name ?? "",
+        yes(c.is_active),
+      ]);
+  const media = template ? [["Example: Star Flex", "Solvent", "Yes"]] : data.media.map((m) => [m.name, m.machine ?? "", yes(m.is_active)]);
   // A location still waiting for review goes out with the locality blank, so re-importing the
   // export does not confirm the placeholder by accident.
   const locations = template
-    ? [["Example: Ameerpet", "Hyderabad", "Hyderabad", "Yes"]]
-    : data.locations.map((l) => [l.name, l.needs_confirmation ? "" : LOC[l.locality], l.district ?? "", yes(l.is_active)]);
+    ? [["Example: Ameerpet", "Hyderabad", "Hyderabad", "Telangana", "Yes"]]
+    : data.locations.map((l) => [l.name, l.needs_confirmation ? "" : LOC[l.locality], l.district ?? "", l.state ?? "", yes(l.is_active)]);
 
   const wb = xlsx.utils.book_new();
   const add = (kind: MasterKind, rows: unknown[][], widths: number[]) => {
@@ -359,9 +482,9 @@ export function buildMasterWorkbook(data?: WorkbookData): Buffer {
     ws["!cols"] = widths.map((wch) => ({ wch }));
     xlsx.utils.book_append_sheet(wb, ws, SHEET_NAMES[kind]);
   };
-  add("CLIENT", clients, [40, 16, 10]);
-  add("MEDIA", media, [40, 10]);
-  add("LOCATION", locations, [36, 22, 24, 10]);
+  add("CLIENT", clients, [40, 10, 18, 20, 16, 30, 16, 8]);
+  add("MEDIA", media, [40, 18, 8]);
+  add("LOCATION", locations, [36, 22, 22, 16, 8]);
 
   const guide = xlsx.utils.aoa_to_sheet([
     ["How this file is read"],
@@ -369,7 +492,9 @@ export function buildMasterWorkbook(data?: WorkbookData): Buffer {
     ["Clients, Media and Locations each have their own sheet. Type one name per row."],
     ["A new name is added. A name already in the list (capitals do not matter) gets its other columns updated."],
     ["A blank cell leaves that value as it is. Nothing is ever deleted. Blank rows are skipped."],
-    ["Code: letters, numbers, - and _ only. Optional."],
+    ["Code: letters, numbers, - and _ only. A new client with no code gets the next SBD number."],
+    ["Default Machine (line items): CNC, Epson, Solvent, UV Machine, Outward or Order Sheet."],
+    ["The company's own sheets (OMS Clients Data, OMS Line Items, Locations) are read as they are."],
     ["Hyderabad / Non-local: write Hyderabad or Non-local. Left blank on a new location, it is marked for review."],
     ["Active: Yes or No. No archives the name: it stays on old orders but leaves the pick-lists."],
     ["Rows starting with \"Example:\" are skipped."],

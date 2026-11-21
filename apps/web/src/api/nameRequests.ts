@@ -61,7 +61,7 @@ export type NameRequestResult =
   | { status: "refused"; message: string; existing?: string };
 
 /** POST /master-library/requests. A 409 is an answer, not a failure, so it comes back as one. */
-export async function requestMasterName(data: { kind: MasterKind; name: string; note?: string }): Promise<NameRequestResult> {
+export async function requestMasterName(data: { kind: MasterKind; name: string; note?: string; details?: Record<string, unknown> }): Promise<NameRequestResult> {
   try {
     await apiFetch("/master-library/requests", { method: "POST", data });
     return { status: "sent" };

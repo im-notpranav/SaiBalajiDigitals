@@ -28,6 +28,7 @@ import {
 } from "../services/email.service";
 import { sanitizeZodErrors } from "../utils/sanitize-errors";
 import { holdRateDeviations } from "../utils/rate-card";
+import { assertNotBlocked, OrderBlockedError, spendException } from "../utils/order-blocks";
 
 
 const MAX_ORDERS_PER_PAGE = 200;
@@ -418,6 +419,9 @@ export const createOrder = async (req: Request, res: Response) => {
     const names = await checkMasterNames(prisma, namesOfOrder(parseResult.data));
     if (names.missing.length) return res.status(400).json(missingNamesBody(names.missing));
     const clientName = spellOrder(parseResult.data, names.spell).client_name;
+    // A client with an order open too long or a bill unpaid too long takes no new order from a
+    // CSM, unless the admin allowed one.
+    const blockException = await assertNotBlocked(user, clientName);
 
     // Items are processed per store; s_no restarts at 1 inside each store.
     const processedByStore = stores.map((store) =>
@@ -504,6 +508,8 @@ export const createOrder = async (req: Request, res: Response) => {
       });
     });
 
+    if (blockException) await spendException(blockException.id, order.id);
+
     // A CSM's rate that is not the client's rate card rate waits for the admin.
     const rateHeld = await holdRateDeviations(order.id, user);
     if (rateHeld) {
@@ -563,6 +569,7 @@ export const createOrder = async (req: Request, res: Response) => {
     return res.status(201).json(serializeDecimals({ ...order, total_amount, loss_amount }));
 
   } catch (err: any) {
+    if (err instanceof OrderBlockedError) return res.status(403).json(err.body);
     // ORD{YY}9999 reached: say so instead of a bare server error.
     if (isOrderNumbersUsedUp(err)) return res.status(409).json({ message: err.message });
     console.error(err);

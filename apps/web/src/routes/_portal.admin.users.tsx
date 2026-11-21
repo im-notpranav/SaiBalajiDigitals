@@ -31,6 +31,7 @@ import {
   usernameOk,
   type PhotoDraft,
 } from "@/components/users/UserBits";
+import { UserSheetButtons } from "@/components/users/UserSheetButtons";
 import { apiErrorMessage } from "@/api/allocation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -239,6 +240,8 @@ function UsersPage() {
         crumbs={[{ label: "Automated System" }, { label: "Users" }]}
         actions={
           currentUser?.is_super_admin ? (
+            <div className="flex flex-wrap items-center gap-2">
+            <UserSheetButtons />
             <Dialog open={isDialogOpen} onOpenChange={openCreate}>
               <DialogTrigger asChild>
                 <Button className="rounded-xl">
@@ -308,6 +311,7 @@ function UsersPage() {
               </DialogFooter>
               </DialogContent>
             </Dialog>
+            </div>
           ) : null
         }
       />

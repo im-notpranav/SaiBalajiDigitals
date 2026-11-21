@@ -7,6 +7,7 @@ import { amountOf, buildOrderTemplate, parseOrderTemplate, sftOf } from "../util
 import { bulkOrdersSchema } from "../utils/validators";
 import { sanitizeZodErrors } from "../utils/sanitize-errors";
 import { holdRateDeviations } from "../utils/rate-card";
+import { assertNotBlocked, OrderBlockedError, spendException } from "../utils/order-blocks";
 
 /** GET /api/orders/template — the company's order sheet, ready to fill in. */
 export const orderTemplate = async (_req: Request, res: Response) => {
@@ -82,6 +83,19 @@ export const createBulkOrders = async (req: Request, res: Response) => {
     if (names.missing.length) return res.status(400).json(missingNamesBody(names.missing));
     parsed.data.orders.forEach((o) => spellOrder(o, names.spell));
 
+    // A CSM's sheet: a client on hold stops the upload. An allowed exception covers one order.
+    const spend = new Map<string, number>();
+    if (!isAdmin) {
+      const perClient = new Map<string, number>();
+      for (const o of parsed.data.orders) perClient.set(o.client_name, (perClient.get(o.client_name) ?? 0) + 1);
+      for (const [client, count] of perClient) {
+        const ex = await assertNotBlocked(user, client);
+        if (ex && count > 1)
+          return res.status(403).json({ blocked: true, client_name: client, reasons: [], message: `${client} is on hold. The admin allowed one order, but the sheet has ${count}.` });
+        if (ex) spend.set(client, ex.id);
+      }
+    }
+
     // Numbers are taken first, as the sequence runs its own transaction. A failure below leaves a gap.
     const numbers: string[] = [];
     for (let i = 0; i < parsed.data.orders.length; i++) numbers.push(await generateOrderId());
@@ -141,6 +155,8 @@ export const createBulkOrders = async (req: Request, res: Response) => {
     }, { timeout: 120000 });
 
     for (const o of created) {
+      const ex = spend.get(o.client_name);
+      if (ex) await spendException(ex, o.id);
       // A CSM's own sheet: rates other than the rate card wait for the admin.
       await holdRateDeviations(o.id, user);
       await notifyRole("PRODUCTION", `New order ${o.order_no} created`, `Client: ${o.client_name}`, "info", o.id);
@@ -150,6 +166,7 @@ export const createBulkOrders = async (req: Request, res: Response) => {
     }
     return res.status(201).json({ orders: created.map(({ id, order_no, client_name }) => ({ id, order_no, client_name })) });
   } catch (err) {
+    if (err instanceof OrderBlockedError) return res.status(403).json(err.body);
     // ORD{YY}9999 reached: say so instead of a bare server error.
     if (isOrderNumbersUsedUp(err)) return res.status(409).json({ message: (err as Error).message });
     console.error("Bulk upload error:", err);

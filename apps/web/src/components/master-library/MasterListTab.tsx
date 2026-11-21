@@ -17,6 +17,8 @@ import {
 import { EntryDialog } from "./EntryDialog";
 import { usageText } from "./names";
 import { ArchivedBadge, FilterPill, LocalityBadge, ReviewBadge, SearchBox, SkeletonRows } from "./shared";
+import { useAuth } from "@/lib/auth-store";
+import { fetchMachines } from "@/api/machines";
 
 export const entriesQuery = (kind: MasterKind) => ({
   queryKey: masterKeys.entries(kind),
@@ -40,6 +42,10 @@ export function MasterListTab({ kind }: { kind: MasterKind }) {
   const [editing, setEditing] = useState<MasterEntry | null>(null);
   const [adding, setAdding] = useState(false);
   const { data, isPending, error, refetch } = useQuery(entriesQuery(kind));
+  // Only the super admin changes the lists; other admins look and approve requests.
+  const canEdit = !!useAuth().user?.is_super_admin;
+  const { data: machineData } = useQuery({ queryKey: ["machines"], queryFn: fetchMachines, enabled: kind === "MEDIA", staleTime: 60_000 });
+  const machineName = useMemo(() => new Map((machineData?.machines ?? []).map((m) => [m.id, m.name])), [machineData]);
   const search = useDeferredValue(q.trim().toLowerCase());
   // Long lists draw in pages, so typing in the search box stays quick on a phone.
   const [limit, setLimit] = useState(PAGE);
@@ -65,7 +71,7 @@ export function MasterListTab({ kind }: { kind: MasterKind }) {
         (e) =>
           (show === "active" ? e.is_active : !e.is_active) &&
           (!reviewOnly || e.needs_confirmation) &&
-          (!search || `${e.name} ${e.code ?? ""} ${e.district ?? ""}`.toLowerCase().includes(search)),
+          (!search || `${e.name} ${e.code ?? ""} ${e.district ?? ""} ${e.short_name ?? ""} ${e.contact_person ?? ""} ${e.state ?? ""}`.toLowerCase().includes(search)),
       ),
     [all, show, reviewOnly, search],
   );
@@ -96,7 +102,8 @@ export function MasterListTab({ kind }: { kind: MasterKind }) {
 
   const isLocation = kind === "LOCATION";
   const isClient = kind === "CLIENT";
-  const cols = isClient ? 4 : isLocation ? 5 : 3;
+  const isMedia = kind === "MEDIA";
+  const cols = isClient ? 5 : isLocation ? 6 : 4;
 
   return (
     <>
@@ -124,9 +131,11 @@ export function MasterListTab({ kind }: { kind: MasterKind }) {
             </FilterPill>
           )}
         </div>
-        <Button className="rounded-xl sm:ml-auto" onClick={() => setAdding(true)} disabled={isPending}>
-          <Plus className="mr-1.5 h-4 w-4" /> Add {KIND_LABELS[kind].toLowerCase()}
-        </Button>
+        {canEdit && (
+          <Button className="rounded-xl sm:ml-auto" onClick={() => setAdding(true)} disabled={isPending}>
+            <Plus className="mr-1.5 h-4 w-4" /> Add {KIND_LABELS[kind].toLowerCase()}
+          </Button>
+        )}
       </div>
 
       <div className="surface-panel overflow-hidden">
@@ -135,8 +144,11 @@ export function MasterListTab({ kind }: { kind: MasterKind }) {
             <TableRow className="bg-muted/40 hover:bg-muted/40">
               <TableHead>Name</TableHead>
               {isClient && <TableHead className="hidden sm:table-cell">Code</TableHead>}
+              {isClient && <TableHead className="hidden md:table-cell">Contact</TableHead>}
+              {isMedia && <TableHead className="hidden sm:table-cell">Default machine</TableHead>}
               {isLocation && <TableHead className="hidden sm:table-cell">Hyderabad / Non-local</TableHead>}
               {isLocation && <TableHead className="hidden md:table-cell">District</TableHead>}
+              {isLocation && <TableHead className="hidden md:table-cell">State</TableHead>}
               <TableHead className="hidden sm:table-cell">Used on</TableHead>
               <TableHead className="w-px text-right"><span className="sr-only">Actions</span></TableHead>
             </TableRow>
@@ -174,12 +186,31 @@ export function MasterListTab({ kind }: { kind: MasterKind }) {
                   {isClient && (
                     <TableCell className="hidden font-mono text-xs sm:table-cell">{e.code || <span className="text-muted-foreground">—</span>}</TableCell>
                   )}
+                  {isClient && (
+                    <TableCell className="hidden text-xs md:table-cell">
+                      {e.contact_person || e.contact_number || e.email ? (
+                        <>
+                          <div>{[e.short_name, e.contact_person].filter(Boolean).join(" · ") || "—"}</div>
+                          <div className="text-muted-foreground">{[e.contact_number, e.email].filter(Boolean).join(" · ")}</div>
+                        </>
+                      ) : (
+                        <span className="text-muted-foreground">{e.short_name || "—"}</span>
+                      )}
+                    </TableCell>
+                  )}
+                  {isMedia && (
+                    <TableCell className="hidden sm:table-cell">
+                      {e.default_machine_id ? machineName.get(e.default_machine_id) ?? "—" : <span className="text-muted-foreground">—</span>}
+                    </TableCell>
+                  )}
                   {isLocation && (
                     <TableCell className="hidden sm:table-cell"><LocalityBadge locality={e.locality} review={e.needs_confirmation} /></TableCell>
                   )}
                   {isLocation && <TableCell className="hidden md:table-cell">{e.district || <span className="text-muted-foreground">—</span>}</TableCell>}
+                  {isLocation && <TableCell className="hidden md:table-cell">{e.state || <span className="text-muted-foreground">—</span>}</TableCell>}
                   <TableCell className={cn("hidden whitespace-nowrap tabular-nums sm:table-cell", !e.usage && "text-muted-foreground")}>{usageText(kind, e)}</TableCell>
                   <TableCell className="whitespace-nowrap py-1.5 text-right">
+                    {canEdit && (<>
                     <Button variant="ghost" size="sm" onClick={() => setEditing(e)} aria-label={`Edit ${e.name}`}>
                       <Pencil className="h-4 w-4 sm:mr-1.5" /> <span className="hidden sm:inline">Edit</span>
                     </Button>
@@ -192,6 +223,7 @@ export function MasterListTab({ kind }: { kind: MasterKind }) {
                       {e.is_active ? <Archive className="h-4 w-4 sm:mr-1.5" /> : <ArchiveRestore className="h-4 w-4 sm:mr-1.5" />}
                       <span className="hidden sm:inline">{e.is_active ? "Archive" : "Restore"}</span>
                     </Button>
+                    </>)}
                   </TableCell>
                 </TableRow>
               ))

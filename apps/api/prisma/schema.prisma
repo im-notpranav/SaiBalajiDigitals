@@ -523,15 +523,27 @@ model EmailRecipient {
 
 /// Master Library: only the admin adds names. CSMs pick from the active ones.
 model Client {
-  id         Int        @id @default(autoincrement())
-  name       String     @unique
+  id                 Int        @id @default(autoincrement())
+  name               String     @unique
   /// Tracking code, not used anywhere else. Optional until the business hands them out.
-  code       String?    @unique
+  code               String?    @unique
   /// Archived names stay on old orders but leave the pick-lists.
-  is_active  Boolean    @default(true)
-  created_at DateTime   @default(now())
-  updated_at DateTime   @default(now()) @updatedAt
-  rateCards  RateCard[]
+  is_active          Boolean    @default(true)
+  created_at         DateTime   @default(now())
+  updated_at         DateTime   @default(now()) @updatedAt
+  rateCards          RateCard[]
+  short_name         String?
+  contact_person     String?
+  contact_number     String?
+  email              String?
+  /// The CSM the client sheet names. Information only: an order's CSM is whoever raised it.
+  csm_name           String?
+  /// New order numbers stop for this client while an order is open too long or a bill is unpaid too long.
+  block_orders       Boolean    @default(true)
+  /// An order not closed this many days after its order date blocks new ones.
+  pending_block_days Int        @default(90)
+  /// An invoice unpaid this many days after its billing date blocks new orders.
+  payment_block_days Int        @default(120)
 }
 
 /// Media / line-item names. Master Library: admin-owned, like Client.
@@ -621,6 +633,9 @@ model MasterNameRequest {
   reject_reason String?
   /// The name actually added on approval (the admin may correct the spelling).
   final_name    String?
+  /// The rest of what the CSM filled in: a client's contact details, a line item's machine,
+  /// a location's locality, district and state.
+  details       Json?
   created_at    DateTime            @default(now())
 
   @@index([status])
@@ -654,6 +669,7 @@ model Area {
   name               String       @unique
   locality           AreaLocality
   district           String?
+  state              String?
   /// Imported areas whose locality the business has not confirmed yet.
   needs_confirmation Boolean      @default(false)
   is_active          Boolean      @default(true)
@@ -1074,4 +1090,23 @@ model AppSetting {
   updated_by Int?
   updater    User?    @relation(fields: [updated_by], references: [id], onDelete: SetNull)
   updated_at DateTime @updatedAt
+}
+
+/// A CSM asks to raise an order for a client that is blocked (an old open order or an old
+/// unpaid bill). Once approved it lets one order through, within seven days.
+model OrderBlockException {
+  id            Int                 @id @default(autoincrement())
+  client_name   String
+  reason        String
+  status        MasterRequestStatus @default(PENDING)
+  requested_by  Int?
+  decided_by    Int?
+  decided_at    DateTime?
+  decision_note String?
+  used_at       DateTime?
+  used_order_id Int?
+  created_at    DateTime            @default(now())
+
+  @@index([status])
+  @@index([requested_by])
 }

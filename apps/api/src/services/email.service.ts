@@ -394,3 +394,18 @@ export async function sendExcelEmail(
 }
 
 export { adminEmail };
+
+/** A client newly added to the Master Library (from a CSM's request) is welcomed by email. */
+export async function sendClientWelcomeEmail(recipientEmail: string, clientName: string, contactPerson: string | null, code: string | null) {
+  const body = `
+    <p style="margin:0 0 16px;font-size:14px;color:#3d3830;line-height:1.6;">
+      Dear ${escapeHtml(contactPerson || clientName)},
+    </p>
+    <p style="margin:0 0 16px;font-size:14px;color:#3d3830;line-height:1.6;">
+      Welcome to Sai Balaji Digitals. <strong>${escapeHtml(clientName)}</strong> is now set up with us${code ? ` as client <strong>${escapeHtml(code)}</strong>` : ""}.
+      Your client service manager will be in touch about your first order.
+    </p>
+    <p style="margin:0;font-size:14px;color:#3d3830;line-height:1.6;">Thank you for choosing us.</p>
+  `;
+  await sendMail(recipientEmail, `Welcome to Sai Balaji Digitals — ${clientName}`, wrap("Welcome", body));
+}

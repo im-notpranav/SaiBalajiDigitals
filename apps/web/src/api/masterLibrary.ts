@@ -35,7 +35,18 @@ export interface MasterEntry {
   updated_at: string;
   /** Clients only. */
   code?: string | null;
+  short_name?: string | null;
+  contact_person?: string | null;
+  contact_number?: string | null;
+  email?: string | null;
+  csm_name?: string | null;
+  block_orders?: boolean;
+  pending_block_days?: number;
+  payment_block_days?: number;
+  /** Media only: the machine new lines of it queue on. */
+  default_machine_id?: number | null;
   /** Locations only. */
+  state?: string | null;
   locality?: Locality;
   district?: string | null;
   needs_confirmation?: boolean;
@@ -50,6 +61,13 @@ export interface MasterEntryInput {
   locality?: Locality;
   district?: string | null;
   is_active?: boolean;
+  short_name?: string | null;
+  contact_person?: string | null;
+  contact_number?: string | null;
+  email?: string | null;
+  csm_name?: string | null;
+  default_machine_id?: number | null;
+  state?: string | null;
 }
 
 export interface NameRequest {
@@ -65,6 +83,8 @@ export interface NameRequest {
   decided_at: string | null;
   reject_reason: string | null;
   final_name: string | null;
+  /** What the asker filled in beside the name: contact, machine, locality, state. */
+  details?: Record<string, unknown> | null;
   created_at: string;
 }
 
@@ -136,7 +156,7 @@ export const applyMasterImport = (file: File) => sendFile(`${BASE}/import`, file
  * Ask the admin to add a missing name. A 409 means the name is already in the list
  * (`existing` holds its spelling) or has already been asked for (`existing_request`).
  */
-export const requestMasterName = (data: { kind: MasterKind; name: string; note?: string | null }) =>
+export const requestMasterName = (data: { kind: MasterKind; name: string; note?: string | null; details?: Record<string, unknown> }) =>
   apiFetch<{ request: NameRequest }>(`${BASE}/requests`, { method: "POST", data });
 
 /** The Admin gets every request; anyone else gets their own. */
@@ -145,7 +165,7 @@ export const fetchNameRequests = (status?: RequestStatus) =>
 
 export const approveNameRequest = (
   id: number,
-  data: { name?: string; code?: string | null; locality?: Locality; district?: string | null },
+  data: { name?: string; code?: string | null; locality?: Locality; district?: string | null } & Record<string, unknown>,
 ) => apiFetch<{ request: NameRequest; entry: Omit<MasterEntry, "usage" | "uses">; existed: boolean }>(`${BASE}/requests/${id}/approve`, { method: "POST", data });
 
 export const rejectNameRequest = (id: number, reason: string) =>

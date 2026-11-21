@@ -83,7 +83,7 @@ export const checkUsername = async (req: Request, res: Response) => {
  * someone else is refused, so two CSMs never share one. The code is separate from the employee
  * code: CSM code 300 and employee code 300 may belong to different people.
  */
-async function linkCsmCode(tx: Prisma.TransactionClient, userId: number, code: string) {
+export async function linkCsmCode(tx: Prisma.TransactionClient, userId: number, code: string) {
   const existing = await tx.csmCode.findFirst({
     where: { code: { equals: code, mode: "insensitive" } },
     select: { id: true, user_id: true, kind: true, label: true, user: { select: { name: true } } },

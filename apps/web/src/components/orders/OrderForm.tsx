@@ -30,6 +30,7 @@ import {
 } from "@/lib/constants";
 import type { CreateOrderInput, CreateOrderItemInput, Order, UserRole } from "@sb-oms/shared-types";
 import { ClientCombobox, LocationCombobox, MediaCombobox } from "./AutocompleteComboboxes";
+import { OrderBlockNotice, useOrderBlock } from "./OrderBlockNotice";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -214,6 +215,10 @@ export interface OrderFormProps {
 export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userRole, lineItemsLocked = false, startWithNewLine = false, requestMode = false }: OrderFormProps) {
   const [clientName, setClientName] = useState(defaultValues?.client_name || "");
   const [poNumber, setPoNumber] = useState(defaultValues?.po_number || "");
+  // A new order by a CSM: the client may be on hold for an old order or an unpaid bill.
+  const checkBlock = !defaultValues && userRole === "CSM";
+  const { data: blockState } = useOrderBlock(clientName, checkBlock);
+  const onHold = checkBlock && !!blockState?.blocked && !blockState.exception;
   const [orderRemark, setOrderRemark] = useState(defaultValues?.order_remark || "");
   const [stores, setStores] = useState<StoreBlock[]>(() => {
     const blocks = storeBlocksOf(defaultValues);
@@ -540,6 +545,11 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
               <Label htmlFor="clientName" className={fieldLabel}>Client *</Label>
               <ClientCombobox id="clientName" value={clientName} onChange={setClientName} className="mt-1 h-9" />
             </div>
+            {checkBlock && clientName.trim() && (
+              <div className="sm:col-span-3">
+                <OrderBlockNotice client={clientName} enabled={checkBlock} />
+              </div>
+            )}
             <div>
               <Label htmlFor="poNumber" className={fieldLabel}>Job PO</Label>
               <Input
@@ -886,7 +896,7 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
             )}
           </div>
           <div className="p-4">
-            <Button type="submit" size="lg" className="w-full rounded-xl" disabled={isSubmitting}>
+            <Button type="submit" size="lg" className="w-full rounded-xl" disabled={isSubmitting || onHold} title={onHold ? "This client is on hold. Request an exception first." : undefined}>
               <Send className="mr-2 h-4 w-4" />{" "}
               {isSubmitting ? "Submitting…" : requestMode ? "Save / Send for approval" : defaultValues ? "Save Changes" : "Submit Order"}
             </Button>

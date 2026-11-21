@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../utils/prisma";
 import { sanitizeZodErrors } from "../utils/sanitize-errors";
 import { notifyNameRequestDecided, notifyNameRequested } from "../services/notifications.service";
+import { sendClientWelcomeEmail } from "../services/email.service";
 import {
   KIND_LABELS,
   MASTER_KINDS,
@@ -28,6 +29,7 @@ import {
   mediaEntrySchema,
   mergeSchema,
   nameRequestSchema,
+  requestDetailsSchema,
   notSameSchema,
   rejectRequestSchema,
 } from "../utils/validators-master";
@@ -112,6 +114,48 @@ function idOf(req: Request): number {
   return id;
 }
 
+/** What each kind's entry carries, everywhere it is read or written. */
+const CLIENT_SELECT = {
+  id: true,
+  name: true,
+  code: true,
+  is_active: true,
+  updated_at: true,
+  short_name: true,
+  contact_person: true,
+  contact_number: true,
+  email: true,
+  csm_name: true,
+  block_orders: true,
+  pending_block_days: true,
+  payment_block_days: true,
+} as const;
+const MEDIA_SELECT = { id: true, name: true, is_active: true, updated_at: true, default_machine_id: true } as const;
+const AREA_SELECT = { id: true, name: true, locality: true, district: true, state: true, needs_confirmation: true, is_active: true, updated_at: true } as const;
+
+/** Client codes run SBD001, SBD002, ...: the next free ones after the highest in use. */
+async function nextClientCodes(db: Db, count: number, taken: Iterable<string> = []): Promise<string[]> {
+  const rows = await db.client.findMany({ where: { code: { startsWith: "SBD" } }, select: { code: true } });
+  const used = new Set<string>([...rows.map((r) => (r.code ?? "").toUpperCase()), ...[...taken].map((c) => c.toUpperCase())]);
+  let n = 0;
+  for (const c of used) {
+    const m = /^SBD(\d+)$/.exec(c);
+    if (m) n = Math.max(n, Number(m[1]));
+  }
+  const out: string[] = [];
+  while (out.length < count) {
+    n++;
+    const code = `SBD${String(n).padStart(3, "0")}`;
+    if (!used.has(code)) out.push(code);
+  }
+  return out;
+}
+
+const CLIENT_EXTRA = ["short_name", "contact_person", "contact_number", "email", "csm_name"] as const;
+/** The client columns a body carries (undefined when not given, so an edit leaves the rest). */
+const clientExtras = (d: Record<string, unknown>) =>
+  Object.fromEntries(CLIENT_EXTRA.filter((k) => d[k] !== undefined).map((k) => [k, (d[k] as string | null) ?? null]));
+
 const byName = (a: { name: string }, b: { name: string }) =>
   a.name.localeCompare(b.name, "en", { sensitivity: "base", numeric: true }) || a.name.localeCompare(b.name);
 
@@ -126,14 +170,14 @@ interface Entry extends ExistingEntry {
 async function loadEntries(db: Db, kind: MasterKind, ids?: number[]): Promise<Entry[]> {
   const where = ids ? { id: { in: ids } } : {};
   if (kind === "CLIENT") {
-    return db.client.findMany({ where, select: { id: true, name: true, code: true, is_active: true, updated_at: true } });
+    return db.client.findMany({ where, select: CLIENT_SELECT });
   }
   if (kind === "MEDIA") {
-    return db.media.findMany({ where, select: { id: true, name: true, is_active: true, updated_at: true } });
+    return db.media.findMany({ where, select: MEDIA_SELECT });
   }
   return db.area.findMany({
     where,
-    select: { id: true, name: true, locality: true, district: true, needs_confirmation: true, is_active: true, updated_at: true },
+    select: AREA_SELECT,
   });
 }
 
@@ -251,29 +295,42 @@ export const listEntries = async (req: Request, res: Response) => {
 const schemaFor = (kind: MasterKind) =>
   kind === "CLIENT" ? clientEntrySchema : kind === "MEDIA" ? mediaEntrySchema : locationEntrySchema;
 
-type EntryInput = { name?: string; code?: string | null; locality?: Locality; district?: string | null; is_active?: boolean };
+type EntryInput = {
+  name?: string;
+  code?: string | null;
+  locality?: Locality;
+  district?: string | null;
+  state?: string | null;
+  is_active?: boolean;
+  default_machine_id?: number | null;
+  block_orders?: boolean;
+  pending_block_days?: number;
+  payment_block_days?: number;
+} & Partial<Record<(typeof CLIENT_EXTRA)[number], string | null>>;
 
 async function createEntry(tx: Db, kind: MasterKind, d: EntryInput & { name: string; needs_confirmation?: boolean }): Promise<Entry> {
   const is_active = d.is_active ?? true;
   if (kind === "CLIENT") {
+    const code = d.code || (await nextClientCodes(tx, 1))[0]!;
     return tx.client.create({
-      data: { name: d.name, code: d.code ?? null, is_active },
-      select: { id: true, name: true, code: true, is_active: true, updated_at: true },
+      data: { name: d.name, code, is_active, ...clientExtras(d) },
+      select: CLIENT_SELECT,
     });
   }
   if (kind === "MEDIA") {
-    return tx.media.create({ data: { name: d.name, is_active }, select: { id: true, name: true, is_active: true, updated_at: true } });
+    return tx.media.create({ data: { name: d.name, is_active, default_machine_id: d.default_machine_id ?? null }, select: MEDIA_SELECT });
   }
   return tx.area.create({
     data: {
       name: d.name,
       locality: d.locality ?? "LOCAL",
       district: d.district ?? null,
+      state: d.state ?? null,
       // No locality given (a request approved without one): keep the placeholder flagged.
       needs_confirmation: d.needs_confirmation ?? !d.locality,
       is_active,
     },
-    select: { id: true, name: true, locality: true, district: true, needs_confirmation: true, is_active: true, updated_at: true },
+    select: AREA_SELECT,
   });
 }
 
@@ -326,14 +383,22 @@ export const updateMasterEntry = async (req: Request, res: Response) => {
         if (d.code !== undefined && d.code !== current.code) await assertCodeFree(tx, d.code, id);
         updated = await tx.client.update({
           where: { id },
-          data: { name: d.name, code: d.code, is_active: d.is_active },
-          select: { id: true, name: true, code: true, is_active: true, updated_at: true },
+          data: {
+            name: d.name,
+            code: d.code,
+            is_active: d.is_active,
+            ...clientExtras(d),
+            block_orders: d.block_orders,
+            pending_block_days: d.pending_block_days,
+            payment_block_days: d.payment_block_days,
+          },
+          select: CLIENT_SELECT,
         });
       } else if (kind === "MEDIA") {
         updated = await tx.media.update({
           where: { id },
-          data: { name: d.name, is_active: d.is_active },
-          select: { id: true, name: true, is_active: true, updated_at: true },
+          data: { name: d.name, is_active: d.is_active, default_machine_id: d.default_machine_id },
+          select: MEDIA_SELECT,
         });
       } else {
         updated = await tx.area.update({
@@ -342,10 +407,11 @@ export const updateMasterEntry = async (req: Request, res: Response) => {
             name: d.name,
             locality: d.locality,
             district: d.district,
+            state: d.state,
             is_active: d.is_active,
             ...(d.locality ? { needs_confirmation: false } : {}),
           },
-          select: { id: true, name: true, locality: true, district: true, needs_confirmation: true, is_active: true, updated_at: true },
+          select: AREA_SELECT,
         });
       }
 
@@ -515,11 +581,17 @@ export const masterTemplate = async (_req: Request, res: Response) => {
 export const masterExport = async (_req: Request, res: Response) => {
   try {
     const [clients, media, locations] = await Promise.all([
-      prisma.client.findMany({ select: { name: true, code: true, is_active: true } }),
-      prisma.media.findMany({ select: { name: true, is_active: true } }),
-      prisma.area.findMany({ select: { name: true, locality: true, district: true, needs_confirmation: true, is_active: true } }),
+      prisma.client.findMany({
+        select: { name: true, code: true, is_active: true, short_name: true, contact_person: true, contact_number: true, email: true, csm_name: true },
+      }),
+      prisma.media.findMany({ select: { name: true, is_active: true, defaultMachine: { select: { name: true } } } }),
+      prisma.area.findMany({ select: { name: true, locality: true, district: true, state: true, needs_confirmation: true, is_active: true } }),
     ]);
-    const buffer = buildMasterWorkbook({ clients: clients.sort(byName), media: media.sort(byName), locations: locations.sort(byName) });
+    const buffer = buildMasterWorkbook({
+      clients: clients.sort(byName),
+      media: media.map((m) => ({ name: m.name, is_active: m.is_active, machine: m.defaultMachine?.name ?? null })).sort(byName),
+      locations: locations.sort(byName),
+    });
     const day = new Date(Date.now() + 5.5 * 3600_000).toISOString().slice(0, 10);
     res.setHeader("Content-Disposition", `attachment; filename=Master_Library_${day}.xlsx`);
     res.setHeader("Content-Type", XLSX_TYPE);
@@ -541,9 +613,10 @@ async function planImport(db: Db, file: Buffer) {
   const { sheets, fileError } = parseMasterWorkbook(file);
   if (fileError) throw new HttpError(400, fileError);
   const plans: Partial<Record<MasterKind, SheetPlan>> = {};
+  const machines = new Map((await db.machine.findMany({ select: { id: true, name: true } })).map((m) => [m.name.toLowerCase(), m]));
   for (const kind of MASTER_KINDS) {
     const sheet = sheets[kind];
-    if (sheet.found && !sheet.problem) plans[kind] = planSheet(kind, sheet, await loadEntries(db, kind));
+    if (sheet.found && !sheet.problem) plans[kind] = planSheet(kind, sheet, await loadEntries(db, kind), { machines });
   }
   return { sheets, plans };
 }
@@ -600,22 +673,30 @@ export const applyMasterImport = async (req: Request, res: Response) => {
         const p = plan.plans[kind];
         if (!p || (p.adds.length === 0 && p.updates.length === 0)) continue;
         const adds = p.adds.map((a) => a.data);
-        if (kind === "CLIENT") await tx.client.createMany({ data: adds.map((a) => ({ name: a.name, code: a.code ?? null, is_active: a.is_active })) });
-        else if (kind === "MEDIA") await tx.media.createMany({ data: adds.map((a) => ({ name: a.name, is_active: a.is_active })) });
+        if (kind === "CLIENT") {
+          // A new client without a code in the sheet takes the next SBD number.
+          const fresh = await nextClientCodes(tx, adds.filter((a) => !a.code).length, adds.map((a) => a.code ?? "").filter(Boolean));
+          await tx.client.createMany({
+            data: adds.map((a) => ({ name: a.name, code: a.code || fresh.shift()!, is_active: a.is_active, ...clientExtras(a) })),
+          });
+        } else if (kind === "MEDIA") {
+          await tx.media.createMany({ data: adds.map((a) => ({ name: a.name, is_active: a.is_active, default_machine_id: a.default_machine_id ?? null })) });
+        }
         else {
           await tx.area.createMany({
             data: adds.map((a) => ({
               name: a.name,
               locality: a.locality ?? "LOCAL",
               district: a.district ?? null,
+              state: a.state ?? null,
               needs_confirmation: a.needs_confirmation ?? true,
               is_active: a.is_active,
             })),
           });
         }
         for (const u of p.updates) {
-          if (kind === "CLIENT") await tx.client.update({ where: { id: u.id }, data: { code: u.data.code, is_active: u.data.is_active } });
-          else if (kind === "MEDIA") await tx.media.update({ where: { id: u.id }, data: { is_active: u.data.is_active } });
+          if (kind === "CLIENT") await tx.client.update({ where: { id: u.id }, data: { code: u.data.code, is_active: u.data.is_active, ...clientExtras(u.data) } });
+          else if (kind === "MEDIA") await tx.media.update({ where: { id: u.id }, data: { is_active: u.data.is_active, default_machine_id: u.data.default_machine_id } });
           else await tx.area.update({ where: { id: u.id }, data: u.data });
         }
         await audit(tx, user, kind, 0, "IMPORT", null, {
@@ -658,6 +739,8 @@ export const createNameRequest = async (req: Request, res: Response) => {
     const { kind, name, note } = parsed.data;
     if (kind === "LOCATION" && name.length > 100) return res.status(400).json({ message: "A location name can be up to 100 letters." });
     const user = req.user!;
+    const details = requestDetailsSchema.safeParse(parsed.data.details ?? {});
+    if (!details.success) return badInput(res, details.error);
 
     const match = matchOf(await loadEntries(prisma, kind), name);
     // An archived name may be asked for: approving it brings it back.
@@ -674,7 +757,13 @@ export const createNameRequest = async (req: Request, res: Response) => {
     }
 
     const request = await prisma.masterNameRequest.create({
-      data: { kind, name, note: note ?? null, requested_by: user.id },
+      data: {
+        kind,
+        name,
+        note: note ?? null,
+        requested_by: user.id,
+        details: Object.keys(details.data).length ? (details.data as Prisma.InputJsonValue) : Prisma.DbNull,
+      },
       include: requestInclude,
     });
     await notifyNameRequested(KIND_LABELS[kind], name, user.name).catch((e) => console.error("Name request notification failed:", e));
@@ -738,7 +827,23 @@ export const approveNameRequest = async (req: Request, res: Response) => {
         }
       } else {
         if (kind === "CLIENT") await assertCodeFree(tx, d.code);
-        entry = await createEntry(tx, kind, { name, code: d.code, locality: d.locality, district: d.district });
+        // What the CSM filled in, with the admin's corrections on top.
+        const asked = requestDetailsSchema.safeParse(request.details ?? {});
+        const base = asked.success ? asked.data : {};
+        const pick = <K extends keyof typeof d>(k: K) => (d[k] !== undefined ? d[k] : (base as Record<string, unknown>)[k as string]);
+        entry = await createEntry(tx, kind, {
+          name,
+          code: d.code,
+          locality: pick("locality") as Locality | undefined,
+          district: pick("district") as string | null | undefined,
+          state: pick("state") as string | null | undefined,
+          default_machine_id: pick("machine_id") as number | null | undefined,
+          short_name: pick("short_name") as string | null | undefined,
+          contact_person: pick("contact_person") as string | null | undefined,
+          contact_number: pick("contact_number") as string | null | undefined,
+          email: pick("email") as string | null | undefined,
+          csm_name: pick("csm_name") as string | null | undefined,
+        });
         await audit(tx, user, kind, entry.id, "INSERT", null, { name: entry.name, via: "name request", request_id: request.id });
       }
       const updated = await tx.masterNameRequest.update({
@@ -749,6 +854,11 @@ export const approveNameRequest = async (req: Request, res: Response) => {
       return { request: updated, entry, existed: !!match };
     });
 
+    // A new client with an email address gets the welcome email.
+    if (!result.existed && result.request.kind === "CLIENT" && (result.entry as { email?: string | null }).email) {
+      const c = result.entry as { name: string; code?: string | null; email?: string | null; contact_person?: string | null };
+      sendClientWelcomeEmail(c.email!, c.name, c.contact_person ?? null, c.code ?? null).catch((e) => console.error("Welcome email failed:", e));
+    }
     if (result.request.requested_by) {
       await notifyNameRequestDecided(result.request.requested_by, {
         approved: true,
@@ -765,15 +875,15 @@ export const approveNameRequest = async (req: Request, res: Response) => {
 
 async function restore(tx: Db, kind: MasterKind, id: number): Promise<Entry> {
   if (kind === "CLIENT") {
-    return tx.client.update({ where: { id }, data: { is_active: true }, select: { id: true, name: true, code: true, is_active: true, updated_at: true } });
+    return tx.client.update({ where: { id }, data: { is_active: true }, select: CLIENT_SELECT });
   }
   if (kind === "MEDIA") {
-    return tx.media.update({ where: { id }, data: { is_active: true }, select: { id: true, name: true, is_active: true, updated_at: true } });
+    return tx.media.update({ where: { id }, data: { is_active: true }, select: MEDIA_SELECT });
   }
   return tx.area.update({
     where: { id },
     data: { is_active: true },
-    select: { id: true, name: true, locality: true, district: true, needs_confirmation: true, is_active: true, updated_at: true },
+    select: AREA_SELECT,
   });
 }
 
