@@ -12,11 +12,11 @@ function ProductionReports() {
   const navigate = Route.useNavigate();
   return (
     <ReportsPage
-      tabs={["production"]}
+      tabs={["printing", "production"]}
       search={Route.useSearch()}
       onSearch={(search) => navigate({ search, replace: true })}
       title="Production Reports"
-      description="Items assigned and finished, by person, with holds and work nobody has yet."
+      description="Line-by-line printing for any dates, for everyone or one operator; items assigned and finished, holds and unassigned work."
       crumbs={[{ label: "Production Manager" }, { label: "Reports" }]}
     />
   );

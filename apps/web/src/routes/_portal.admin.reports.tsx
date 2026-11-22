@@ -12,7 +12,7 @@ function AdminReports() {
   const navigate = Route.useNavigate();
   return (
     <ReportsPage
-      tabs={["orders", "money", "csm", "production", "allocation", "payments", "masters", "system"]}
+      tabs={["orders", "money", "turnover", "csm", "production", "printing", "delay", "allocation", "payments", "masters", "system"]}
       search={Route.useSearch()}
       onSearch={(search) => navigate({ search, replace: true })}
       title="Reports"

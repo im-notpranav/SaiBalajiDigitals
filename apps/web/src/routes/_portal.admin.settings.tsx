@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { REMARK_TYPES } from "@/lib/constants";
 import { toast } from "sonner";
 import { useEffect, useState } from "react";
-import { apiClient } from "@/api/client";
+import { apiClient, apiFetch } from "@/api/client";
 import { apiErrorMessage } from "@/api/allocation";
 import { fetchPaymentSettings, updatePaymentSettings } from "@/api/payments";
 import { useAuth } from "@/lib/auth-store";
@@ -158,9 +158,80 @@ function SettingsPage() {
 
         <PaymentOverdueCard />
         <PaymentThresholdCard />
+        <DelayLimitsCard />
         <SheetLinkCard />
       </div>
     </>
+  );
+}
+
+const STAGES = [
+  { key: "production", label: "Production" },
+  { key: "installation", label: "Installation" },
+  { key: "invoice", label: "Invoice" },
+  { key: "payment", label: "Payment" },
+] as const;
+type Limits = Record<(typeof STAGES)[number]["key"], number>;
+
+/** Days an order may spend in each stage before the Delay report shows it red. */
+function DelayLimitsCard() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const canEdit = user?.role === "ADMIN";
+  const { data } = useQuery({ queryKey: ["delay-limits"], queryFn: () => apiFetch<{ delay_limits: Limits }>("/admin/delay-limits") });
+  const [draft, setDraft] = useState<Record<string, string> | null>(null);
+  const saved = data?.delay_limits;
+  const shown = draft ?? (saved ? Object.fromEntries(STAGES.map((s) => [s.key, String(saved[s.key])])) : null);
+  const parsed = shown ? Object.fromEntries(STAGES.map((s) => [s.key, Number(shown[s.key])])) as Limits : null;
+  const valid = !!parsed && STAGES.every((s) => Number.isInteger(parsed[s.key]) && parsed[s.key] >= 1 && parsed[s.key] <= 365);
+  const changed = !!parsed && !!saved && STAGES.some((s) => parsed[s.key] !== saved[s.key]);
+  const save = useMutation({
+    mutationFn: () => apiFetch<{ delay_limits: Limits }>("/admin/delay-limits", { method: "PUT", data: { delay_limits: parsed } }),
+    onSuccess: () => {
+      toast.success("Delay limits saved");
+      setDraft(null);
+      queryClient.invalidateQueries({ queryKey: ["delay-limits"] });
+      queryClient.invalidateQueries({ queryKey: ["report", "delay"] });
+    },
+    onError: (err) => toast.error(friendlyError(err, "Could not save")),
+  });
+  return (
+    <div className="surface-panel p-6">
+      <h3 className="mb-1 text-sm font-semibold">Stage delay limits</h3>
+      <p className="mb-4 text-xs text-muted-foreground">
+        Calendar days an order may spend in each stage. Reports → Delay shows an order red in a stage it stayed in longer.
+      </p>
+      {shown && (
+        <form
+          className="flex flex-wrap items-end gap-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (valid && changed) save.mutate();
+          }}
+        >
+          {STAGES.map((st) => (
+            <div key={st.key} className="grid gap-1.5">
+              <Label htmlFor={`delay-${st.key}`}>{st.label}</Label>
+              <Input
+                id={`delay-${st.key}`}
+                inputMode="numeric"
+                value={shown[st.key]}
+                onChange={(e) => setDraft({ ...shown, [st.key]: e.target.value.trim() })}
+                disabled={!canEdit}
+                className="w-20 font-mono"
+              />
+            </div>
+          ))}
+          {canEdit && (
+            <Button type="submit" className="rounded-xl" disabled={!valid || !changed || save.isPending}>
+              Save
+            </Button>
+          )}
+        </form>
+      )}
+      {shown && !valid && <div className="mt-2 text-xs text-destructive">Each stage needs a whole number of days from 1 to 365.</div>}
+      {!canEdit && <div className="mt-2 text-xs text-muted-foreground">Only the Admin can change this.</div>}
+    </div>
   );
 }
 

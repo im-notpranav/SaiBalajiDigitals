@@ -12,7 +12,7 @@ function Reports() {
   const navigate = Route.useNavigate();
   return (
     <ReportsPage
-      tabs={["money"]}
+      tabs={["money", "turnover"]}
       search={Route.useSearch()}
       onSearch={(search) => navigate({ search, replace: true })}
       title="Financial Reports"

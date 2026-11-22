@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
+import { OmPendingBoard, OmsWasToday } from "@/components/dashboard/OmPendingBoard";
 import {
   AlertTriangle,
   ArrowRight,
@@ -283,6 +284,16 @@ function AdminDashboard() {
               onClick={() => openStage("completed")}
             />
           </div>
+
+          {/* Open orders by CSM with aging, for the Admin and the Operation Manager. */}
+          <div className="mt-6">
+            <OmPendingBoard />
+          </div>
+          {isOperations && (
+            <div className="mt-6">
+              <OmsWasToday />
+            </div>
+          )}
 
           {!isOperations && (
             <div className="mt-6">

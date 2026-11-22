@@ -18,6 +18,14 @@ export const SETTINGS = {
     default: "https://docs.google.com/spreadsheets/d/11QfGW_viCceR_baPTm-wdy_CS1qGVJ63qkpDDFOEHV4/edit?usp=sharing",
     valid: isGoogleSheetUrl,
   },
+  /** Days an order may spend in each stage before the Delay report flags it. */
+  delay_limits: {
+    default: { production: 3, installation: 3, invoice: 5, payment: 45 } as { production: number; installation: number; invoice: number; payment: number },
+    valid: (v: unknown) =>
+      !!v &&
+      typeof v === "object" &&
+      ["production", "installation", "invoice", "payment"].every((k) => Number.isInteger((v as any)[k]) && (v as any)[k] >= 1 && (v as any)[k] <= 365),
+  },
 } as const;
 
 export type SettingKey = keyof typeof SETTINGS;

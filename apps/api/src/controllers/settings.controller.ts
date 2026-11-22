@@ -189,3 +189,27 @@ export const updatePaymentSettings = async (req: Request, res: Response) => {
     res.status(500).json({ message: "Internal server error" });
   }
 };
+
+// GET /admin/delay-limits — days per stage before the Delay report flags an order.
+export const getDelayLimits = async (_req: Request, res: Response) => {
+  try {
+    res.json({ delay_limits: await getSetting("delay_limits") });
+  } catch (error) {
+    console.error("getDelayLimits failed:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+// PUT /admin/delay-limits — Admin only.
+export const updateDelayLimits = async (req: Request, res: Response) => {
+  try {
+    const value = req.body?.delay_limits;
+    if (!(await setSetting("delay_limits", value, req.user!.id))) {
+      return res.status(400).json({ message: "Each stage needs a whole number of days from 1 to 365." });
+    }
+    res.json({ delay_limits: await getSetting("delay_limits") });
+  } catch (error) {
+    console.error("updateDelayLimits failed:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};

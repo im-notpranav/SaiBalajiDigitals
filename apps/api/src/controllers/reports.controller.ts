@@ -13,6 +13,7 @@ import {
 import { CLOSED_STATUSES, OPEN_STATUSES } from "../utils/order-status";
 import { averageCycleDays, businessDaysBetween, closedAt, currentStage } from "../utils/order-stage";
 import { OPEN_PAYMENT_STATUSES } from "../utils/payment-workflow";
+import { delayReport, printingReport, turnoverReport, type Viewer } from "./reports-extra";
 import {
   RangeError400,
   ageBucket,
@@ -50,6 +51,8 @@ interface Filters {
   csm?: number;
   /** Only orders for this client (exact name). */
   client?: string;
+  /** Printing: only lines this operator worked. */
+  operator?: number;
 }
 
 /** A table for the Excel export: one sheet, its columns in the order of the first row's keys. */
@@ -91,7 +94,9 @@ function orderWhere(f: Filters) {
 function parseFilters(q: Request["query"]): Filters {
   const csm = Number(q.csm);
   const client = typeof q.client === "string" ? q.client.trim() : "";
+  const operator = Number(q.operator);
   return {
+    operator: Number.isInteger(operator) && operator > 0 ? operator : undefined,
     csm: Number.isInteger(csm) && csm > 0 ? csm : undefined,
     client: client || undefined,
   };
@@ -1610,7 +1615,7 @@ async function systemReport(r: ReportRange): Promise<Built> {
 // Routing
 // ---------------------------------------------------------------------------------------
 
-type Builder = (r: ReportRange, f: Filters) => Promise<Built>;
+type Builder = (r: ReportRange, f: Filters, viewer: Viewer) => Promise<Built>;
 
 /** Each tab, who may read it, and how it is built. */
 export const REPORT_TABS: Record<string, { roles: Role[]; build: Builder }> = {
@@ -1622,6 +1627,9 @@ export const REPORT_TABS: Record<string, { roles: Role[]; build: Builder }> = {
   payments: { roles: ["ADMIN", "OPERATION_MANAGER", "COST_CONTROL_MANAGER"], build: paymentsReport },
   masters: { roles: ["ADMIN", "OPERATION_MANAGER"], build: (r) => mastersReport(r) },
   system: { roles: ["ADMIN", "OPERATION_MANAGER"], build: (r) => systemReport(r) },
+  printing: { roles: ["ADMIN", "OPERATION_MANAGER", "PRODUCTION_MANAGER", "PRODUCTION"], build: printingReport },
+  turnover: { roles: ["ADMIN", "OPERATION_MANAGER", "ACCOUNTS"], build: turnoverReport },
+  delay: { roles: ["ADMIN", "OPERATION_MANAGER"], build: delayReport },
 };
 
 /** Everyone who may read at least one tab. */
@@ -1672,7 +1680,7 @@ async function run(req: Request, res: Response): Promise<(Built & { range: Repor
     }
     throw e;
   }
-  const built = await tab.build(range, parseFilters(req.query));
+  const built = await tab.build(range, parseFilters(req.query), req.user!);
   return { ...built, range };
 }
 

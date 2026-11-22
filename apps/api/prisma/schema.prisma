@@ -153,6 +153,7 @@ model User {
   installedStores      OrderStore[]          @relation("StoreInstaller")
   invoicePayments      Invoice[]             @relation("InvoicePaymentReceiver")
   csmCodes             CsmCode[]
+  daySheetEntries      DaySheetEntry[]       @relation("DaySheetUser")
   usualVehicles        Vehicle[]             @relation("VehicleUsualDriver")
   workJobsCreated      WorkJob[]             @relation("WorkJobCreator")
   workJobsStarted      WorkJob[]             @relation("WorkJobStarter")
@@ -1090,6 +1091,26 @@ model AppSetting {
   updated_by Int?
   updater    User?    @relation(fields: [updated_by], references: [id], onDelete: SetNull)
   updated_at DateTime @updatedAt
+}
+
+/// A row of someone's day sheet: a paster's note of the work done that day, or a CSM's
+/// other work (follow-up, visit, call) beside the orders the sheet lists by itself.
+model DaySheetEntry {
+  id          Int      @id @default(autoincrement())
+  user_id     Int
+  user        User     @relation("DaySheetUser", fields: [user_id], references: [id], onDelete: Cascade)
+  day         DateTime @db.Date
+  /// Follow-up, Visit, Call, Meeting, Note or Other.
+  activity    String   @default("Note")
+  client_name String?
+  note        String
+  /// Time of day as HH:MM, when given.
+  time        String?
+  order_id    Int?
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  @@index([user_id, day])
 }
 
 /// A CSM asks to raise an order for a client that is blocked (an old open order or an old

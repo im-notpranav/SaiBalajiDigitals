@@ -44,6 +44,7 @@ import {
   Tags,
   Cog,
   Lock,
+  NotebookPen,
 } from "lucide-react";
 import { fetchChangeQueueCount } from "@/api/changeRequests";
 import { fetchRateCardCount } from "@/api/rateCards";
@@ -107,6 +108,7 @@ const FIELD_NAV: NavItem[] = [
   { to: "/sheet", label: "GS-WAS", icon: FileSpreadsheet, was: "GS" },
   { to: "/field/leave", label: "Leave & Overtime", icon: CalendarOff },
   { to: "/field/payments", label: "Payments", icon: Wallet },
+  { to: "/day-sheet", label: "Day Sheet", icon: NotebookPen },
   { to: "/field/notifications", label: "Notifications", icon: Bell },
   { to: "/profile", label: "Profile", icon: UserCircle },
 ];
@@ -135,6 +137,7 @@ const NAV: Record<UserRole, NavItem[]> = {
     { to: "/employee/upload-orders", label: "Bulk Upload", icon: Upload },
     { to: "/employee/orders", label: "My Orders", icon: ClipboardList },
     { to: "/employee/rate-cards", label: "Rate Cards", icon: Tags },
+    { to: "/day-sheet", label: "Day Sheet", icon: NotebookPen },
     { to: "/employee/grid", label: "Weekly Grid", icon: CalendarRange, group: "Work Allocation" },
     { to: "/employee/board", label: "Daily Board", icon: LayoutGrid, group: "Work Allocation" },
     { to: "/employee/sheet", label: "GS-WAS", icon: FileSpreadsheet, was: "GS", group: "Work Allocation" },
@@ -146,6 +149,7 @@ const NAV: Record<UserRole, NavItem[]> = {
   PRODUCTION: [
     { to: "/production/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { to: "/production/queue", label: "Queue", icon: Workflow },
+    { to: "/production/report", label: "My Report", icon: FileBarChart2 },
     { to: "/sheet", label: "GS-WAS", icon: FileSpreadsheet, was: "GS" },
     { to: "/production/notifications", label: "Notifications", icon: Bell },
     { to: "/profile", label: "Profile", icon: UserCircle },
@@ -184,6 +188,7 @@ const NAV: Record<UserRole, NavItem[]> = {
     ...DASHBOARD,
     ...ORDER_SYSTEM,
     ...WORK_ALLOCATION,
+    { to: "/day-sheet", label: "Day Sheets", icon: NotebookPen },
     { to: "/admin/notifications", label: "Notifications", icon: Bell },
     { to: "/profile", label: "Profile", icon: UserCircle },
   ],
@@ -191,6 +196,7 @@ const NAV: Record<UserRole, NavItem[]> = {
     ...DASHBOARD,
     ...ORDER_SYSTEM,
     { to: "/admin/change-requests", label: "Change Requests", icon: GitPullRequestArrow, group: "Automated System" },
+    { to: "/day-sheet", label: "Day Sheets", icon: NotebookPen, group: "Automated System" },
     { to: "/admin/order-blocks", label: "Order Blocks", icon: Lock, group: "Automated System" },
     { to: "/admin/import", label: "Bulk Import", icon: Upload, group: "Automated System" },
     { to: "/admin/users", label: "Users", icon: Users, group: "Automated System" },

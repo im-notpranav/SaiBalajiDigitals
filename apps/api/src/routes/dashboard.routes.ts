@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { getDashboard, getAdminDashboard, getCsmDashboard, getProdManagerDashboard, getAccountantDashboard } from "../controllers/dashboard.controller";
+import { getPendingByCsm } from "../controllers/day-sheets.controller";
 import { authenticate, authorize , denyReadOnlyMutations } from "../middlewares/auth.middleware";
 
 const router = Router();
@@ -8,6 +9,7 @@ router.use(authenticate);
 router.use(denyReadOnlyMutations);
 
 router.get("/admin", authorize("ADMIN", "OPERATION_MANAGER"), getAdminDashboard);
+router.get("/pending-by-csm", authorize("ADMIN", "OPERATION_MANAGER"), getPendingByCsm);
 router.get("/csm", authorize("CSM", "ADMIN", "OPERATION_MANAGER"), getCsmDashboard);
 router.get("/prod-manager", authorize("PRODUCTION_MANAGER", "ADMIN"), getProdManagerDashboard);
 router.get("/accountant", authorize("ACCOUNTS", "ADMIN"), getAccountantDashboard);

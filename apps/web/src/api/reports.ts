@@ -1,7 +1,7 @@
 import { apiDownload, apiFetch } from "./client";
 
 /** The Reports page's tabs, as the API names them. */
-export type ReportTab = "orders" | "money" | "csm" | "production" | "allocation" | "payments" | "masters" | "system";
+export type ReportTab = "orders" | "money" | "csm" | "production" | "allocation" | "payments" | "masters" | "system" | "printing" | "turnover" | "delay";
 
 export interface ReportQuery {
   /** YYYY-MM-DD, India time, included. */
@@ -9,6 +9,8 @@ export interface ReportQuery {
   to?: string;
   /** Only orders this user created. */
   csm?: number;
+  /** Printing: only lines this operator worked. */
+  operator?: number;
   /** Only orders for this client. */
   client?: string;
 }

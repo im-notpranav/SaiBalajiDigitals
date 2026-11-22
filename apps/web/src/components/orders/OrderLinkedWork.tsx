@@ -64,7 +64,7 @@ export function OrderLinkedWork({
 
   return (
     <div className={showPayments ? "grid gap-4 lg:grid-cols-2" : "grid gap-4"}>
-      <section className="surface-panel min-w-0 p-4 sm:p-5">
+      <section id="field-work" className="surface-panel min-w-0 scroll-mt-20 p-4 sm:p-5">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h3 className="flex items-center gap-2 text-sm font-semibold">
             <HardHat className="h-4 w-4 text-primary" /> Field work

@@ -21,9 +21,32 @@ import {
   SystemTab,
   type TabProps,
 } from "./tabs";
+import { DelayTab, PrintingTab, TurnoverTab } from "./tabs-extra";
 
 /** What each tab is called, what the dates mean on it, and which filters it takes. */
-const TAB_INFO: Record<ReportTab, { label: string; dates: string; csm?: boolean; client?: boolean; view: ComponentType<TabProps> }> = {
+const TAB_INFO: Record<ReportTab, { label: string; dates: string; csm?: boolean; client?: boolean; operator?: boolean; view: ComponentType<TabProps> }> = {
+  printing: {
+    label: "Printing",
+    dates: "Lines started or finished between these dates. An operator sees only their own lines.",
+    csm: true,
+    client: true,
+    operator: true,
+    view: PrintingTab,
+  },
+  turnover: {
+    label: "Turnover",
+    dates: "Orders raised, invoices billed and payments received between these dates.",
+    csm: true,
+    client: true,
+    view: TurnoverTab,
+  },
+  delay: {
+    label: "Delay",
+    dates: "Orders raised between these dates, with the days they spent in each stage.",
+    csm: true,
+    client: true,
+    view: DelayTab,
+  },
   orders: {
     label: "Orders",
     dates: "Orders created, and orders closed, between these dates. Open orders and stages are as of now.",
@@ -79,6 +102,7 @@ export interface ReportsSearch {
   to?: string;
   csm?: number;
   client?: string;
+  operator?: number;
 }
 
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -93,6 +117,7 @@ export function parseReportsSearch(s: Record<string, unknown>): ReportsSearch {
     to: day(s.to),
     csm: Number.isInteger(csm) && csm > 0 ? csm : undefined,
     client: typeof s.client === "string" && s.client.trim() ? s.client : undefined,
+    operator: Number.isInteger(Number(s.operator)) && Number(s.operator) > 0 ? Number(s.operator) : undefined,
   };
 }
 
@@ -153,6 +178,7 @@ export function ReportsPage({ tabs, search, onSearch, title, description, crumbs
     to,
     csm: info.csm ? search.csm : undefined,
     client: info.client ? search.client : undefined,
+    operator: info.operator ? search.operator : undefined,
   };
   const preset = ranges.find((p) => p.from === from && p.to === to)?.key ?? "custom";
 
@@ -320,7 +346,25 @@ export function ReportsPage({ tabs, search, onSearch, title, description, crumbs
               </Select>
             </label>
           )}
-          {(search.csm || search.client || search.from || search.to) && (
+          {info.operator && (data?.operators?.length ?? 0) > 0 && (
+            <label className="col-span-2 grid gap-1.5 md:col-span-1 md:w-52">
+              <span className="text-xs font-semibold text-muted-foreground">Operator</span>
+              <Select value={search.operator ? String(search.operator) : "all"} onValueChange={(v) => set({ operator: v === "all" ? undefined : Number(v) })}>
+                <SelectTrigger aria-label="Operator">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Every operator</SelectItem>
+                  {(data.operators as { id: number; name: string }[]).map((o) => (
+                    <SelectItem key={o.id} value={String(o.id)}>
+                      {o.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </label>
+          )}
+          {(search.csm || search.client || search.operator || search.from || search.to) && (
             <Button
               variant="ghost"
               size="sm"
