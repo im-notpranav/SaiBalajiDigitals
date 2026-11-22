@@ -43,9 +43,11 @@ import {
   GitPullRequestArrow,
   Tags,
   Cog,
+  Lock,
 } from "lucide-react";
 import { fetchChangeQueueCount } from "@/api/changeRequests";
 import { fetchRateCardCount } from "@/api/rateCards";
+import { fetchBlockExceptionCount } from "@/api/orderBlocks";
 import { type UserRole, useAuth } from "@/lib/auth-store";
 import { cn } from "@/lib/utils";
 import { BrandLockup } from "@/components/brand/Logo";
@@ -189,6 +191,7 @@ const NAV: Record<UserRole, NavItem[]> = {
     ...DASHBOARD,
     ...ORDER_SYSTEM,
     { to: "/admin/change-requests", label: "Change Requests", icon: GitPullRequestArrow, group: "Automated System" },
+    { to: "/admin/order-blocks", label: "Order Blocks", icon: Lock, group: "Automated System" },
     { to: "/admin/import", label: "Bulk Import", icon: Upload, group: "Automated System" },
     { to: "/admin/users", label: "Users", icon: Users, group: "Automated System" },
     { to: "/admin/master-library", label: "Master Library", icon: Library, group: "Automated System" },
@@ -279,7 +282,14 @@ function SidebarBody({
     enabled: role === "ADMIN",
     refetchInterval: 60_000,
   });
+  const { data: blockCount } = useQuery({
+    queryKey: ["order-blocks", "count"],
+    queryFn: fetchBlockExceptionCount,
+    enabled: role === "ADMIN",
+    refetchInterval: 60_000,
+  });
   const waitingFor: Record<string, number> = {
+    "/admin/order-blocks": blockCount?.pending ?? 0,
     "/admin/change-requests": changeCount?.pending ?? 0,
     "/admin/rate-cards": rateCount?.pending ?? 0,
   };

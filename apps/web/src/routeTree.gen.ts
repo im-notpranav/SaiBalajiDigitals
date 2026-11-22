@@ -34,6 +34,7 @@ import { Route as PortalAdminMachinesRouteImport } from './routes/_portal.admin.
 import { Route as PortalAdminMasterLibraryRouteImport } from './routes/_portal.admin.master-library'
 import { Route as PortalAdminMastersRouteImport } from './routes/_portal.admin.masters'
 import { Route as PortalAdminNotificationsRouteImport } from './routes/_portal.admin.notifications'
+import { Route as PortalAdminOrderBlocksRouteImport } from './routes/_portal.admin.order-blocks'
 import { Route as PortalAdminOrdersRouteImport } from './routes/_portal.admin.orders'
 import { Route as PortalAdminOverdueRouteImport } from './routes/_portal.admin.overdue'
 import { Route as PortalAdminOvertimeRouteImport } from './routes/_portal.admin.overtime'
@@ -208,6 +209,11 @@ const PortalAdminNotificationsRoute =
     path: '/admin/notifications',
     getParentRoute: () => PortalRoute,
   } as any)
+const PortalAdminOrderBlocksRoute = PortalAdminOrderBlocksRouteImport.update({
+  id: '/admin/order-blocks',
+  path: '/admin/order-blocks',
+  getParentRoute: () => PortalRoute,
+} as any)
 const PortalAdminOrdersRoute = PortalAdminOrdersRouteImport.update({
   id: '/admin/orders',
   path: '/admin/orders',
@@ -469,6 +475,7 @@ export interface FileRoutesByFullPath {
   '/admin/master-library': typeof PortalAdminMasterLibraryRoute
   '/admin/masters': typeof PortalAdminMastersRoute
   '/admin/notifications': typeof PortalAdminNotificationsRoute
+  '/admin/order-blocks': typeof PortalAdminOrderBlocksRoute
   '/admin/orders': typeof PortalAdminOrdersRoute
   '/admin/overdue': typeof PortalAdminOverdueRoute
   '/admin/overtime': typeof PortalAdminOvertimeRoute
@@ -539,6 +546,7 @@ export interface FileRoutesByTo {
   '/admin/master-library': typeof PortalAdminMasterLibraryRoute
   '/admin/masters': typeof PortalAdminMastersRoute
   '/admin/notifications': typeof PortalAdminNotificationsRoute
+  '/admin/order-blocks': typeof PortalAdminOrderBlocksRoute
   '/admin/orders': typeof PortalAdminOrdersRoute
   '/admin/overdue': typeof PortalAdminOverdueRoute
   '/admin/overtime': typeof PortalAdminOvertimeRoute
@@ -611,6 +619,7 @@ export interface FileRoutesById {
   '/_portal/admin/master-library': typeof PortalAdminMasterLibraryRoute
   '/_portal/admin/masters': typeof PortalAdminMastersRoute
   '/_portal/admin/notifications': typeof PortalAdminNotificationsRoute
+  '/_portal/admin/order-blocks': typeof PortalAdminOrderBlocksRoute
   '/_portal/admin/orders': typeof PortalAdminOrdersRoute
   '/_portal/admin/overdue': typeof PortalAdminOverdueRoute
   '/_portal/admin/overtime': typeof PortalAdminOvertimeRoute
@@ -683,6 +692,7 @@ export interface FileRouteTypes {
     | '/admin/master-library'
     | '/admin/masters'
     | '/admin/notifications'
+    | '/admin/order-blocks'
     | '/admin/orders'
     | '/admin/overdue'
     | '/admin/overtime'
@@ -753,6 +763,7 @@ export interface FileRouteTypes {
     | '/admin/master-library'
     | '/admin/masters'
     | '/admin/notifications'
+    | '/admin/order-blocks'
     | '/admin/orders'
     | '/admin/overdue'
     | '/admin/overtime'
@@ -824,6 +835,7 @@ export interface FileRouteTypes {
     | '/_portal/admin/master-library'
     | '/_portal/admin/masters'
     | '/_portal/admin/notifications'
+    | '/_portal/admin/order-blocks'
     | '/_portal/admin/orders'
     | '/_portal/admin/overdue'
     | '/_portal/admin/overtime'
@@ -1052,6 +1064,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/notifications'
       fullPath: '/admin/notifications'
       preLoaderRoute: typeof PortalAdminNotificationsRouteImport
+      parentRoute: typeof PortalRoute
+    }
+    '/_portal/admin/order-blocks': {
+      id: '/_portal/admin/order-blocks'
+      path: '/admin/order-blocks'
+      fullPath: '/admin/order-blocks'
+      preLoaderRoute: typeof PortalAdminOrderBlocksRouteImport
       parentRoute: typeof PortalRoute
     }
     '/_portal/admin/orders': {
@@ -1387,6 +1406,7 @@ interface PortalRouteChildren {
   PortalAdminMasterLibraryRoute: typeof PortalAdminMasterLibraryRoute
   PortalAdminMastersRoute: typeof PortalAdminMastersRoute
   PortalAdminNotificationsRoute: typeof PortalAdminNotificationsRoute
+  PortalAdminOrderBlocksRoute: typeof PortalAdminOrderBlocksRoute
   PortalAdminOrdersRoute: typeof PortalAdminOrdersRoute
   PortalAdminOverdueRoute: typeof PortalAdminOverdueRoute
   PortalAdminOvertimeRoute: typeof PortalAdminOvertimeRoute
@@ -1455,6 +1475,7 @@ const PortalRouteChildren: PortalRouteChildren = {
   PortalAdminMasterLibraryRoute: PortalAdminMasterLibraryRoute,
   PortalAdminMastersRoute: PortalAdminMastersRoute,
   PortalAdminNotificationsRoute: PortalAdminNotificationsRoute,
+  PortalAdminOrderBlocksRoute: PortalAdminOrderBlocksRoute,
   PortalAdminOrdersRoute: PortalAdminOrdersRoute,
   PortalAdminOverdueRoute: PortalAdminOverdueRoute,
   PortalAdminOvertimeRoute: PortalAdminOvertimeRoute,
