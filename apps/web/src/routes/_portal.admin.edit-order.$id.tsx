@@ -7,7 +7,8 @@ import { addStore, fetchOrder, updateOrder, updateOrderDetails, updateStore } fr
 import { toastMissingNames } from "@/api/nameRequests";
 import { OrderForm } from "@/components/orders/OrderForm";
 import type { CreateOrderInput } from "@sb-oms/shared-types";
-import { Loader2 } from "lucide-react";
+import { Loader2, Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth-store";
 import { friendlyError } from "@/lib/friendly-error";
 
@@ -26,6 +27,8 @@ function EditOrderAdmin() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const [saving, setSaving] = useState(false);
+  // Each press of "Add line item" at the top adds a blank line to the last store.
+  const [addLineSignal, setAddLineSignal] = useState(0);
 
   const { data: orderData, isLoading, error } = useQuery({
     queryKey: ["order", id],
@@ -110,9 +113,21 @@ function EditOrderAdmin() {
         title={`Edit Order ${order.order_no} (Admin)`}
         description="Edit details or line items."
         crumbs={[{ label: "Automated System" }, { label: "Orders", to: "/admin/orders" }, { label: "Edit" }]}
+        actions={
+          <Button type="button" variant="outline" onClick={() => setAddLineSignal((n) => n + 1)}>
+            <Plus className="mr-2 h-4 w-4" aria-hidden /> Add line item
+          </Button>
+        }
       />
 
-      <OrderForm defaultValues={order} onSubmit={submit} isSubmitting={saving} userRole={user?.role} startWithNewLine={!!addLine} />
+      <OrderForm
+        defaultValues={order}
+        onSubmit={submit}
+        isSubmitting={saving}
+        userRole={user?.role}
+        startWithNewLine={!!addLine}
+        addLineSignal={addLineSignal}
+      />
     </>
   );
 }
