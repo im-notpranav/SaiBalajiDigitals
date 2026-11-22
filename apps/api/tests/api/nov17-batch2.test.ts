@@ -19,17 +19,52 @@ beforeAll(async () => {
 });
 
 describe("a CSM's essential changes wait for the admin", () => {
-  it("refuses a new line straight onto a saved order", async () => {
+  it("takes a new line straight onto a saved order, but not a changed saved line", async () => {
     const { order, store } = await makeOrder(csm);
     const item = await prisma.orderItem.findFirstOrThrow({ where: { order_id: order.id } });
-    const res = await as(csm).put(`/api/orders/${order.id}`).send({
-      items: [
-        { id: item.id, media: "Flex", width_inches: 120, height_inches: 120, qty: 1, rate: 10 },
-        { store_id: store.id, media: "Vinyl", width_inches: 12, height_inches: 12, qty: 1, rate: 50 },
-      ],
+    const saved = { id: item.id, media: item.media, width_inches: Number(item.width_inches), height_inches: Number(item.height_inches), qty: Number(item.qty), rate: Number(item.rate) };
+    const added = await as(csm).put(`/api/orders/${order.id}`).send({
+      items: [saved, { store_id: store.id, media: "Vinyl", width_inches: 12, height_inches: 12, qty: 1, rate: 50 }],
     });
-    expect(res.status).toBe(403);
-    expect(res.body.needs_approval).toBe(true);
+    expect(added.status).toBe(200);
+    expect(await prisma.orderItem.count({ where: { order_id: order.id } })).toBe(2);
+
+    const changed = await as(csm).put(`/api/orders/${order.id}`).send({ items: [{ ...saved, rate: saved.rate + 1 }] });
+    expect(changed.status).toBe(403);
+    expect(changed.body.needs_approval).toBe(true);
+  });
+
+  it("shows one request with its payload for the compare page", async () => {
+    const { order } = await makeOrder(csm);
+    const item = await prisma.orderItem.findFirstOrThrow({ where: { order_id: order.id } });
+    const create = await as(csm).post(`/api/orders/${order.id}/change-requests`).send({
+      kind: "LINE_EDIT",
+      reason: "Bigger board",
+      payload: { items: [{ id: item.id, media: "Flex", width_inches: 144, height_inches: 120, qty: 1, rate: 10 }] },
+    });
+    expect(create.status).toBe(201);
+    const view = await as(admin).get(`/api/change-requests/view/change/${create.body.request.id}`);
+    expect(view.status).toBe(200);
+    expect(view.body.request.payload.items[0].width_inches).toBe(144);
+    expect(view.body.request.order.id).toBe(order.id);
+    expect((await as(csm).get(`/api/change-requests/view/change/${create.body.request.id}`)).status).toBe(403);
+    expect((await as(admin).get(`/api/change-requests/view/line_remark/${item.id}`)).status).toBe(404);
+    expect((await as(admin).get("/api/change-requests/view/nope/1")).status).toBe(400);
+  });
+
+  it("gives each pending order its stage on the OM board", async () => {
+    const { order } = await makeOrder(csm);
+    const res = await as(om).get("/api/dashboard/pending-by-csm");
+    expect(res.status).toBe(200);
+    const row = res.body.csms.flatMap((g: any) => [...g.local, ...g.non_local]).find((r: any) => r.id === order.id);
+    expect(row?.stage).toBe("unassigned");
+  });
+
+  it("takes a new store from the order CSM only", async () => {
+    const { order } = await makeOrder(csm);
+    expect((await as(otherCsm).post(`/api/orders/${order.id}/stores`).send({ store_name: "Branch 2", location: "Hyderabad" })).status).toBe(403);
+    const ok = await as(csm).post(`/api/orders/${order.id}/stores`).send({ store_name: "Branch 2", location: "Hyderabad" });
+    expect(ok.status).toBe(201);
   });
 
   it("refuses a store rename but still takes a PO", async () => {

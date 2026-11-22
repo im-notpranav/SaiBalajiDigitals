@@ -72,6 +72,7 @@ export function OrderBlockNotice({ client, enabled }: { client: string; enabled:
         <Lock className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
         <div className="min-w-0 flex-1">
           <p className="font-medium text-destructive">New orders for {data.client_name} are on hold</p>
+          <p className="text-xs text-muted-foreground">Clear these, or ask the admin to allow this one order.</p>
           <ul className="mt-1 space-y-0.5 text-muted-foreground">
             {data.reasons.slice(0, 5).map((r) => (
               <li key={`${r.kind}-${r.order_id}-${r.invoice_no ?? ""}`}>
@@ -93,8 +94,8 @@ export function OrderBlockNotice({ client, enabled }: { client: string; enabled:
                 </Button>
               </>
             ) : (
-              <Button type="button" size="sm" variant="outline" className="h-8" onClick={() => setAsking(true)}>
-                Request exception
+              <Button type="button" size="sm" className="h-8" onClick={() => setAsking(true)}>
+                Ask the admin for an exception
               </Button>
             )}
           </div>
@@ -110,6 +111,7 @@ export function OrderBlockNotice({ client, enabled }: { client: string; enabled:
           <div className="grid gap-2">
             <Label htmlFor="block-reason">Why can this order not wait?</Label>
             <Textarea id="block-reason" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={1000} className="min-h-[90px]" autoFocus />
+            <p className="text-xs text-muted-foreground">{reason.trim().length < 5 ? "A few words at least." : `${reason.trim().length} / 1000`}</p>
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setAsking(false)} disabled={ask.isPending}>Cancel</Button>

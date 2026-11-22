@@ -51,6 +51,7 @@ export function UserSheetButtons() {
   const input = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
+  const [onlySkipped, setOnlySkipped] = useState(false);
 
   const run = useMutation({
     mutationFn: (v: { file: File; preview: boolean }) => sendSheet(v.file, v.preview),
@@ -60,7 +61,10 @@ export function UserSheetButtons() {
         qc.invalidateQueries({ queryKey: ["users"] });
         setFile(null);
         setResult(null);
-      } else setResult(res);
+      } else {
+        setOnlySkipped(false);
+        setResult(res);
+      }
     },
     onError: (err) => toast.error(friendlyError(err, "Could not read the sheet")),
   });
@@ -107,6 +111,7 @@ export function UserSheetButtons() {
           <DialogHeader>
             <DialogTitle>Check the sheet</DialogTitle>
             <DialogDescription>
+              {file && <span className="font-medium text-foreground">{file.name}. </span>}
               Nothing is saved yet. A user name already in the app is updated; its password changes only where the Password cell is filled.
             </DialogDescription>
           </DialogHeader>
@@ -117,6 +122,11 @@ export function UserSheetButtons() {
                 <Badge className="bg-primary/10 text-primary hover:bg-primary/10">{result.update} updated</Badge>
                 <Badge variant="secondary">{result.unchanged} unchanged</Badge>
                 {result.error_count > 0 && <Badge className="bg-destructive/10 text-destructive hover:bg-destructive/10">{result.error_count} skipped</Badge>}
+                {result.error_count > 0 && (
+                  <button type="button" onClick={() => setOnlySkipped((v) => !v)} className="ml-auto text-xs font-medium text-primary hover:underline">
+                    {onlySkipped ? "Show every row" : "Show only skipped rows"}
+                  </button>
+                )}
               </div>
               {result.rows.length > 0 && (
                 <div className="max-h-[50dvh] overflow-y-auto rounded-lg border">
@@ -129,7 +139,11 @@ export function UserSheetButtons() {
                       </tr>
                     </thead>
                     <tbody>
-                      {result.rows.map((r) => (
+                      {[...result.rows]
+                        .filter((r) => !onlySkipped || r.action === "error")
+                        // Skipped rows first: those are the ones to fix in the sheet.
+                        .sort((a, b) => Number(b.action === "error") - Number(a.action === "error") || a.row - b.row)
+                        .map((r) => (
                         <tr key={r.row} className="border-t">
                           <td className="px-2 py-1.5 tabular-nums text-muted-foreground">{r.row}</td>
                           <td className="px-2 py-1.5">

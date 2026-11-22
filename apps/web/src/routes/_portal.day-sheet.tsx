@@ -95,6 +95,11 @@ function DaySheetPage() {
           <Button variant="outline" size="icon" aria-label="Next day" disabled={day >= todayIst()} onClick={() => set({ day: shift(day, 1) })}>
             <ChevronRight className="h-4 w-4" />
           </Button>
+          {day !== todayIst() && (
+            <Button variant="ghost" onClick={() => set({ day: undefined })}>
+              Today
+            </Button>
+          )}
         </div>
         {viewAll && (
           <label className="grid gap-1 sm:w-72">
@@ -132,7 +137,12 @@ function SheetBody({ sheet, orderBase }: { sheet: Sheet; orderBase: "/employee/o
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
       <section className="surface-panel p-4 sm:p-5">
-        <h2 className="mb-3 text-sm font-semibold">{isField ? "Jobs that day" : "Orders that day"}</h2>
+        <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold">
+          {isField ? "Jobs that day" : "Orders that day"}
+          <span className="rounded-full bg-muted px-2 text-xs font-medium tabular-nums text-muted-foreground">
+            {isField ? sheet.jobs.length : sheet.orders.length}
+          </span>
+        </h2>
         {isField ? (
           sheet.jobs.length === 0 ? (
             <p className="text-sm text-muted-foreground">No jobs booked.</p>
@@ -192,6 +202,7 @@ function Rows({ sheet, isField }: { sheet: Sheet; isField: boolean }) {
       setClient("");
       setTime("");
       refresh();
+      toast.success("Added to the day sheet");
     },
     onError: (err) => toast.error(friendlyError(err, "Could not add it")),
   });
@@ -203,12 +214,18 @@ function Rows({ sheet, isField }: { sheet: Sheet; isField: boolean }) {
 
   return (
     <section className="surface-panel p-4 sm:p-5">
-      <h2 className="mb-3 text-sm font-semibold">{isField ? "Work done" : "Other work"}</h2>
+      <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold">
+        {isField ? "Work done" : "Other work"}
+        <span className="rounded-full bg-muted px-2 text-xs font-medium tabular-nums text-muted-foreground">{sheet.entries.length}</span>
+      </h2>
       {sheet.entries.length === 0 ? (
         <EmptyState title="Nothing written" description={sheet.can_edit ? (isField ? "Add a note of the work you did." : "Add follow-ups, visits and calls.") : undefined} />
       ) : (
         <ul className="mb-4 divide-y text-sm">
-          {sheet.entries.map((e) => (
+          {[...sheet.entries]
+            // Rows with a time in time order; rows without one keep the order they were written in.
+            .sort((a, b) => (a.time && b.time ? a.time.localeCompare(b.time) : a.time ? -1 : b.time ? 1 : 0))
+            .map((e) => (
             <li key={e.id} className="flex items-start gap-2 py-2">
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
@@ -260,7 +277,21 @@ function Rows({ sheet, isField }: { sheet: Sheet; isField: boolean }) {
           )}
           <div className="grid gap-1.5">
             <Label htmlFor="ds-note">{isField ? "What you did" : "Note"}</Label>
-            <Textarea id="ds-note" value={note} onChange={(e) => setNote(e.target.value)} maxLength={2000} className="min-h-[70px]" />
+            <Textarea
+              id="ds-note"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && note.trim() && !add.isPending) {
+                  e.preventDefault();
+                  add.mutate();
+                }
+              }}
+              maxLength={2000}
+              className="min-h-[70px]"
+              placeholder={isField ? "e.g. Installed 4 boards at the store, 1 left for tomorrow" : "e.g. Called about the pending payment, promised by Friday"}
+            />
+            <p className="text-[11px] text-muted-foreground">Ctrl + Enter adds it.</p>
           </div>
           <div className="flex justify-end">
             <Button type="submit" disabled={!note.trim() || add.isPending}>

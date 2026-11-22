@@ -81,6 +81,7 @@ import { Route as PortalAdminOrdersIdRouteImport } from './routes/_portal.admin.
 import { Route as PortalEmployeeEditOrderIdRouteImport } from './routes/_portal.employee.edit-order.$id'
 import { Route as PortalEmployeeOrdersIdRouteImport } from './routes/_portal.employee.orders_.$id'
 import { Route as PortalProductionOrdersIdRouteImport } from './routes/_portal.production.orders_.$id'
+import { Route as PortalAdminChangeRequestsSourceIdRouteImport } from './routes/_portal.admin.change-requests_.$source.$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -461,6 +462,12 @@ const PortalProductionOrdersIdRoute =
     path: '/production/orders/$id',
     getParentRoute: () => PortalRoute,
   } as any)
+const PortalAdminChangeRequestsSourceIdRoute =
+  PortalAdminChangeRequestsSourceIdRouteImport.update({
+    id: '/admin/change-requests_/$source/$id',
+    path: '/admin/change-requests/$source/$id',
+    getParentRoute: () => PortalRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -534,6 +541,7 @@ export interface FileRoutesByFullPath {
   '/employee/edit-order/$id': typeof PortalEmployeeEditOrderIdRoute
   '/employee/orders/$id': typeof PortalEmployeeOrdersIdRoute
   '/production/orders/$id': typeof PortalProductionOrdersIdRoute
+  '/admin/change-requests/$source/$id': typeof PortalAdminChangeRequestsSourceIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -607,6 +615,7 @@ export interface FileRoutesByTo {
   '/employee/edit-order/$id': typeof PortalEmployeeEditOrderIdRoute
   '/employee/orders/$id': typeof PortalEmployeeOrdersIdRoute
   '/production/orders/$id': typeof PortalProductionOrdersIdRoute
+  '/admin/change-requests/$source/$id': typeof PortalAdminChangeRequestsSourceIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -682,6 +691,7 @@ export interface FileRoutesById {
   '/_portal/employee/edit-order/$id': typeof PortalEmployeeEditOrderIdRoute
   '/_portal/employee/orders_/$id': typeof PortalEmployeeOrdersIdRoute
   '/_portal/production/orders_/$id': typeof PortalProductionOrdersIdRoute
+  '/_portal/admin/change-requests_/$source/$id': typeof PortalAdminChangeRequestsSourceIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -757,6 +767,7 @@ export interface FileRouteTypes {
     | '/employee/edit-order/$id'
     | '/employee/orders/$id'
     | '/production/orders/$id'
+    | '/admin/change-requests/$source/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -830,6 +841,7 @@ export interface FileRouteTypes {
     | '/employee/edit-order/$id'
     | '/employee/orders/$id'
     | '/production/orders/$id'
+    | '/admin/change-requests/$source/$id'
   id:
     | '__root__'
     | '/'
@@ -904,6 +916,7 @@ export interface FileRouteTypes {
     | '/_portal/employee/edit-order/$id'
     | '/_portal/employee/orders_/$id'
     | '/_portal/production/orders_/$id'
+    | '/_portal/admin/change-requests_/$source/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -1419,6 +1432,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PortalProductionOrdersIdRouteImport
       parentRoute: typeof PortalRoute
     }
+    '/_portal/admin/change-requests_/$source/$id': {
+      id: '/_portal/admin/change-requests_/$source/$id'
+      path: '/admin/change-requests/$source/$id'
+      fullPath: '/admin/change-requests/$source/$id'
+      preLoaderRoute: typeof PortalAdminChangeRequestsSourceIdRouteImport
+      parentRoute: typeof PortalRoute
+    }
   }
 }
 
@@ -1491,6 +1511,7 @@ interface PortalRouteChildren {
   PortalEmployeeEditOrderIdRoute: typeof PortalEmployeeEditOrderIdRoute
   PortalEmployeeOrdersIdRoute: typeof PortalEmployeeOrdersIdRoute
   PortalProductionOrdersIdRoute: typeof PortalProductionOrdersIdRoute
+  PortalAdminChangeRequestsSourceIdRoute: typeof PortalAdminChangeRequestsSourceIdRoute
 }
 
 const PortalRouteChildren: PortalRouteChildren = {
@@ -1562,6 +1583,8 @@ const PortalRouteChildren: PortalRouteChildren = {
   PortalEmployeeEditOrderIdRoute: PortalEmployeeEditOrderIdRoute,
   PortalEmployeeOrdersIdRoute: PortalEmployeeOrdersIdRoute,
   PortalProductionOrdersIdRoute: PortalProductionOrdersIdRoute,
+  PortalAdminChangeRequestsSourceIdRoute:
+    PortalAdminChangeRequestsSourceIdRoute,
 }
 
 const PortalRouteWithChildren =

@@ -613,11 +613,8 @@ export const updateOrder = async (req: Request, res: Response) => {
       return res.status(403).json({ message: "Only an administrator can set order remarks." });
     }
 
-    // Once an order has lines, a CSM's essential change (a new line too) waits for the admin:
-    // it goes as a Request Change. An allotted order with no lines yet is filled in freely.
-    if (user.role === "CSM" && existingOrder.items.length > 0 && items?.some((it: any) => !it.id)) {
-      return res.status(403).json({ message: NEEDS_APPROVAL_MESSAGE, needs_approval: true });
-    }
+    // A CSM adds new lines straight onto their order. Changing or removing a saved line is
+    // refused below: that goes to the admin as a Request Change.
 
     // Header fields have their own endpoints. Rejected loudly rather than ignored:
     // silently dropping a header edit is how these changes get lost.
@@ -649,7 +646,7 @@ export const updateOrder = async (req: Request, res: Response) => {
       if (user.role === "CSM") {
         for (const oldItem of existingOrder.items) {
           if (!incomingIds.has(oldItem.id)) {
-            return res.status(403).json({ message: "Line items cannot be removed once saved." });
+            return res.status(403).json({ message: NEEDS_APPROVAL_MESSAGE, needs_approval: true });
           }
         }
         for (const newItem of items) {
@@ -666,7 +663,7 @@ export const updateOrder = async (req: Request, res: Response) => {
             (newItem.remarks_other_text ?? null) !== (oldItem.remarks_other_text ?? null) ||
             Number(newItem.adjustment_amount ?? 0) !== Number((oldItem as any).adjustment_amount ?? 0);
           if (changed) {
-            return res.status(403).json({ message: "Existing line items cannot be edited — flag it and add a corrected line instead." });
+            return res.status(403).json({ message: NEEDS_APPROVAL_MESSAGE, needs_approval: true });
           }
         }
       }
@@ -1125,8 +1122,9 @@ export const addStore = async (req: Request, res: Response) => {
     if (!isAdmin && !isCsmEditable(order.status)) {
       return res.status(403).json({ message: "Stores can only be added before billing starts." });
     }
-    if (!isAdmin && (await prisma.orderItem.count({ where: { order_id: order.id } })) > 0) {
-      return res.status(403).json({ message: NEEDS_APPROVAL_MESSAGE, needs_approval: true });
+    // A new store with its new lines needs no approval, but only the order's CSM adds one.
+    if (user.role === "CSM" && order.created_by !== user.id) {
+      return res.status(403).json({ message: "Only the order's CSM can add stores to it." });
     }
     if (order.stores.length >= 50) {
       return res.status(409).json({ message: "An order can hold at most 50 stores." });

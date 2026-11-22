@@ -8,7 +8,8 @@ import { OrderForm } from "@/components/orders/OrderForm";
 import { toastMissingNames } from "@/api/nameRequests";
 import type { CreateOrderInput } from "@sb-oms/shared-types";
 import { useAuth } from "@/lib/auth-store";
-import { Loader2 } from "lucide-react";
+import { Loader2, Plus } from "lucide-react";
+import { RequestChangeButton } from "@/components/orders/RequestChange";
 import { friendlyError } from "@/lib/friendly-error";
 import { createChangeRequest, type LineEditPayload } from "@/api/changeRequests";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -17,8 +18,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
 /**
- * What a CSM's edit asks the admin for: client, store names and locations, changed / new /
- * removed lines and new stores. Empty when only PO numbers or the order remark changed.
+ * What a CSM's edit asks the admin for: client, store names and locations, and changed or
+ * removed saved lines. New lines and new stores are not in it: they save at once.
  */
 function essentialChanges(order: any, payload: CreateOrderInput, includeLines: boolean): LineEditPayload {
   const out: LineEditPayload = {};
@@ -26,15 +27,11 @@ function essentialChanges(order: any, payload: CreateOrderInput, includeLines: b
   const prevStores = new Map<number, any>((order.stores ?? []).map((s: any) => [s.id, s]));
   const prevItems = new Map<number, any>((order.items ?? []).map((i: any) => [i.id, i]));
   const stores: NonNullable<LineEditPayload["stores"]> = [];
-  const newStores: NonNullable<LineEditPayload["new_stores"]> = [];
   const items: NonNullable<LineEditPayload["items"]> = [];
   const kept = new Set<number>();
   const plain = (it: any) => ({ media: it.media, width_inches: it.width_inches, height_inches: it.height_inches, qty: it.qty, rate: it.rate });
   for (const s of payload.stores ?? []) {
-    if (!s.id) {
-      if (includeLines) newStores.push({ store_name: s.store_name, location: s.location, po_number: s.po_number || null, items: s.items.map(plain) });
-      continue;
-    }
+    if (!s.id) continue;
     const prev = prevStores.get(s.id);
     if (prev && (s.store_name !== prev.store_name || s.location !== prev.location)) {
       stores.push({ id: s.id, store_name: s.store_name, location: s.location });
@@ -42,19 +39,19 @@ function essentialChanges(order: any, payload: CreateOrderInput, includeLines: b
     for (const it of s.items) {
       if (it.id) kept.add(it.id);
       if (!includeLines) continue;
-      const was = it.id ? prevItems.get(it.id) : null;
+      if (!it.id) continue;
+      const was = prevItems.get(it.id);
       const changed =
-        !was ||
-        was.media !== it.media ||
+        !!was &&
+        (was.media !== it.media ||
         Number(was.width_inches) !== it.width_inches ||
         Number(was.height_inches) !== it.height_inches ||
         Number(was.qty) !== it.qty ||
-        Number(was.rate) !== it.rate;
-      if (changed) items.push({ ...(it.id ? { id: it.id } : { store_id: s.id }), ...plain(it) });
+        Number(was.rate) !== it.rate);
+      if (changed) items.push({ id: it.id, ...plain(it) });
     }
   }
   if (stores.length) out.stores = stores;
-  if (newStores.length) out.new_stores = newStores;
   if (items.length) out.items = items;
   if (includeLines) {
     const removed = [...prevItems.keys()].filter((itemId) => !kept.has(itemId));
@@ -62,6 +59,17 @@ function essentialChanges(order: any, payload: CreateOrderInput, includeLines: b
   }
   return out;
 }
+
+/** New lines on saved stores, and whole new stores: these save straight away. */
+function freshLines(payload: CreateOrderInput) {
+  const plain = (it: any) => ({ media: it.media, width_inches: it.width_inches, height_inches: it.height_inches, qty: it.qty, rate: it.rate });
+  const onSaved = (payload.stores ?? []).flatMap((s) => (s.id ? s.items.filter((it) => !it.id).map((it) => ({ ...plain(it), store_id: s.id! })) : []));
+  const newStores = (payload.stores ?? [])
+    .filter((s) => !s.id)
+    .map((s) => ({ store_name: s.store_name, location: s.location, po_number: s.po_number || null, items: s.items.map(plain) }));
+  return { onSaved, newStores, count: onSaved.length + newStores.reduce((n, s) => n + s.items.length, 0) };
+}
+type Fresh = ReturnType<typeof freshLines>;
 
 function summarise(p: LineEditPayload | null): string {
   if (!p) return "";
@@ -97,7 +105,13 @@ function EditOrderEmployee() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const [saving, setSaving] = useState(false);
-  const [pendingRequest, setPendingRequest] = useState<LineEditPayload | null>(null);
+  const [pendingRequest, setPendingRequest] = useState<{
+    ask: LineEditPayload;
+    headerPatch: Record<string, unknown>;
+    storePos: { id: number; po: string | null }[];
+    fresh: Fresh;
+  } | null>(null);
+  const [addLineSignal, setAddLineSignal] = useState(0);
   const [reason, setReason] = useState("");
 
   const { data: orderData, isLoading, error } = useQuery({
@@ -122,34 +136,63 @@ function EditOrderEmployee() {
     navigate({ to: "/employee/orders/$id", params: { id } });
   };
 
-  /** Request mode: PO numbers and the order remark save now; the rest waits for approval. */
+  /**
+   * Saves what needs no approval: PO numbers, the order remark, new lines and new stores.
+   * Saved lines go to updateOrder exactly as they are, so only the new ones are added.
+   */
+  const saveDirect = async (headerPatch: Record<string, unknown>, storePos: { id: number; po: string | null }[], fresh: Fresh) => {
+    if (!order) return;
+    const orderId = Number(id);
+    if (Object.keys(headerPatch).length > 0) await updateOrderDetails(orderId, headerPatch);
+    for (const p of storePos) await updateStore(orderId, p.id, { po_number: p.po });
+    const added: any[] = [...fresh.onSaved];
+    for (const s of fresh.newStores) {
+      const created = await addStore(orderId, { store_name: s.store_name, location: s.location, po_number: s.po_number });
+      added.push(...s.items.map((it) => ({ ...it, store_id: created.id })));
+    }
+    if (added.length > 0) {
+      const saved = (order.items ?? []).map((i: any) => ({
+        id: i.id,
+        media: i.media,
+        width_inches: Number(i.width_inches),
+        height_inches: Number(i.height_inches),
+        qty: Number(i.qty),
+        rate: Number(i.rate),
+        remarks: i.remarks ?? null,
+        remarks_other_text: i.remarks_other_text ?? null,
+        adjustment_amount: i.adjustment_amount == null ? null : Number(i.adjustment_amount),
+      }));
+      await updateOrder(orderId, { items: [...saved, ...added] } as unknown as CreateOrderInput);
+    }
+  };
+
+  /** Request mode: new lines, PO numbers and the order remark save now; edits to saved lines wait for approval. */
   const submitRequest = async (payload: CreateOrderInput) => {
     if (!order) return;
+    const headerPatch: Record<string, unknown> = {};
+    if ((payload.po_number || "") !== (order.po_number || "")) headerPatch.po_number = payload.po_number || null;
+    if ((payload.order_remark || "") !== (order.order_remark || "")) headerPatch.order_remark = payload.order_remark || null;
+    const prevStores = new Map((order.stores ?? []).map((s) => [s.id, s]));
+    const storePos = (payload.stores ?? [])
+      .filter((s) => s.id && prevStores.get(s.id) && (s.po_number || "") !== (prevStores.get(s.id)!.po_number || ""))
+      .map((s) => ({ id: s.id!, po: s.po_number || null }));
+    const fresh: Fresh = lineItemsLocked ? { onSaved: [], newStores: [], count: 0 } : freshLines(payload);
+    const ask = essentialChanges(order, payload, !lineItemsLocked);
+    if (Object.keys(ask).length > 0) {
+      setReason("");
+      setPendingRequest({ ask, headerPatch, storePos, fresh });
+      return;
+    }
+    if (Object.keys(headerPatch).length === 0 && storePos.length === 0 && fresh.count === 0) return void toast.info("Nothing changed.");
     setSaving(true);
     try {
-      const orderId = Number(id);
-      const headerPatch: Record<string, unknown> = {};
-      if ((payload.po_number || "") !== (order.po_number || "")) headerPatch.po_number = payload.po_number || null;
-      if ((payload.order_remark || "") !== (order.order_remark || "")) headerPatch.order_remark = payload.order_remark || null;
-      if (Object.keys(headerPatch).length > 0) await updateOrderDetails(orderId, headerPatch);
-      let storePo = 0;
-      const prevStores = new Map((order.stores ?? []).map((s) => [s.id, s]));
-      for (const s of payload.stores ?? []) {
-        const prev = s.id ? prevStores.get(s.id) : null;
-        if (prev && (s.po_number || "") !== (prev.po_number || "")) {
-          await updateStore(orderId, s.id!, { po_number: s.po_number || null });
-          storePo++;
-        }
-      }
-      const ask = essentialChanges(order, payload, !lineItemsLocked);
-      if (Object.keys(ask).length === 0) {
-        if (Object.keys(headerPatch).length === 0 && storePo === 0) toast.info("Nothing changed.");
-        else done(`Order ${order.order_no} updated`, "PO and remark saved.");
-        return;
-      }
-      setReason("");
-      setPendingRequest(ask);
+      await saveDirect(headerPatch, storePos, fresh);
+      done(
+        `Order ${order.order_no} updated`,
+        fresh.count ? `${fresh.count} new line${fresh.count === 1 ? "" : "s"} added.` : "PO and remark saved.",
+      );
     } catch (err: any) {
+      if (toastMissingNames(err, { isAdmin })) return;
       toast.error("Failed to update order", { description: friendlyError(err) });
     } finally {
       setSaving(false);
@@ -161,9 +204,23 @@ function EditOrderEmployee() {
     if (reason.trim().length < 3) return void toast.error("Give a reason for the change.");
     setSaving(true);
     try {
-      await createChangeRequest(Number(id), { kind: "LINE_EDIT", reason: reason.trim(), payload: pendingRequest });
+      // The request first: if it is refused, nothing else has been saved yet.
+      await createChangeRequest(Number(id), { kind: "LINE_EDIT", reason: reason.trim(), payload: pendingRequest.ask });
+      const { headerPatch, storePos, fresh } = pendingRequest;
       setPendingRequest(null);
-      done("Sent for approval", "The admin approves the change before it applies.");
+      try {
+        await saveDirect(headerPatch, storePos, fresh);
+      } catch (err: any) {
+        toast.error("The request was sent, but the new lines or PO did not save", { description: friendlyError(err) });
+        queryClient.invalidateQueries({ queryKey: ["order", id] });
+        return;
+      }
+      done(
+        "Sent for approval",
+        fresh.count
+          ? `${fresh.count} new line${fresh.count === 1 ? "" : "s"} saved. The rest applies once the admin approves.`
+          : "The admin approves the change before it applies.",
+      );
     } catch (err: any) {
       if (toastMissingNames(err, { isAdmin })) return;
       toast.error("Not sent", { description: friendlyError(err) });
@@ -258,7 +315,22 @@ function EditOrderEmployee() {
             ? "Line items are frozen. Client, store, location and PO numbers can still be corrected."
             : "Update the stores, line items or order details."
         }
-        crumbs={[{ label: "Employee" }, { label: "Orders" }, { label: "Edit" }]}
+        crumbs={[{ label: "Employee" }, { label: "Orders", to: "/employee/orders" }, { label: "Edit" }]}
+        actions={
+          <>
+            {!lineItemsLocked && (
+              <Button type="button" variant="outline" onClick={() => setAddLineSignal((n) => n + 1)}>
+                <Plus className="mr-2 h-4 w-4" aria-hidden /> Add line item
+              </Button>
+            )}
+            {requestMode && isCreator && (
+              <RequestChangeButton
+                order={order}
+                onEditHere={() => toast.info("Change the line on this form", { description: "Then press Save / Send for approval at the side." })}
+              />
+            )}
+          </>
+        }
       />
 
       <OrderForm
@@ -269,13 +341,16 @@ function EditOrderEmployee() {
         lineItemsLocked={lineItemsLocked}
         startWithNewLine={!!addLine}
         requestMode={requestMode}
+        addLineSignal={addLineSignal}
       />
       <Dialog open={!!pendingRequest} onOpenChange={(o) => !o && setPendingRequest(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Send for approval</DialogTitle>
             <DialogDescription>
-              {summarise(pendingRequest)} The order stays as it is until the admin approves.
+              {summarise(pendingRequest?.ask ?? null)} These wait for the admin; the order keeps its current figures until then.
+              {pendingRequest && pendingRequest.fresh.count > 0 &&
+                ` Your ${pendingRequest.fresh.count} new line${pendingRequest.fresh.count === 1 ? "" : "s"} save at once.`}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-1.5">

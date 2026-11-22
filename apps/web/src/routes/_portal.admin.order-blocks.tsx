@@ -1,8 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { format } from "date-fns";
-import { Check, Loader2, Lock, Search, X } from "lucide-react";
+import { format, formatDistanceToNowStrict } from "date-fns";
+import { Check, CircleDollarSign, Clock, Loader2, Lock, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { EmptyState, ErrorState, LoadingState } from "@/components/layout/PageStates";
@@ -43,6 +43,9 @@ const TABS: { id: Tab; label: string }[] = [
  */
 function OrderBlocksPage() {
   const [tab, setTab] = useState<Tab>("PENDING");
+  // Same query the Waiting tab uses, so its count shows on the tab without a second call.
+  const waiting = useQuery({ queryKey: ["order-blocks", "exceptions", "pending"], queryFn: () => fetchBlockExceptions("PENDING") });
+  const waitingCount = (waiting.data?.exceptions ?? []).filter((r) => r.status === "PENDING").length;
   return (
     <>
       <PageHeader
@@ -61,6 +64,9 @@ function OrderBlocksPage() {
             className={cn("rounded-md px-4 py-1.5 font-medium", tab === t.id ? "bg-background shadow-sm" : "text-muted-foreground")}
           >
             {t.label}
+            {t.id === "PENDING" && waitingCount > 0 && (
+              <span className="ml-1.5 rounded-full bg-warning/20 px-1.5 text-[11px] font-semibold tabular-nums text-warning">{waitingCount}</span>
+            )}
           </button>
         ))}
       </div>
@@ -68,6 +74,12 @@ function OrderBlocksPage() {
     </>
   );
 }
+
+const CARD_EDGE: Record<string, string> = {
+  PENDING: "border-l-warning",
+  APPROVED: "border-l-success",
+  REJECTED: "border-l-destructive",
+};
 
 const STATUS_STYLE: Record<string, string> = {
   PENDING: "bg-warning/15 text-warning",
@@ -91,7 +103,7 @@ function Exceptions({ decided }: { decided: boolean }) {
   return (
     <div className="grid gap-3">
       {rows.map((r) => (
-        <div key={r.id} className="surface-panel p-4">
+        <div key={r.id} className={cn("surface-panel border-l-4 p-4", CARD_EDGE[r.status])}>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
@@ -102,10 +114,16 @@ function Exceptions({ decided }: { decided: boolean }) {
               </div>
               <p className="mt-1 text-sm">"{r.reason}"</p>
               {r.reasons && r.reasons.length > 0 && (
-                <ul className="mt-2 space-y-0.5 text-xs text-muted-foreground">
+                <ul className="mt-2 space-y-1 rounded-lg border bg-muted/20 p-2 text-xs">
+                  <li className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Why the client is on hold</li>
                   {r.reasons.slice(0, 6).map((b) => (
-                    <li key={`${b.kind}-${b.order_id}-${b.invoice_no ?? ""}`}>
-                      <Link to="/admin/orders/$id" params={{ id: String(b.order_id) }} className="hover:underline">
+                    <li key={`${b.kind}-${b.order_id}-${b.invoice_no ?? ""}`} className="flex items-center gap-1.5">
+                      {b.kind === "PENDING_ORDER" ? (
+                        <Clock className="h-3.5 w-3.5 shrink-0 text-warning" aria-label="Open order" />
+                      ) : (
+                        <CircleDollarSign className="h-3.5 w-3.5 shrink-0 text-destructive" aria-label="Unpaid invoice" />
+                      )}
+                      <Link to="/admin/orders/$id" params={{ id: String(b.order_id) }} className="underline-offset-2 hover:underline">
                         {blockReasonText(b)}
                       </Link>
                     </li>
@@ -115,7 +133,8 @@ function Exceptions({ decided }: { decided: boolean }) {
               )}
               {r.decision_note && <p className="mt-1 text-sm text-muted-foreground">Note: {r.decision_note}</p>}
               <p className="mt-1 text-xs text-muted-foreground">
-                {r.requester?.name ?? "A CSM"} · {format(new Date(r.created_at), "d MMM, h:mm a")}
+                {r.requester?.name ?? "A CSM"} ·{" "}
+                <span title={format(new Date(r.created_at), "d MMM yyyy, h:mm a")}>{formatDistanceToNowStrict(new Date(r.created_at), { addSuffix: true })}</span>
                 {r.decided_at && ` · decided by ${r.decider?.name ?? "the admin"} ${format(new Date(r.decided_at), "d MMM")}`}
               </p>
             </div>
@@ -185,11 +204,16 @@ function DecideDialog({ deciding, onClose }: { deciding: { row: BlockException; 
 
 function ClientSettings() {
   const [q, setQ] = useState("");
+  const [show, setShow] = useState<"all" | "on" | "off">("all");
   const { data, isLoading, error, refetch } = useQuery({ queryKey: ["order-blocks", "clients"], queryFn: fetchClientBlockSettings });
+  const all = data?.clients ?? [];
+  const onCount = all.filter((c) => c.block_orders).length;
   const rows = useMemo(() => {
     const s = q.trim().toLowerCase();
-    return (data?.clients ?? []).filter((c) => !s || `${c.name} ${c.code ?? ""}`.toLowerCase().includes(s));
-  }, [data, q]);
+    return all.filter(
+      (c) => (show === "all" || (show === "on") === c.block_orders) && (!s || `${c.name} ${c.code ?? ""}`.toLowerCase().includes(s)),
+    );
+  }, [all, q, show]);
 
   if (isLoading) return <LoadingState />;
   if (error) return <ErrorState error={error} onRetry={() => refetch()} />;
@@ -201,16 +225,37 @@ function ClientSettings() {
           <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search clients" className="pl-8" aria-label="Search clients" />
         </div>
-        <p className="text-xs text-muted-foreground">Days of 0 switch that block off. Changes save as you leave a box.</p>
+        <div className="inline-flex rounded-lg bg-muted p-0.5 text-xs" role="radiogroup" aria-label="Which clients">
+          {([
+            ["all", `All ${all.length}`],
+            ["on", `Blocking on ${onCount}`],
+            ["off", `Off ${all.length - onCount}`],
+          ] as const).map(([k, label]) => (
+            <button
+              key={k}
+              type="button"
+              role="radio"
+              aria-checked={show === k}
+              onClick={() => setShow(k)}
+              className={cn("rounded-md px-2.5 py-1 font-medium", show === k ? "bg-background shadow-sm" : "text-muted-foreground")}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
+      <p className="border-b bg-muted/20 px-3 py-1.5 text-xs text-muted-foreground">
+        Days of 0 switch that block off. Each change saves as you leave the box.
+      </p>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
             <tr>
               <th className="px-3 py-2">Client</th>
               <th className="px-3 py-2">Block on</th>
-              <th className="px-3 py-2">Open order, days</th>
-              <th className="px-3 py-2">Unpaid bill, days</th>
+              <th className="px-3 py-2" title="An order still open this many days after its order date holds the client">Open order, days</th>
+              <th className="px-3 py-2" title="An invoice still unpaid this many days after its invoice date holds the client">Unpaid bill, days</th>
+              <th className="w-16 px-3 py-2"><span className="sr-only">Saved</span></th>
             </tr>
           </thead>
           <tbody>
@@ -229,13 +274,15 @@ function ClientRow({ client }: { client: ClientBlockSettings }) {
   const qc = useQueryClient();
   const [pending, setPending] = useState(String(client.pending_block_days));
   const [payment, setPayment] = useState(String(client.payment_block_days));
+  const [savedAt, setSavedAt] = useState(0);
   const save = useMutation({
     mutationFn: (data: Parameters<typeof updateClientBlockSettings>[1]) => updateClientBlockSettings(client.id, data),
     onSuccess: (res) => {
       qc.setQueryData<{ clients: ClientBlockSettings[] }>(["order-blocks", "clients"], (old) =>
         old ? { clients: old.clients.map((c) => (c.id === res.client.id ? res.client : c)) } : old,
       );
-      toast.success(`Saved ${client.name}`);
+      setSavedAt(Date.now());
+      setTimeout(() => setSavedAt(0), 2000);
     },
     onError: (err) => {
       setPending(String(client.pending_block_days));
@@ -254,7 +301,7 @@ function ClientRow({ client }: { client: ClientBlockSettings }) {
     if (n !== client[field]) save.mutate({ [field]: n });
   };
   return (
-    <tr className="border-t">
+    <tr className={cn("border-t", !client.block_orders && "text-muted-foreground")}>
       <td className="px-3 py-1.5">
         <div className="font-medium">{client.name}</div>
         {client.code && <div className="font-mono text-xs text-muted-foreground">{client.code}</div>}
@@ -285,6 +332,15 @@ function ClientRow({ client }: { client: ClientBlockSettings }) {
           onBlur={() => commit("payment_block_days", payment)}
           aria-label={`Unpaid-bill days for ${client.name}`}
         />
+      </td>
+      <td className="px-3 py-1.5 text-xs" aria-live="polite">
+        {save.isPending ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" aria-label="Saving" />
+        ) : savedAt ? (
+          <span className="inline-flex items-center gap-1 text-success">
+            <Check className="h-3.5 w-3.5" aria-hidden /> Saved
+          </span>
+        ) : null}
       </td>
     </tr>
   );

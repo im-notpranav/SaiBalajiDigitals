@@ -31,11 +31,21 @@ export interface QueueRow {
   summary: string;
   amount: number | null;
   store_id: number | null;
+  /** The line a line remark is on. */
+  item_id: number | null;
+  /** A change request's own data: a LineEditPayload, or a rate change's lines. */
+  payload: unknown;
+  other_order_id: number | null;
   requester: { id: number; name: string } | null;
   decider: { id: number; name: string } | null;
   decision_note: string | null;
   created_at: string;
   decided_at: string | null;
+}
+
+/** A RATE_CHANGE request's lines: the CSM's rate and the rate card's. */
+export interface RateChangePayload {
+  items: { id: number; asked: number; card: number }[];
 }
 
 export interface LineEditLine {
@@ -74,6 +84,10 @@ export const fetchCombineOptions = (orderId: number) =>
 
 export const fetchChangeQueue = (status: "pending" | "decided") =>
   apiFetch<{ requests: QueueRow[] }>(`/change-requests?status=${status}`);
+
+/** One request of the queue, for the compare page. */
+export const fetchChangeRequestView = (source: string, id: number) =>
+  apiFetch<{ request: QueueRow }>(`/change-requests/view/${source}/${id}`);
 
 export const fetchChangeQueueCount = () => apiFetch<{ pending: number }>("/change-requests/count");
 

@@ -40,7 +40,6 @@ import { cn } from "@/lib/utils";
 
 type Choice =
   | "edit"
-  | "add-line"
   | "ExtraAmount"
   | "LessAmount"
   | "UnderWarranty"
@@ -53,8 +52,7 @@ type Choice =
 type Group = "order" | "money" | "line" | "more";
 
 const CHOICES: { key: Choice; label: string; hint: string; icon: typeof Plus; group: Group }[] = [
-  { key: "edit", label: "Change rate, size or qty", hint: "Or line item, client, store, location", icon: FilePenLine, group: "order" },
-  { key: "add-line", label: "Add Line Item", hint: "Opens the order with a new line", icon: Plus, group: "order" },
+  { key: "edit", label: "Change a saved line", hint: "Rate, size, qty, line item, or remove it. Also client, store, location", icon: FilePenLine, group: "order" },
   { key: "ExtraAmount", label: "Extra Amount", hint: "Charge more on the whole order", icon: Plus, group: "money" },
   { key: "LessAmount", label: "Less Amount", hint: "Charge less on the whole order", icon: Minus, group: "money" },
   { key: "UnderWarranty", label: "Under Warranty", hint: "A line is not billed", icon: ShieldCheck, group: "line" },
@@ -73,11 +71,13 @@ const GROUPS: { key: Group; title: string }[] = [
 ];
 
 /**
- * Request Change: the CSM's one place to ask the admin for anything on an order. Rates,
- * sizes, quantities and line items are changed on the order form, which sends them for
- * approval; money, line remarks, combining and anything else are asked for right here.
+ * Request Change: the CSM's one place to ask the admin for anything on an order. Saved lines
+ * (rate, size, qty, line item, removal) are changed on the order form, which sends them for
+ * approval; money, line remarks, combining and anything else are asked for right here. New
+ * lines need no approval, so they are not here: the order page and the edit form add them.
+ * On the edit form itself, onEditHere replaces the link back to the form.
  */
-export function RequestChangeButton({ order }: { order: any }) {
+export function RequestChangeButton({ order, onEditHere }: { order: any; onEditHere?: () => void }) {
   const [open, setOpen] = useState(false);
   const [choice, setChoice] = useState<Choice | null>(null);
   const close = () => {
@@ -107,9 +107,19 @@ export function RequestChangeButton({ order }: { order: any }) {
             </DialogDescription>
           </DialogHeader>
           {!choice ? (
-            <ChoiceGrid onPick={setChoice} order={order} />
-          ) : choice === "edit" || choice === "add-line" ? (
-            <EditRoute order={order} addLine={choice === "add-line"} />
+            <ChoiceGrid
+              order={order}
+              onPick={(c) => {
+                if (c === "edit" && onEditHere) {
+                  close();
+                  onEditHere();
+                  return;
+                }
+                setChoice(c);
+              }}
+            />
+          ) : choice === "edit" ? (
+            <EditRoute order={order} />
           ) : choice === "ExtraAmount" || choice === "LessAmount" ? (
             <AmountForm order={order} type={choice} onDone={close} />
           ) : choice === "combine" ? (
@@ -158,21 +168,15 @@ function ChoiceGrid({ onPick, order }: { onPick: (c: Choice) => void; order: any
   );
 }
 
-function EditRoute({ order, addLine }: { order: any; addLine: boolean }) {
+function EditRoute({ order }: { order: any }) {
   return (
     <div className="space-y-4 text-sm">
       <p className="text-muted-foreground">
-        {addLine
-          ? "The order opens with a new line ready. Fill it in and press Send for approval."
-          : "Change what you need on the order form. Rates, sizes, quantities, line items, client, store names and locations go to the admin with your reason. PO numbers and the order remark save at once."}
+        Change what you need on the order form. Changes to saved lines, the client, store names and locations go to the admin with
+        your reason. New lines, PO numbers and the order remark save at once.
       </p>
-      <Link
-        to="/employee/edit-order/$id"
-        params={{ id: String(order.id) }}
-        search={addLine ? { addLine: true } : {}}
-        className={cn(buttonVariants(), "w-full")}
-      >
-        {addLine ? "Open with a new line" : "Open the order form"}
+      <Link to="/employee/edit-order/$id" params={{ id: String(order.id) }} className={cn(buttonVariants(), "w-full")}>
+        Open the order form
       </Link>
     </div>
   );

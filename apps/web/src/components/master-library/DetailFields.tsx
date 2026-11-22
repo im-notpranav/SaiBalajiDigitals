@@ -83,7 +83,10 @@ export function DetailFields({
         </div>
         <div className="grid gap-2">
           <Label htmlFor={`${idPrefix}-phone`}>Contact number {opt}</Label>
-          <Input id={`${idPrefix}-phone`} value={value.contact_number} onChange={(e) => set("contact_number", e.target.value)} maxLength={30} inputMode="tel" />
+          <Input id={`${idPrefix}-phone`} value={value.contact_number} onChange={(e) => set("contact_number", e.target.value)} maxLength={30} inputMode="tel" placeholder="e.g. 98480 12345" />
+          {value.contact_number.trim() !== "" && value.contact_number.replace(/\D/g, "").length < 10 && (
+            <p className="text-xs text-warning">A mobile number has 10 digits.</p>
+          )}
         </div>
         <div className="grid gap-2 sm:col-span-2">
           <Label htmlFor={`${idPrefix}-email`}>Email {opt}</Label>

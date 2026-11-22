@@ -300,6 +300,59 @@ function remarkLabel(r: string) {
 
 const sNo = (n: number) => `S${String(n).padStart(2, "0")}`;
 
+const queueOrderSel = { select: { id: true, order_no: true, client_name: true, created_by: true, creator_name: true } };
+const adjustmentInclude = {
+  order: queueOrderSel,
+  orderStore: { select: { s_no: true, store_name: true } },
+  requester: { select: { id: true, name: true } },
+  decider: { select: { id: true, name: true } },
+} as const;
+const lineRemarkInclude = { order: queueOrderSel, remarksSetter: { select: { id: true, name: true } }, orderStore: { select: { s_no: true, store_name: true } } } as const;
+
+/** One queue row, whatever its source. The compare page reads payload and the line it concerns. */
+const changeRow = (c: any) => ({
+  source: "change" as "change" | "adjustment" | "line_remark",
+  id: c.id as number,
+  kind: c.kind as string,
+  label: KIND_LABEL[c.kind] ?? c.kind,
+  status: c.status as string,
+  order: c.order,
+  reason: c.reason as string,
+  summary: c.summary as string,
+  amount: null as number | null,
+  store_id: null as number | null,
+  item_id: null as number | null,
+  payload: (c.payload ?? null) as unknown,
+  other_order_id: (c.other_order_id ?? null) as number | null,
+  requester: c.requester,
+  decider: c.decider,
+  decision_note: c.decision_note as string | null,
+  created_at: c.created_at as Date,
+  decided_at: c.decided_at as Date | null,
+});
+
+const adjustmentRow = (a: any) => ({
+  ...changeRow({ ...a, kind: a.type, status: a.status === "Requested" ? "PENDING" : String(a.status).toUpperCase(), payload: null }),
+  source: "adjustment" as const,
+  label: a.type === "ExtraAmount" ? "Extra Amount" : "Less Amount",
+  summary: `${a.type === "ExtraAmount" ? "+" : "−"}${money(num(a.amount))} on the order, billed with ${sNo(a.orderStore.s_no)} ${a.orderStore.store_name}`,
+  amount: num(a.amount),
+  store_id: a.order_store_id as number,
+});
+
+const lineRemarkRow = (i: any) => ({
+  ...changeRow({ id: i.id, kind: i.remarks, status: i.remarks_confirmed ? "APPROVED" : "PENDING", order: i.order, reason: i.remarks_other_text ?? "", requester: i.remarksSetter }),
+  source: "line_remark" as const,
+  label: remarkLabel(i.remarks),
+  summary: `${sNo(i.orderStore.s_no)} line ${i.s_no} (${i.media}, ${money(num(i.amount))}): ${remarkLabel(i.remarks)}${i.adjustment_amount ? ` ${money(num(i.adjustment_amount))}` : ""}`,
+  amount: i.adjustment_amount != null ? num(i.adjustment_amount) : null,
+  store_id: i.order_store_id as number,
+  item_id: i.id as number,
+  decision_note: null,
+  created_at: i.remarks_set_at ?? new Date(0),
+  decided_at: null,
+});
+
 /**
  * GET /api/change-requests?status=pending|decided — one queue for everything a CSM asked:
  * change requests, whole-order Extra / Less Amounts, and line remarks (Reprint, Sample,
@@ -308,7 +361,6 @@ const sNo = (n: number) => `S${String(n).padStart(2, "0")}`;
 export const changeRequestQueue = async (req: Request, res: Response) => {
   try {
     const decided = String(req.query.status ?? "pending") === "decided";
-    const orderSel = { select: { id: true, order_no: true, client_name: true, created_by: true, creator_name: true } };
     const [changes, adjustments, lines] = await Promise.all([
       prisma.changeRequest.findMany({
         where: decided ? { status: { in: ["APPROVED", "REJECTED", "CANCELLED"] } } : { status: "PENDING" },
@@ -318,12 +370,7 @@ export const changeRequestQueue = async (req: Request, res: Response) => {
       }),
       prisma.orderAdjustment.findMany({
         where: decided ? { status: { in: ["Approved", "Rejected"] }, requested_by: { not: null } } : { status: "Requested" },
-        include: {
-          order: orderSel,
-          orderStore: { select: { s_no: true, store_name: true } },
-          requester: { select: { id: true, name: true } },
-          decider: { select: { id: true, name: true } },
-        },
+        include: adjustmentInclude,
         orderBy: { created_at: decided ? "desc" : "asc" },
         take: decided ? 100 : 500,
       }),
@@ -331,69 +378,43 @@ export const changeRequestQueue = async (req: Request, res: Response) => {
         ? Promise.resolve([] as any[])
         : prisma.orderItem.findMany({
             where: { remarks: { not: null }, remarks_confirmed: false, order: { status: { not: "Completed" } } },
-            include: { order: orderSel, remarksSetter: { select: { id: true, name: true } }, orderStore: { select: { s_no: true, store_name: true } } },
+            include: lineRemarkInclude,
             orderBy: { remarks_set_at: "asc" },
             take: 500,
           }),
     ]);
 
-    const rows = [
-      ...changes.map((c) => ({
-        source: "change" as const,
-        id: c.id,
-        kind: c.kind as string,
-        label: KIND_LABEL[c.kind] ?? c.kind,
-        status: c.status as string,
-        order: c.order,
-        reason: c.reason,
-        summary: c.summary,
-        amount: null as number | null,
-        store_id: null as number | null,
-        requester: c.requester,
-        decider: c.decider,
-        decision_note: c.decision_note,
-        created_at: c.created_at,
-        decided_at: c.decided_at,
-      })),
-      ...adjustments.map((a) => ({
-        source: "adjustment" as const,
-        id: a.id,
-        kind: a.type as string,
-        label: a.type === "ExtraAmount" ? "Extra Amount" : "Less Amount",
-        status: a.status === "Requested" ? "PENDING" : a.status.toUpperCase(),
-        order: a.order,
-        reason: a.reason,
-        summary: `${a.type === "ExtraAmount" ? "+" : "−"}${money(num(a.amount))} on the order, billed with ${sNo(a.orderStore.s_no)} ${a.orderStore.store_name}`,
-        amount: num(a.amount),
-        store_id: a.order_store_id,
-        requester: a.requester,
-        decider: a.decider,
-        decision_note: a.decision_note,
-        created_at: a.created_at,
-        decided_at: a.decided_at,
-      })),
-      ...(lines as any[]).map((i) => ({
-        source: "line_remark" as const,
-        id: i.id as number,
-        kind: i.remarks as string,
-        label: remarkLabel(i.remarks),
-        status: "PENDING",
-        order: i.order,
-        reason: (i.remarks_other_text ?? "") as string,
-        summary: `${sNo(i.orderStore.s_no)} line ${i.s_no} (${i.media}, ${money(num(i.amount))}): ${remarkLabel(i.remarks)}${i.adjustment_amount ? ` ${money(num(i.adjustment_amount))}` : ""}`,
-        amount: i.adjustment_amount != null ? num(i.adjustment_amount) : null,
-        store_id: i.order_store_id as number,
-        requester: i.remarksSetter,
-        decider: null,
-        decision_note: null,
-        created_at: i.remarks_set_at ?? new Date(0),
-        decided_at: null,
-      })),
-    ].sort((a, b) => (decided ? -1 : 1) * (new Date(a.created_at).getTime() - new Date(b.created_at).getTime()));
+    const rows = [...changes.map(changeRow), ...adjustments.map(adjustmentRow), ...(lines as any[]).map(lineRemarkRow)].sort(
+      (a, b) => (decided ? -1 : 1) * (new Date(a.created_at).getTime() - new Date(b.created_at).getTime()),
+    );
 
     return res.json({ requests: serializeDecimals(rows) });
   } catch (err) {
     return fail(res, err, "changeRequestQueue");
+  }
+};
+
+/** GET /api/change-requests/view/:source/:id — one row of the queue, for the compare page. */
+export const changeRequestView = async (req: Request, res: Response) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) throw new HttpError(400, "Invalid id");
+    const source = String(req.params.source);
+    let row: { source: string } | null = null;
+    if (source === "change") {
+      const c = await prisma.changeRequest.findUnique({ where: { id }, include: requestInclude });
+      row = c ? changeRow(c) : null;
+    } else if (source === "adjustment") {
+      const a = await prisma.orderAdjustment.findUnique({ where: { id }, include: adjustmentInclude });
+      row = a ? adjustmentRow(a) : null;
+    } else if (source === "line_remark") {
+      const i = await prisma.orderItem.findUnique({ where: { id }, include: lineRemarkInclude });
+      row = i?.remarks ? lineRemarkRow(i) : null;
+    } else throw new HttpError(400, "Unknown request type");
+    if (!row) throw new HttpError(404, "This request is no longer there. It may have been decided or withdrawn.");
+    return res.json({ request: serializeDecimals(row) });
+  } catch (err) {
+    return fail(res, err, "changeRequestView");
   }
 };
 

@@ -210,9 +210,20 @@ export interface OrderFormProps {
    * the essentials (rate, size, qty, lines, client, store, location) to the admin for approval.
    */
   requestMode?: boolean;
+  /** Bumped by the page's "Add line item" shortcut: each new value adds a blank line on the last store. */
+  addLineSignal?: number;
 }
 
-export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userRole, lineItemsLocked = false, startWithNewLine = false, requestMode = false }: OrderFormProps) {
+/** A saved line as the form compares it: what would count as a change needing approval. */
+const savedLineChanged = (l: Line, item: any) =>
+  !!item &&
+  (l.media !== item.media ||
+    numOf(l.width_inches) !== Number(item.width_inches) ||
+    numOf(l.height_inches) !== Number(item.height_inches) ||
+    Number(l.qty) !== Number(item.qty) ||
+    numOf(l.rate) !== Number(item.rate));
+
+export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userRole, lineItemsLocked = false, startWithNewLine = false, requestMode = false, addLineSignal = 0 }: OrderFormProps) {
   const [clientName, setClientName] = useState(defaultValues?.client_name || "");
   const [poNumber, setPoNumber] = useState(defaultValues?.po_number || "");
   // A new order by a CSM: the client may be on hold for an old order or an unpaid bill.
@@ -233,6 +244,57 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
     row?.scrollIntoView({ behavior: "smooth", block: "center" });
     row?.querySelector<HTMLElement>("input, button")?.focus({ preventScroll: true });
   }, [startWithNewLine]);
+
+  // The page's "Add line item" shortcut: a blank line on the last store, brought into view.
+  const [focusLineId, setFocusLineId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!addLineSignal || lineItemsLocked) return;
+    const id = `added-line-${addLineSignal}`;
+    setStores((ss) => {
+      const last = ss[ss.length - 1]!;
+      return [...ss.slice(0, -1), { ...last, lines: [...last.lines, { ...blankLine(), id }] }];
+    });
+    setFocusLineId(id);
+  }, [addLineSignal, lineItemsLocked]);
+  useEffect(() => {
+    if (!focusLineId) return;
+    const row = document.querySelector<HTMLElement>(`[data-line-id="${focusLineId}"]`);
+    if (!row) return;
+    row.scrollIntoView({ behavior: "smooth", block: "center" });
+    row.querySelector<HTMLElement>("input, button")?.focus({ preventScroll: true });
+    setFocusLineId(null);
+  }, [focusLineId, stores]);
+
+  // Request mode: what saves at once and what goes to the admin, worked out as the CSM types.
+  const savedItems = useMemo(() => new Map<number, any>((defaultValues?.items ?? []).map((i: any) => [i.id, i])), [defaultValues]);
+  const savedStores = useMemo(() => new Map<number, any>((defaultValues?.stores ?? []).map((s: any) => [s.id, s])), [defaultValues]);
+  const requestSummary = useMemo(() => {
+    if (!requestMode) return null;
+    const kept = new Set<number>();
+    let newLines = 0;
+    let newStores = 0;
+    let changedLines = 0;
+    let storeEdits = 0;
+    for (const s of stores) {
+      if (!s.originalId) {
+        newStores++;
+        newLines += s.lines.length;
+        continue;
+      }
+      const prev = savedStores.get(s.originalId);
+      if (prev && (s.store_name !== prev.store_name || s.location !== prev.location)) storeEdits++;
+      for (const l of s.lines) {
+        if (!l.originalId) newLines++;
+        else {
+          kept.add(l.originalId);
+          if (savedLineChanged(l, savedItems.get(l.originalId))) changedLines++;
+        }
+      }
+    }
+    const removedLines = [...savedItems.keys()].filter((id) => !kept.has(id)).length;
+    const clientChanged = !!defaultValues && clientName !== defaultValues.client_name;
+    return { newLines, newStores, changedLines, removedLines, storeEdits, clientChanged, needsApproval: changedLines + removedLines + storeEdits + (clientChanged ? 1 : 0) };
+  }, [requestMode, stores, savedItems, savedStores, clientName, defaultValues]);
 
   const isAdmin = userRole === "ADMIN";
   const getSft = (l: Line) => (numOf(l.width_inches) * numOf(l.height_inches)) / 144;
@@ -647,7 +709,7 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
           )}
           {requestMode && !lineItemsLocked && (
             <p className="mb-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
-              Change or remove any line. Rates, sizes, quantities and line items go to the admin for approval.
+              <span className="font-medium text-foreground">New lines save at once.</span> Changing or removing a saved line goes to the admin for approval.
             </p>
           )}
 
@@ -658,9 +720,30 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
               const showLoss = !requestMode && (!line.originalId || isAdmin);
               const lossLabel = isAdmin ? "Remark (optional)" : "Propose a remark (needs admin approval)";
               const lineTotal = getLineTotal(line);
+              // Request mode: say on the line itself whether it saves now or waits for the admin.
+              const lineState = !requestMode || lineItemsLocked
+                ? null
+                : !line.originalId
+                  ? "new"
+                  : savedLineChanged(line, savedItems.get(line.originalId))
+                    ? "changed"
+                    : null;
 
               return (
-              <div key={line.id} data-line-id={line.id} className="rounded-xl border bg-background/60 p-2.5">
+              <div
+                key={line.id}
+                data-line-id={line.id}
+                className={`rounded-xl border p-2.5 transition-colors ${lineState === "new" ? "border-emerald-500/40 bg-emerald-500/[0.04]" : lineState === "changed" ? "border-amber-500/50 bg-amber-500/[0.06]" : "bg-background/60"}`}
+              >
+                {lineState && (
+                  <div className="mb-1.5 flex items-center gap-1.5 sm:pl-8">
+                    <span
+                      className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${lineState === "new" ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" : "bg-amber-500/15 text-amber-800 dark:text-amber-300"}`}
+                    >
+                      {lineState === "new" ? "New · saves at once" : "Changed · needs approval"}
+                    </span>
+                  </div>
+                )}
                 {/* Line 1: what is being made. */}
                 <div className="grid grid-cols-4 gap-2 sm:grid-cols-[1.5rem_minmax(0,1fr)_repeat(4,5.5rem)] sm:items-center">
                   <span className="hidden text-center text-xs tabular-nums text-muted-foreground sm:block" aria-hidden>
@@ -895,10 +978,40 @@ export function OrderForm({ defaultValues, onSubmit, isSubmitting = false, userR
               </div>
             )}
           </div>
+          {requestSummary && (requestSummary.newLines > 0 || requestSummary.needsApproval > 0) && (
+            <div className="space-y-2 border-b p-4 text-xs">
+              {requestSummary.newLines > 0 && (
+                <div className="flex items-start gap-2">
+                  <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-emerald-500" aria-hidden />
+                  <span>
+                    <span className="font-medium">Saves at once:</span>{" "}
+                    {requestSummary.newLines} new line{requestSummary.newLines === 1 ? "" : "s"}
+                    {requestSummary.newStores > 0 && ` in ${requestSummary.newStores} new store${requestSummary.newStores === 1 ? "" : "s"}`}
+                  </span>
+                </div>
+              )}
+              {requestSummary.needsApproval > 0 && (
+                <div className="flex items-start gap-2">
+                  <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-amber-500" aria-hidden />
+                  <span>
+                    <span className="font-medium">Needs approval:</span>{" "}
+                    {[
+                      requestSummary.changedLines && `${requestSummary.changedLines} changed line${requestSummary.changedLines === 1 ? "" : "s"}`,
+                      requestSummary.removedLines && `${requestSummary.removedLines} removed line${requestSummary.removedLines === 1 ? "" : "s"}`,
+                      requestSummary.storeEdits && `${requestSummary.storeEdits} store rename${requestSummary.storeEdits === 1 ? "" : "s"}`,
+                      requestSummary.clientChanged && "client",
+                    ]
+                      .filter(Boolean)
+                      .join(", ")}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
           <div className="p-4">
             <Button type="submit" size="lg" className="w-full rounded-xl" disabled={isSubmitting || onHold} title={onHold ? "This client is on hold. Request an exception first." : undefined}>
               <Send className="mr-2 h-4 w-4" />{" "}
-              {isSubmitting ? "Submitting…" : requestMode ? "Save / Send for approval" : defaultValues ? "Save Changes" : "Submit Order"}
+              {isSubmitting ? "Submitting…" : requestMode ? (requestSummary?.needsApproval ? "Save / Send for approval" : "Save Changes") : defaultValues ? "Save Changes" : "Submit Order"}
             </Button>
           </div>
         </div>

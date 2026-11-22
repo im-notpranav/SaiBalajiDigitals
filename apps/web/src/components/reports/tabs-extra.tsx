@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { BarList, COLORS, DataTable, Panel, Pill, StatGrid, TrendChart, fmt, words } from "./parts";
 import type { TabProps } from "./tabs";
 
@@ -93,6 +94,23 @@ export function TurnoverTab({ data }: TabProps) {
             { key: "raised", label: "Order value", align: "right", render: (r) => fmt.inr(r.raised) },
             { key: "billed", label: "Billed", align: "right", render: (r) => fmt.inr(r.billed) },
             { key: "received", label: "Received", align: "right", render: (r) => fmt.inr(r.received) },
+            {
+              key: "collected",
+              label: "Collected",
+              align: "right",
+              render: (r) => {
+                const pct = r.billed > 0 ? Math.min(100, Math.round((r.received / r.billed) * 100)) : null;
+                if (pct == null) return <span className="text-muted-foreground">—</span>;
+                return (
+                  <span className="inline-flex items-center justify-end gap-2" title={`${pct}% of the billed amount received`}>
+                    <span className="hidden h-1.5 w-14 overflow-hidden rounded-full bg-muted sm:inline-block">
+                      <span className={pct >= 80 ? "block h-full bg-success" : pct >= 50 ? "block h-full bg-warning" : "block h-full bg-destructive"} style={{ width: `${pct}%` }} />
+                    </span>
+                    <span className="tabular-nums">{pct}%</span>
+                  </span>
+                );
+              },
+            },
           ]}
         />
       </Panel>
@@ -103,6 +121,9 @@ export function TurnoverTab({ data }: TabProps) {
 const STAGE_LABEL: Record<string, string> = { production: "Production", installation: "Installation", invoice: "Invoice", payment: "Payment" };
 
 export function DelayTab({ data, orderLink }: TabProps) {
+  const [onlyLate, setOnlyLate] = useState(false);
+  const allRows = (data.rows as any[]).map((r) => ({ ...r, key: r.order_id }));
+  const rows = onlyLate ? allRows.filter((r) => r.late.length > 0) : allRows;
   const stageCell = (stage: string) => ({
     key: stage,
     label: STAGE_LABEL[stage]!,
@@ -135,8 +156,23 @@ export function DelayTab({ data, orderLink }: TabProps) {
         title="Orders by delay"
         description={`${data.late_orders} of ${data.row_count} orders raised in the range went over a stage limit. Red is over the limit; "…" means still in that stage. Limits are in Settings.`}
       >
+        <div className="mb-3 inline-flex rounded-lg bg-muted p-0.5 text-xs" role="radiogroup" aria-label="Which orders">
+          {[false, true].map((v) => (
+            <button
+              key={String(v)}
+              type="button"
+              role="radio"
+              aria-checked={onlyLate === v}
+              onClick={() => setOnlyLate(v)}
+              className={onlyLate === v ? "rounded-md bg-background px-2.5 py-1 font-medium shadow-sm" : "rounded-md px-2.5 py-1 font-medium text-muted-foreground"}
+            >
+              {v ? `Only late ${data.late_orders}` : `All ${allRows.length}`}
+            </button>
+          ))}
+        </div>
         <DataTable
-          rows={(data.rows as any[]).map((r) => ({ ...r, key: r.order_id }))}
+          rows={rows}
+          empty={onlyLate ? "No order went over a limit in this range." : undefined}
           limit={50}
           rowLink={linkOf(orderLink)}
           columns={[

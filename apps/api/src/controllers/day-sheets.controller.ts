@@ -168,6 +168,15 @@ export const daySheetPeople = async (req: Request, res: Response) => {
 // Pending board
 // ---------------------------------------------------------------------------------------
 
+/** Where an open order is stuck. Same rule as the web app's orderStage (apps/web/src/lib/order-stage.ts). */
+function stageOf(o: { status: string; items: { production_completed: boolean; assignments: unknown[] }[] }) {
+  if (o.status === "BillingCompleted" || o.status === "Pending") return "payment";
+  if (o.status === "Installed") return "billing";
+  const assigned = o.items.filter((i) => i.assignments.length > 0);
+  if (assigned.length === 0) return "unassigned";
+  return assigned.every((i) => i.production_completed) ? "installation" : "production";
+}
+
 export const ageTone = (days: number) => (days <= 5 ? "green" : days <= 10 ? "orange" : "red");
 
 /** GET /api/dashboard/pending-by-csm */
@@ -185,7 +194,7 @@ export const getPendingByCsm = async (_req: Request, res: Response) => {
           created_by: true,
           creator_name: true,
           stores: { select: { location: true } },
-          items: true,
+          items: { include: { assignments: { select: { id: true } } } },
           adjustments: { where: { status: "Approved" } },
         },
         orderBy: { date: "asc" },
@@ -195,7 +204,7 @@ export const getPendingByCsm = async (_req: Request, res: Response) => {
     ]);
     const localityOf = new Map(areas.map((a) => [a.name.toLowerCase(), a.locality]));
     const now = Date.now();
-    type Row = { id: number; order_no: string; client_name: string; date: string; status: string; days: number; tone: string; value: number; locations: string };
+    type Row = { id: number; order_no: string; client_name: string; date: string; status: string; stage: string; days: number; tone: string; value: number; locations: string };
     const groups = new Map<string, { csm_id: number | null; csm: string; local: Row[]; non_local: Row[] }>();
     for (const o of orders) {
       const days = Math.max(0, Math.floor((now - o.date.getTime()) / DAY_MS));
@@ -210,6 +219,7 @@ export const getPendingByCsm = async (_req: Request, res: Response) => {
         client_name: o.client_name,
         date: o.date.toISOString(),
         status: o.status,
+        stage: stageOf(o),
         days,
         tone: ageTone(days),
         value: computeTotals(o.items, o.adjustments).total_amount,
