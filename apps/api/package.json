@@ -15,7 +15,8 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:seed:lists": "tsx prisma/seed-media-clients.ts",
     "db:seed:allocation": "tsx prisma/seed-allocation-masters.ts",
-    "import:field-staff": "tsx prisma/import-field-staff.ts"
+    "import:field-staff": "tsx prisma/import-field-staff.ts",
+    "import:masters": "tsx prisma/import-master-library.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
