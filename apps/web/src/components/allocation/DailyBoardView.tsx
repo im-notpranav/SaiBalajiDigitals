@@ -23,7 +23,7 @@ import { JobDialog } from "./JobDialog";
 import { usePrefetchJobLookups } from "./jobLookups";
 import { JobDetailDialog } from "./JobDetailDialog";
 import { CsmJobEditDialog } from "./CsmJobEditDialog";
-import { JobStatusBadge, JobStatusMenu, LocalityTag, MineTag } from "./JobBits";
+import { JobStatusBadge, JobStatusMenu, LocalityTag, MineTag, jobOwnerName } from "./JobBits";
 import {
   FIELD_ROLE_LABELS,
   JOB_EDITABLE,
@@ -231,6 +231,12 @@ export function DailyBoardView({
                       {j.order && (
                         <div className="truncate text-xs text-muted-foreground">
                           {j.order.order_no} · {j.order.client_name}
+                        </div>
+                      )}
+                      {/* Whose job it is, so the team knows whom they are working for. */}
+                      {(j.csm || j.csm_code) && (
+                        <div className="truncate text-xs text-muted-foreground">
+                          CSM <span className="font-medium text-foreground">{jobOwnerName(j)}</span>
                         </div>
                       )}
                     </button>

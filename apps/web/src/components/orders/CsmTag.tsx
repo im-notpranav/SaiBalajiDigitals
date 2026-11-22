@@ -16,12 +16,15 @@ export function CsmTag({
   compact = false,
   className,
   withIcon = false,
+  labelled = false,
 }: {
   id?: number | null;
   name?: string | null;
   compact?: boolean;
   className?: string;
   withIcon?: boolean;
+  /** Show "CSM" before the name on screen, for spots where a bare name could be anyone. */
+  labelled?: boolean;
 }) {
   const directory = useCsmDirectory();
   const entry = id != null ? directory.get(id) : undefined;
@@ -36,7 +39,7 @@ export function CsmTag({
       title={title}
     >
       {withIcon && <UserRound className="h-3 w-3 shrink-0" aria-hidden />}
-      <span className="sr-only">CSM </span>
+      <span className={labelled ? "shrink-0" : "sr-only"}>CSM </span>
       <span className="truncate">{shown}</span>
     </span>
   );

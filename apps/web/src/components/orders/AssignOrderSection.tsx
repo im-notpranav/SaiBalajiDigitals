@@ -10,6 +10,7 @@ import {
 } from "@/api/orders";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { CsmTag } from "@/components/orders/CsmTag";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Table,
@@ -302,6 +303,8 @@ export function AssignOrderSection({
             {order.client_name} · {storeLabel(order)}
             {storeSubLabel(order) ? ` (${storeSubLabel(order)})` : ""}
           </p>
+          {/* Whose order this is, so the team knows whom they are making it for. */}
+          <CsmTag id={order.created_by} name={order.creator_name} withIcon labelled className="mt-1 text-xs" />
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {items.length > 0 && (

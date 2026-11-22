@@ -759,10 +759,10 @@ async function gridFor(viewer: Viewer, query: Request["query"]) {
         ...(self ? { members: { some: { user_id: self } } } : {}),
       },
       include: {
-        csmCode: { select: { code: true, user: { select: { id: true } } } },
+        csmCode: { select: { code: true, user: { select: { id: true, name: true } } } },
         csm2Code: { select: { code: true, user: { select: { id: true } } } },
         csmUser: { select: { name: true } },
-        order: { select: { order_no: true, client_name: true } },
+        order: { select: { order_no: true, client_name: true, creator_name: true } },
         area: { select: { name: true } },
         // A field person is never sent who else is on their jobs.
         members: {
@@ -831,7 +831,8 @@ async function gridFor(viewer: Viewer, query: Request["query"]) {
           {
             order_no: j.order?.order_no ?? null,
             client_name: j.order?.client_name ?? null,
-            csm: j.csmUser?.name ?? null,
+            // The same owner csmUserOf picks: the job's CSM, else its CSM code's person, else the order's CSM.
+            csm: j.csmUser?.name ?? j.csmCode?.user?.name ?? j.order?.creator_name ?? null,
             pasters: names("PASTER"),
             helpers: names("HELPER"),
             drivers: names("DRIVER"),
