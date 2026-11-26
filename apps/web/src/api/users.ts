@@ -68,8 +68,9 @@ export const uploadUserPhoto = (id: number, picture: Blob) =>
 export const removeUserPhoto = (id: number) =>
   apiFetch<{ id: number; photo_url: string | null }>(`/users/${id}/photo`, { method: "DELETE" });
 
+/** `warning` comes back on deactivation when the person still has open work to reassign. */
 export async function toggleUserStatus(id: number, is_active: boolean) {
-  const res = await apiFetch<AuthUser>(`/users/${id}/status`, {
+  const res = await apiFetch<AuthUser & { warning?: string }>(`/users/${id}/status`, {
     method: "PUT",
     data: { is_active },
   });

@@ -1,6 +1,6 @@
 import { serializeDecimals } from "../utils/serialize";
 import { computeTotals } from "../utils/order-totals";
-import { isCsmEditable, isHeaderEditable, isBillingStarted, OPEN_STATUSES, CLOSED_STATUSES } from "../utils/order-status";
+import { isCsmEditable, isHeaderEditable, isBillingStarted, isClosed, OPEN_STATUSES, CLOSED_STATUSES } from "../utils/order-status";
 import { Request, Response } from "express";
 import { EXPORT_EMAIL_ALLOWED_DOMAINS } from "../utils/config";
 import { prisma } from "../utils/prisma";
@@ -1634,17 +1634,20 @@ export const closeOrder = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Only pending orders can be closed." });
     }
 
+    // The status is re-checked in the write, so two admins closing at once close it once (GAP-E01).
     const updated = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT set_config('app.current_user_id', ${req.user!.id.toString()}, true)`;
-      return tx.order.update({
-        where: { id },
+      const { count } = await tx.order.updateMany({
+        where: { id, status: "Pending" },
         data: {
           status: "Completed",
           remarks,
           remarks_other_text: remarks_other_text || null,
         },
       });
+      return count ? tx.order.findUnique({ where: { id } }) : null;
     });
+    if (!updated) return res.status(409).json({ message: "This order has just changed. Refresh and try again." });
 
     return res.status(200).json(serializeDecimals(updated));
   } catch (err) {
@@ -1700,18 +1703,26 @@ export const forceCloseOrder = async (req: Request, res: Response) => {
     const order = await prisma.order.findUnique({ where: { id } });
     
     if (!order) return res.status(404).json({ message: "Order not found" });
+    // A closed or fully paid order keeps its outcome: force-closing it again would overwrite
+    // the original closing remark, or turn a paid order into an admin closure.
+    if (isClosed(order.status)) {
+      return res.status(400).json({ message: "This order is already closed." });
+    }
 
+    // The status is re-checked in the write, so two admins closing at once close it once (GAP-E01).
     const updated = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT set_config('app.current_user_id', ${req.user!.id.toString()}, true)`;
-      return tx.order.update({
-        where: { id },
+      const { count } = await tx.order.updateMany({
+        where: { id, status: { in: OPEN_STATUSES } },
         data: {
           status: "Completed",
           remarks,
           remarks_other_text,
         },
       });
+      return count ? tx.order.findUnique({ where: { id } }) : null;
     });
+    if (!updated) return res.status(409).json({ message: "This order has just changed. Refresh and try again." });
 
     return res.status(200).json(serializeDecimals(updated));
   } catch (err) {

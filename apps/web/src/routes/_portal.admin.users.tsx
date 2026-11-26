@@ -174,8 +174,9 @@ function UsersPage() {
 
   const toggleMutation = useMutation({
     mutationFn: ({ id, is_active }: { id: number; is_active: boolean }) => toggleUserStatus(id, is_active),
-    onSuccess: () => {
-      toast.success("User status updated");
+    onSuccess: ({ user }) => {
+      if (user.warning) toast.warning(`${user.name} deactivated`, { description: user.warning, duration: 10000 });
+      else toast.success("User status updated");
       queryClient.invalidateQueries({ queryKey: ["users"] });
       queryClient.invalidateQueries({ queryKey: ["field-staff"] });
     },

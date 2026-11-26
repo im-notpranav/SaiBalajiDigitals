@@ -30,8 +30,9 @@ describe("GET /api/reports/:tab", () => {
     }
   });
 
-  it("gives Accounts the Money tab only, and Cost Control the Payments tab only", async () => {
+  it("gives Accounts Money and Payments, and Cost Control the Payments tab only", async () => {
     expect((await as(accounts).get("/api/reports/money")).status).toBe(200);
+    expect((await as(accounts).get("/api/reports/payments")).status).toBe(200);
     expect((await as(accounts).get("/api/reports/orders")).status).toBe(403);
     expect((await as(ccm).get("/api/reports/payments")).status).toBe(200);
     expect((await as(ccm).get("/api/reports/money")).status).toBe(403);

@@ -7,16 +7,19 @@ export const Route = createFileRoute("/_portal/accountant/reports")({
   component: Reports,
 });
 
-/** The Money report: billed, received, outstanding and not yet billed. Rows open the billing page. */
+/**
+ * The Money report: billed, received, outstanding and not yet billed. Rows open the billing page.
+ * Payments is the payout register, read-only for Accounts (decision D-08).
+ */
 function Reports() {
   const navigate = Route.useNavigate();
   return (
     <ReportsPage
-      tabs={["money", "turnover"]}
+      tabs={["money", "turnover", "payments"]}
       search={Route.useSearch()}
       onSearch={(search) => navigate({ search, replace: true })}
       title="Financial Reports"
-      description="Billed, received, outstanding and not yet billed, for any dates."
+      description="Billed, received, outstanding and not yet billed, and payouts to staff, for any dates."
       crumbs={[{ label: "Accountant" }, { label: "Reports" }]}
       orderLink={(id) => ({ to: "/accountant/billing/$id", params: { id: String(id) } })}
     />

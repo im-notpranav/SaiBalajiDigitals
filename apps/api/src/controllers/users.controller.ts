@@ -8,6 +8,7 @@ import { issueAuthCookie } from "../utils/auth-cookie";
 import { objectStore } from "../utils/object-store";
 import { detectFileType } from "../utils/payment-files";
 import { OPEN_PAYMENT_STATUSES } from "../utils/payment-workflow";
+import { OPEN_STATUSES } from "../utils/order-status";
 
 import { createUserSchema, updateMeSchema, updateUserSchema, resetPasswordSchema } from "../utils/validators";
 import { sanitizeZodErrors } from "../utils/sanitize-errors";
@@ -197,6 +198,40 @@ const listed = (parts: string[]) =>
   parts.length <= 1 ? parts.join("") : `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
 
 /**
+ * What a person still has open, as phrases ("2 open jobs", "1 pending leave request").
+ * `withOrders` adds the CSM's own open orders, which nobody else can mark installed or
+ * raise payment requests on.
+ */
+async function openWorkOf(id: number, withOrders = false): Promise<string[]> {
+  const [jobs, payments, leave, orders] = await Promise.all([
+    prisma.workJob.count({
+      where: {
+        status: { notIn: ["COMPLETED", "CANCELLED"] },
+        OR: [{ members: { some: { user_id: id } } }, { csm_user_id: id }],
+      },
+    }),
+    prisma.paymentRequest.count({ where: { requested_by: id, status: { in: OPEN_PAYMENT_STATUSES } } }),
+    prisma.leaveRecord.count({ where: { user_id: id, status: "PENDING", cancelled_at: null } }),
+    withOrders ? prisma.order.count({ where: { created_by: id, status: { in: OPEN_STATUSES } } }) : 0,
+  ]);
+  return [
+    orders ? counted(orders, "open order") : null,
+    jobs ? counted(jobs, "open job") : null,
+    payments ? counted(payments, "open payment request") : null,
+    leave ? counted(leave, "pending leave request") : null,
+  ].filter((p): p is string => !!p);
+}
+
+/**
+ * Deactivation is never refused for open work: cutting off someone's access must not wait.
+ * Instead the caller gets a warning naming what is left, so it can be reassigned (GAP-C01).
+ */
+export async function deactivationWarning(id: number, name: string): Promise<string | null> {
+  const open = await openWorkOf(id, true);
+  return open.length ? `${name} still has ${listed(open)}. Reassign or close them.` : null;
+}
+
+/**
  * Permanent delete, as a tombstone: the row stays so every job, payment, order and log that
  * names this person still points at them, and now reads "Deleted user (Ravi)". What identified
  * or reached them goes: the login (username freed as DELETED_<id>, password replaced with a
@@ -218,21 +253,7 @@ export async function deleteUserPermanently(actorId: number, id: number): Promis
   const lastHolder = await lastHolderBlock(id);
   if (lastHolder) return { status: 409, message: lastHolder };
 
-  const [jobs, payments, leave] = await Promise.all([
-    prisma.workJob.count({
-      where: {
-        status: { notIn: ["COMPLETED", "CANCELLED"] },
-        OR: [{ members: { some: { user_id: id } } }, { csm_user_id: id }],
-      },
-    }),
-    prisma.paymentRequest.count({ where: { requested_by: id, status: { in: OPEN_PAYMENT_STATUSES } } }),
-    prisma.leaveRecord.count({ where: { user_id: id, status: "PENDING", cancelled_at: null } }),
-  ]);
-  const open = [
-    jobs ? counted(jobs, "open job") : null,
-    payments ? counted(payments, "open payment request") : null,
-    leave ? counted(leave, "pending leave request") : null,
-  ].filter((p): p is string => !!p);
+  const open = await openWorkOf(id);
   if (open.length) {
     return { status: 409, message: `${target.name} still has ${listed(open)}. Reassign or close them first.` };
   }
@@ -460,7 +481,8 @@ export const toggleUserStatus = async (req: Request, res: Response) => {
       select: { id: true, name: true, username: true, role: true, is_active: true },
     });
 
-    return res.status(200).json(updatedUser);
+    const warning = is_active ? null : await deactivationWarning(id, updatedUser.name);
+    return res.status(200).json(warning ? { ...updatedUser, warning } : updatedUser);
   } catch (err) {
     return res.status(500).json({ message: "Internal server error" });
   }

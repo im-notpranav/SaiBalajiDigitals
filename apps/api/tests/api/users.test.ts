@@ -294,3 +294,21 @@ describe("field staff for the Operation Manager and other admins", () => {
     expect(await prisma.user.findUniqueOrThrow({ where: { id: paster.id } })).toMatchObject({ name: paster.name, is_active: true, deleted_at: null });
   });
 });
+
+describe("deactivating someone with open work (GAP-C01)", () => {
+  it("deactivates at once and warns about the CSM's open orders", async () => {
+    const leaving = await makeUser("CSM");
+    await makeOrder(leaving);
+    const res = await as(superAdmin).put(`/api/users/${leaving.id}/status`).send({ is_active: false });
+    expect(res.status).toBe(200);
+    expect(res.body.is_active).toBe(false);
+    expect(res.body.warning).toContain("1 open order");
+  });
+
+  it("gives no warning when nothing is left open", async () => {
+    const idle = await makeUser("HELPER");
+    const res = await as(superAdmin).put(`/api/field-staff/${idle.id}/status`).send({ is_active: false });
+    expect(res.status).toBe(200);
+    expect(res.body.warning).toBeUndefined();
+  });
+});

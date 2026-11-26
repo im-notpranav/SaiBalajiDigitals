@@ -5,7 +5,7 @@ import { prisma } from "../utils/prisma";
 import { createFieldStaffSchema, updateFieldStaffSchema, resetPasswordSchema } from "../utils/validators";
 import { sanitizeZodErrors } from "../utils/sanitize-errors";
 import { FIELD_ROLES, isFieldRole } from "../utils/roles";
-import { deleteUserPermanently, sendUserPhotoRemoval, sendUserPhotoUpload } from "./users.controller";
+import { deactivationWarning, deleteUserPermanently, sendUserPhotoRemoval, sendUserPhotoUpload } from "./users.controller";
 
 /**
  * Field staff (Pasters, Helpers, Drivers) are ordinary users with a field role. This
@@ -134,7 +134,8 @@ export const setFieldStaffStatus = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "is_active must be a boolean" });
     }
     const user = await prisma.user.update({ where: { id: target.id }, data: { is_active }, select: staffSelect });
-    return res.status(200).json(user);
+    const warning = is_active ? null : await deactivationWarning(user.id, user.name);
+    return res.status(200).json(warning ? { ...user, warning } : user);
   } catch (err) {
     console.error(err);
     return res.status(500).json({ message: "Internal server error" });

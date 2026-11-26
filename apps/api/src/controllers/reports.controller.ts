@@ -1624,7 +1624,8 @@ export const REPORT_TABS: Record<string, { roles: Role[]; build: Builder }> = {
   csm: { roles: ["ADMIN", "OPERATION_MANAGER"], build: csmReport },
   production: { roles: ["ADMIN", "OPERATION_MANAGER", "PRODUCTION_MANAGER"], build: (r) => productionReport(r) },
   allocation: { roles: ["ADMIN", "OPERATION_MANAGER"], build: (r) => allocationReport(r) },
-  payments: { roles: ["ADMIN", "OPERATION_MANAGER", "COST_CONTROL_MANAGER"], build: paymentsReport },
+  // Accounts reads the payout register, read-only (decision D-08).
+  payments: { roles: ["ADMIN", "OPERATION_MANAGER", "COST_CONTROL_MANAGER", "ACCOUNTS"], build: paymentsReport },
   masters: { roles: ["ADMIN", "OPERATION_MANAGER"], build: (r) => mastersReport(r) },
   system: { roles: ["ADMIN", "OPERATION_MANAGER"], build: (r) => systemReport(r) },
   printing: { roles: ["ADMIN", "OPERATION_MANAGER", "PRODUCTION_MANAGER", "PRODUCTION"], build: printingReport },

@@ -141,7 +141,8 @@ function FieldStaffPage() {
   const statusMutation = useMutation({
     mutationFn: (u: FieldStaff) => setFieldStaffStatus(u.id, !u.is_active),
     onSuccess: (u) => {
-      toast.success(u.is_active ? `${u.name} reactivated` : `${u.name} deactivated`);
+      if (u.warning) toast.warning(`${u.name} deactivated`, { description: u.warning, duration: 10000 });
+      else toast.success(u.is_active ? `${u.name} reactivated` : `${u.name} deactivated`);
       refresh();
     },
     onError: (err) => toast.error(apiErrorMessage(err, "Could not change status")),

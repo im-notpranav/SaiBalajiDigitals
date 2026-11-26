@@ -91,3 +91,30 @@ describe("order remark and CSM directory", () => {
     expect(res.body.directory.some((d: any) => d.id === csm.id)).toBe(true);
   });
 });
+
+describe("closing an order twice (GAP-E01)", () => {
+  it("refuses to force close an order that is already closed or paid", async () => {
+    const { order } = await makeOrder(csm);
+    const close = { remarks: "Sample", remarks_other_text: "First close" };
+    expect((await as(admin).put(`/api/orders/${order.id}/force-close`).send(close)).status).toBe(200);
+    const again = await as(admin).put(`/api/orders/${order.id}/force-close`).send({ remarks: "Other", remarks_other_text: "Second close" });
+    expect(again.status).toBe(400);
+    expect((await prisma.order.findUnique({ where: { id: order.id } }))?.remarks_other_text).toBe("First close");
+
+    const { order: paid } = await makeOrder(csm);
+    await prisma.order.update({ where: { id: paid.id }, data: { status: "PaymentReceived" } });
+    expect((await as(admin).put(`/api/orders/${paid.id}/force-close`).send(close)).status).toBe(400);
+    expect((await prisma.order.findUnique({ where: { id: paid.id } }))?.status).toBe("PaymentReceived");
+  });
+
+  it("closes a pending order once when two admins close it at once", async () => {
+    const { order } = await makeOrder(csm);
+    await prisma.order.update({ where: { id: order.id }, data: { status: "Pending" } });
+    const close = { remarks: "Sample", remarks_other_text: "Closed at once" };
+    const results = await Promise.all([
+      as(admin).put(`/api/orders/${order.id}/close`).send(close),
+      as(admin).put(`/api/orders/${order.id}/close`).send(close),
+    ]);
+    expect(results.filter((r) => r.status === 200)).toHaveLength(1);
+  });
+});

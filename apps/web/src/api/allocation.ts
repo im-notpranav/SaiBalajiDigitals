@@ -87,8 +87,9 @@ export const updateFieldStaff = (
   data: { name?: string; username?: string; role?: FieldRole; phone: string; email: string; emp_code?: string | null },
 ) => apiFetch<FieldStaff>(`/field-staff/${id}`, { method: "PATCH", data });
 
+/** `warning` comes back on deactivation when the person still has open work to reassign. */
 export const setFieldStaffStatus = (id: number, is_active: boolean) =>
-  apiFetch<FieldStaff>(`/field-staff/${id}/status`, { method: "PUT", data: { is_active } });
+  apiFetch<FieldStaff & { warning?: string }>(`/field-staff/${id}/status`, { method: "PUT", data: { is_active } });
 
 export const resetFieldStaffPassword = (id: number, new_password: string) =>
   apiFetch<{ message: string }>(`/field-staff/${id}/password`, {
